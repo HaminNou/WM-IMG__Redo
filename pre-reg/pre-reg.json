@@ -94,7 +94,7 @@
       "pay_amount": "[PAY_AMOUNT]",
       "pay_rate_per_hour": "[PAY_RATE_PER_HOUR]",
       "estimated_session_minutes": 110,
-      "payment_for_screened_out_time": "[PAYMENT_POLICY]",
+      "payment_for_screened_out_time": "$0.14 if the session ends at the device or sound check; later exits are paid in proportion to time",
       "single_submission_only": true
     }
   },
@@ -383,7 +383,7 @@
     "prolific": {
       "completion_url": "https://app.prolific.com/submissions/complete?cc=CQ6EH8Q1",
       "screen_out_completion_code": "CED70N6J",
-      "payment_policy_text": "[PAYMENT_POLICY]"
+      "payment_policy_text": "$0.14 if the session ends at the device or sound check; later exits are paid in proportion to time"
     },
     "rt_cutoff_ms": 250,
     "schema_version": "1.2.0",

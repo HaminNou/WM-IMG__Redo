@@ -410,7 +410,7 @@ describe('evaluatePreflight — placeholders in participant-facing text', () => 
     expect(findPlaceholderTokens('[A_B] x [A_B] [C1] [lower] [Mixed]')).toEqual(['[A_B]', '[C1]']);
   });
 
-  it('flags the live config payment text and the live study description until they are filled in', async () => {
+  it('has no unfilled placeholders in the live config payment text or the study description', async () => {
     const { readFileSync } = await import('node:fs');
     const { config } = await import('../src/config.js');
     const { consentBodyHtml } = await import('../src/calibration/consent-text.js');
@@ -418,10 +418,10 @@ describe('evaluatePreflight — placeholders in participant-facing text', () => 
       new URL('../prolific-study-description.md', import.meta.url),
       'utf-8'
     );
-    expect(findPlaceholderTokens(consentBodyHtml(config.prolific.payment_policy_text))).toEqual([
+    expect(findPlaceholderTokens(consentBodyHtml(config.prolific.payment_policy_text))).toEqual([]);
+    expect(findPlaceholderTokens(consentBodyHtml('[PAYMENT_POLICY]'))).toEqual([
       '[PAYMENT_POLICY]',
     ]);
-    expect(findPlaceholderTokens(consentBodyHtml('Pro rata.'))).toEqual([]);
-    expect(findPlaceholderTokens(description)).toContain('[PAYMENT_POLICY]');
+    expect(findPlaceholderTokens(description)).toEqual([]);
   });
 });

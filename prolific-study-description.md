@@ -8,7 +8,7 @@ The Impact of Visual Imagery on Spatial Working Memory Recall (online)
 
 ## Short description (shown in the study listing)
 
-A computer-based memory task: you will remember positions on a grid, imagine simple patterns, and respond to short tones using the keyboard. Desktop or laptop computer required; headphones strongly recommended. About 110 minutes. Pay: [PAY_AMOUNT] ([PAY_RATE_PER_HOUR] per hour).
+A computer-based memory task: you will remember positions on a grid, imagine simple patterns, and respond to short tones using the keyboard. Desktop or laptop computer required; headphones strongly recommended. About 110 minutes. Pay: $28 ($14 per hour).
 
 ## Full description
 
@@ -38,11 +38,11 @@ Eligibility is determined only by these Prolific filters. The study does not tes
 8. Display lock: after calibration the page must stay at the same zoom and in fullscreen. If either changes, the task pauses until you restore it, and the affected trials are excluded from analysis. If you cannot restore it, a button lets you end the session.
 9. Attention checks: three brief typed instruction checks occur during the session. They do not end the session, but if you miss more than one, your data may be excluded from the analyses.
 
-**If a check is not passed.** For every check except 4 and 9, the session ends, you are shown a message and sent back to Prolific with the screen-out completion code [SCREEN_OUT_CODE]. Your submission is then recorded on Prolific. Payment for the time spent before the session ended: [PAYMENT_POLICY].
+**If a check is not passed.** For every check except 4 and 9, the session ends, you are shown a message and sent back to Prolific with the screen-out completion code CED70N6J. Your submission is then recorded on Prolific. Payment for the time spent before the session ended: $0.14 if the session ends at the device or sound check; later exits are paid in proportion to time.
 
 **Declining or leaving.** Participation is voluntary. You can decline consent at the start, or stop at any time by selecting "Stop without completing" on Prolific, which returns your submission, without penalty.
 
-**Payment.** [PAY_AMOUNT] for completing the full session, paid by Prolific after you submit the completion code [COMPLETION_CODE]. Partial payment: [PAYMENT_POLICY].
+**Payment.** $28 for completing the full session, paid by Prolific after you submit the completion code CQ6EH8Q1. Partial payment: $0.14 if the session ends at the device or sound check; later exits are paid in proportion to time.
 
 **Data and privacy.** This study is pseudonymous: your responses are stored under your Prolific Participant ID only. We do not collect your name, email address, or IP address. IRB project #2101803, University of Missouri. Contact: Hamid Nourbakhshi, hnth5@missouri.edu.
 
@@ -50,5 +50,5 @@ Eligibility is determined only by these Prolific filters. The study does not tes
 
 - Screeners: set the filters listed above and no others that would exclude participants silently.
 - Device: restrict to desktop in the device settings.
-- Completion codes: add a normal completion code ([COMPLETION_CODE]) and a screen-out code ([SCREEN_OUT_CODE], action: "Screen out / no further action" as appropriate). Set the screen-out code in `config.prolific.screen_out_completion_code`.
-- Estimated time: 110 minutes. Reward: [PAY_AMOUNT].
+- Completion codes: add a normal completion code (CQ6EH8Q1) and a screen-out code (CED70N6J, action: "Screen out / no further action" as appropriate). Set the screen-out code in `config.prolific.screen_out_completion_code`.
+- Estimated time: 110 minutes. Reward: $28.

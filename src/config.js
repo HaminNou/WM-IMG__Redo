@@ -216,8 +216,7 @@ export const config = deepFreeze({
     /* The completion URL is participant-specific; this is the placeholder template
      * that gets the participant's completion code substituted at session end.
      * Replace with the actual Prolific completion URL when the study is published. */
-    completion_url:
-      'https://app.prolific.com/submissions/complete?cc=CQ6EH8Q1',
+    completion_url: 'https://app.prolific.com/submissions/complete?cc=CQ6EH8Q1',
 
     /* Completion code Prolific issues for participants screened out by an
      * in-study check (desktop check, screen-size calibration, tone audibility, pitch check, timing check, practice criterion).
@@ -228,7 +227,8 @@ export const config = deepFreeze({
     /* Statement shown in the consent form about payment for time spent before
      * an in-study check ends the session. Replace the bracketed placeholder
      * with the study's actual policy before launch. */
-    payment_policy_text: '[PAYMENT_POLICY]',
+    payment_policy_text:
+      '$0.14 if the session ends at the device or sound check; later exits are paid in proportion to time',
   },
 
   /* Data egress — DataPipe (https://pipe.jspsych.org), jsPsych's free
