@@ -8,7 +8,7 @@ The Impact of Visual Imagery on Spatial Working Memory Recall (online)
 
 ## Short description (shown in the study listing)
 
-A computer-based memory task: you will remember positions on a grid, imagine simple patterns, and respond to short tones using the keyboard. Desktop or laptop computer required; headphones strongly recommended. About 110 minutes. Pay: $28 ($14 per hour).
+A computer-based memory task: you will remember positions on a grid, imagine simple patterns, and respond to short tones using the keyboard. Desktop or laptop computer required; headphones strongly recommended. About 110 minutes. Pay: $26 ($14 per hour).
 
 ## Full description
 
@@ -42,7 +42,7 @@ Eligibility is determined only by these Prolific filters. The study does not tes
 
 **Declining or leaving.** Participation is voluntary. You can decline consent at the start, or stop at any time by selecting "Stop without completing" on Prolific, which returns your submission, without penalty.
 
-**Payment.** $28 for completing the full session, paid by Prolific after you submit the completion code CQ6EH8Q1. Partial payment: $0.14 if the session ends at the device or sound check; later exits are paid in proportion to time.
+**Payment.** $26 for completing the full session, paid by Prolific after you submit the completion code CQ6EH8Q1. Partial payment: $0.14 if the session ends at the device or sound check; later exits are paid in proportion to time.
 
 **Data and privacy.** This study is pseudonymous: your responses are stored under your Prolific Participant ID only. We do not collect your name, email address, or IP address. IRB project #2101803, University of Missouri. Contact: Hamid Nourbakhshi, hnth5@missouri.edu.
 
@@ -51,4 +51,4 @@ Eligibility is determined only by these Prolific filters. The study does not tes
 - Screeners: set the filters listed above and no others that would exclude participants silently.
 - Device: restrict to desktop in the device settings.
 - Completion codes: add a normal completion code (CQ6EH8Q1) and a screen-out code (CED70N6J, action: "Screen out / no further action" as appropriate). Set the screen-out code in `config.prolific.screen_out_completion_code`.
-- Estimated time: 110 minutes. Reward: $28.
+- Estimated time: 110 minutes. Reward: $26.
