@@ -1,0 +1,642 @@
+[
+  {
+    "text": "Dot 1 — remember its location.",
+    "source": "demos.caption15"
+  },
+  {
+    "text": "Hold the dots in mind for a moment.",
+    "source": "demos.caption22"
+  },
+  {
+    "text": "We chose Yes — that was incorrect; the correct answer was No, so the dot turns red.",
+    "source": "demos.caption65"
+  },
+  {
+    "text": "One quick reminder. Please make sure your audio volume is still at the level you set earlier. When you're ready, press Space to start the practice for Task 2.",
+    "source": "memory.tOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "After the 6 things, we will test your dot memory 3 times. Each time, a black dot will be shown for 3 seconds in some location. Press Yes if a dot was presented here. Press No if no dot was presented here. You will have 3 seconds for each star and for each dot test. If you answer in time, the star or dot can turn green if you were correct, or red if you were not, while it is still on the screen, so you can learn from each response.",
+    "source": "dual.iDInstructionNode.page2#0:script"
+  },
+  {
+    "text": "After the 6 things, we will test your dot memory 3 times. Each time, a white dot will be shown for 3 seconds in some location. Press Yes if a dot was presented here. Press No if no dot was presented here. You will have 3 seconds for each star and for each dot test. If you answer in time, the star or dot can turn green if you were correct, or red if you were not, while it is still on the screen, so you can learn from each response.",
+    "source": "dual.iDInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Dot 2 — keep tracking each location.",
+    "source": "demos.caption18"
+  },
+  {
+    "text": "One last thing, and this is very important. Keep the picture of the rotated pattern in your mind during the entire trial. The only moment you may let the picture go is when the central question mark appears — that is when the dot tests begin, and at that point you can drop the image and focus only on the dot tests. When you're ready, press Space to start the practice for Task 4.",
+    "source": "dual.iDInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Hold a credit card against your screen. Use the slider to resize the rectangle below until it exactly matches the width of the card.",
+    "source": "screen.screenCalibrationWithRetry.timeline[1].stimulus#0"
+  },
+  {
+    "text": "Then we play 3 more tones, one at a time. For each one: Press Yes, the right arrow, if you heard this tone before. Press No, the left arrow, if you did not. Keep your eyes on the centre of the circle and listen.",
+    "source": "memory.tOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Test 2 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption39"
+  },
+  {
+    "text": "Star 2 — judge it against your turned pattern.",
+    "source": "demos.caption43"
+  },
+  {
+    "text": "After the dots, we test your memory 3 times. Each time, a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown in that location. Press No, the left arrow, if it was not. Keep your eyes on the centre of the circle throughout.",
+    "source": "memory.dOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Last block. 60 more trials, same controls, with 60-second rests after trials 20 and 40. Press Space to begin Block 2.",
+    "source": "runner-intros.mainBIntroNode.stimulus#0"
+  },
+  {
+    "text": "Dot test 2 of 3: was a dot shown in this location?",
+    "source": "demos.caption49"
+  },
+  {
+    "text": "You are about to learn five short tasks . We'll teach them one at a time: for each task you will first read a short page of instructions and then do a few practice trials of that task before moving on to the next. Practice has 20 trials in total (4 per task). A few quick reading checks are mixed in along the way — please read each page carefully. If your practice score across all five tasks is below 70%, the whole instructions-and-practice sequence will run once more so you can get the hang of it.",
+    "source": "instructions.instructionsOverview.stimulus#0"
+  },
+  {
+    "text": "Then 6 things will happen one at a time, all mixed together. 3 stars inside the circle — for each star, decide whether it lands in a location that would be covered by the rotated pattern you are picturing. Press On-pattern if the star falls on your pictured pattern, or Not on-pattern if it does not. And 3 tones — try to remember each tone you hear, so you can answer the tone tests at the end of the trial, just like Task 2.",
+    "source": "dual.iTInstructionNode.page1#0:script"
+  },
+  {
+    "text": "When the question mark appears, the tone tests begin. You may let the picture go now and focus on the tones.",
+    "source": "demos.caption52"
+  },
+  {
+    "text": "Watch as dots appear one at a time. Try to remember the location of each dot.",
+    "source": "demos.caption14"
+  },
+  {
+    "text": "We chose Not on-pattern — that was the correct answer, so the star turns green.",
+    "source": "demos.caption70"
+  },
+  {
+    "text": "Please try to be as accurate as you can during the practice trials. If your overall practice score falls below 70% , you will be returned to the beginning of the instructions to read them again and repeat the practice.",
+    "source": "instructions.practiceReadinessNode.stimulus#0"
+  },
+  {
+    "text": "Practice is over. The main trials start now. There are two blocks of 60 trials. Each block includes a 30-second rest after trials 20 and 40, and there is another 30-second rest between the two blocks. Same controls as the practice: Yes / On-pattern on the → RIGHT arrow key, No / Not on-pattern on the ← LEFT arrow key. Important: Before you press both arrow keys to start each trial, look at the label shown above the circle. It tells you what type of trial is coming next, so you know what to expect. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
+    "text": "Tone 1 — listen and remember it.",
+    "source": "demos.caption30"
+  },
+  {
+    "text": "Now keep picturing the turned pattern. 3 stars will appear inside the circle. For each star, decide whether it falls on-pattern or not on-pattern.",
+    "source": "demos.caption39"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -60°).",
+    "source": "demos.caption3"
+  },
+  {
+    "text": "Tone 2 — listen and remember it.",
+    "source": "demos.caption32"
+  },
+  {
+    "text": "We chose No — that was the correct answer, so the question mark turns green.",
+    "source": "demos.caption66"
+  },
+  {
+    "text": "Task 4 combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. You'll have 5 seconds to imagine and turn it.",
+    "source": "dual.iDInstructionNode.page0#0:script"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -30°).",
+    "source": "demos.caption5"
+  },
+  {
+    "text": "Tone test 3 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption55"
+  },
+  {
+    "text": "One last thing, and this is very important. Keep the picture of the rotated pattern in your mind during the entire trial. The only moment you may let the picture go is when the central question mark appears — that is when the tone tests begin, and at that point you can drop the image and focus only on the tone tests. Please make sure your audio volume is still at the level you set earlier. When you're ready, press Space to start the practice for Task 5.",
+    "source": "dual.iTInstructionNode.page3#0:script"
+  },
+  {
+    "text": "One last thing, and this is very important. Keep the picture of the rotated pattern in your mind during the entire trial. The only moment you may let the picture go is when the central question mark appears — that is when the tone tests begin, and at that point you can drop the image and focus only on the tone tests. Please make sure your audio volume is still at the level you set earlier. When you're ready, press Space to see a demonstration of Task 5.",
+    "source": "dual.iTInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Test 1 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption36"
+  },
+  {
+    "text": "Now the main task begins. There are two blocks of 60 trials. Each block includes a 60-second rest after trials 20 and 40, and there is another 60-second rest between the two blocks. Same controls as the practice: Yes / On-pattern on one response key, No / Not on-pattern on the other. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
+    "text": "Then 6 things happen one at a time, mixed together. 3 stars inside the circle — for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And 3 tones — remember each tone you hear, for the tone tests at the end of the trial.",
+    "source": "dual.iTInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Memorize the locations of the dots that will appear inside the circle one at a time.",
+    "source": "demos.caption14"
+  },
+  {
+    "text": "Dot 2 — remember its location.",
+    "source": "demos.caption19"
+  },
+  {
+    "text": "After the 3 tones, we will play 3 more tones, one at a time. Each time, decide whether that tone was one of the ones you just heard. You don't need to look at anything during this task — just keep your eyes on the centre of the circle, and listen for each tone whenever it plays.",
+    "source": "memory.tOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "We chose Yes — that was incorrect; the correct answer was No, so the question mark turns red.",
+    "source": "demos.caption69"
+  },
+  {
+    "text": "Star 2 of 3 — judge it against your turned pattern.",
+    "source": "demos.caption42"
+  },
+  {
+    "text": "That was the last demonstration. Press Space when you are ready to start the practice.",
+    "source": "demos.caption59"
+  },
+  {
+    "text": "You have 3 seconds for each test. If you answer in time, the central question mark turns green for correct or red for incorrect. Please make sure your audio volume is still at the level you set earlier.",
+    "source": "memory.tOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Next, let's set up your hands. Throughout the study you will respond with the two horizontal arrow keys on your keyboard, the left arrow and the right arrow. The demonstrations will label them No or Yes, and Not on-pattern or On-pattern. How you place your hands matters. Use both hands, and only your index fingers. Place one index finger on each of the two horizontal arrow keys, one finger per hand. Keep them resting on those two keys throughout the study. Do not use two fingers of the same hand — one index finger per hand, on its own response key. When both index fingers are resting on the two response keys, click the button below to continue.",
+    "source": "viewing-distance.viewingDistanceTrial.timeline[1].stimulus#0:script"
+  },
+  {
+    "text": "Dot 3 — remember its location.",
+    "source": "demos.caption21"
+  },
+  {
+    "text": "After the dots, we will test your memory 3 times. Each time, a black dot will be shown for 3 seconds, and you have to say whether the dot was shown in that location. Just keep watching the centre of the circle, and remember each dot whenever it appears.",
+    "source": "memory.dOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "You are about to learn five short tasks . We'll teach them one at a time: for each task you will first read a short page of instructions and then do a few practice trials of that task before moving on to the next. Practice has 10 trials in total (2 per task). A few quick reading checks are mixed in along the way — please read each page carefully. If your practice score across all five tasks is below 70%, the whole instructions-and-practice sequence will run once more so you can get the hang of it.",
+    "source": "instructions.instructionsOverview.stimulus#0"
+  },
+  {
+    "text": "Task 5 combines Task 3, the pattern, with Task 2, the tones. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. You'll have 5 seconds to imagine and turn it.",
+    "source": "dual.iTInstructionNode.page0#0:script"
+  },
+  {
+    "text": "You will see 3 dots appear one at a time at different locations inside the circle. Each dot is brief — remember which locations the dots appear in.",
+    "source": "memory.dOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "We chose No — that was the correct answer, so the dot turns green.",
+    "source": "demos.caption62"
+  },
+  {
+    "text": "Would you like to watch the demonstration again? (you can watch up to 3 more times) Click the button below to watch it again.",
+    "source": "demos.caption58"
+  },
+  {
+    "text": "A few more things to know. You will have 3 seconds for each star. Try to get it right rather than answer quickly, but please don't take too long either. If you answer in time, the star can turn green if you were correct, or red if you were not. This colour change happens while the star is still on the screen, so you can learn from each star. Be honest about what you actually see in your mind. If your picture is fuzzy, just do your best — there is no expectation of a perfect mental picture. When you're ready, press Space to start the practice for Task 3.",
+    "source": "imagery.iOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "After the 6 things, we test your tone memory 3 times. Each test plays a tone. Press Yes, the right arrow, if you heard this tone before. Press No, the left arrow, if you did not. You have 3 seconds for each star and each tone test. If you answer in time, the star or central question mark turns green for correct or red for incorrect.",
+    "source": "dual.iTInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Welcome to Task 3. In this task, we will ask you to picture a pattern in your mind, and to keep that picture clear while you respond. Important: you will see the pattern in the demonstration just before the practice — please pay close attention to it then, because the pattern will not be shown again during the trials.",
+    "source": "imagery.iOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "Press both arrow keys ← and → to start the next trial.",
+    "source": "rest.resumeAfterRestGateNode.stimulus#0"
+  },
+  {
+    "text": "Take a short break. The next block will start automatically.",
+    "source": "rest.restNode.stimulus#0"
+  },
+  {
+    "text": "Tone test 3 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption60"
+  },
+  {
+    "text": "Tone test 1 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption53"
+  },
+  {
+    "text": "Would you like to watch the demonstration again? (you can watch up to 2 more times) Click the button below to watch it again.",
+    "source": "demos.caption57"
+  },
+  {
+    "text": "In Task 3 you will picture this pattern in your mind and keep that picture clear while you respond. Important: the demonstration will show this pattern once more so you can commit it to memory. It will not be shown during the trials.",
+    "source": "imagery.iOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "Welcome to Task 1. In this first task, you will see 3 dots appear one at a time at different locations inside a circle on the screen. Each dot is shown briefly. Try to remember which locations the dots appear in.",
+    "source": "memory.dOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -45°).",
+    "source": "demos.caption4"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -90°).",
+    "source": "demos.caption1"
+  },
+  {
+    "text": "Picture the pattern, turn it in your mind, then judge whether each star falls on the rotated pattern.",
+    "source": "demos.caption41"
+  },
+  {
+    "text": "We chose Yes — that was the correct answer, so the question mark turns green.",
+    "source": "demos.caption68"
+  },
+  {
+    "text": "Picture the rotated pattern, memorize each tone, and judge whether each star falls on the rotated pattern.",
+    "source": "demos.caption55"
+  },
+  {
+    "text": "One last thing. If you answer in time, the dot can turn green if you were correct, or red if you were not. This colour change happens while the dot is still on the screen, so you can learn from each test. You will now do a short practice for this task before moving on to the next. When you're ready, press Space to start the practice for Task 1.",
+    "source": "memory.dOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Dot 3 — keep tracking each location.",
+    "source": "demos.caption20"
+  },
+  {
+    "text": "You have 3 seconds for each test. Aim for accuracy first, but don't dwell. If you answer in time, the dot turns green for correct or red for incorrect while it is still on screen.",
+    "source": "memory.dOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Tone test 2 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption59"
+  },
+  {
+    "text": "Listen as tones play one at a time.",
+    "source": "demos.caption26"
+  },
+  {
+    "text": "When the question mark appears, the dot tests begin. You may let the picture go now and focus on the dots.",
+    "source": "demos.caption47"
+  },
+  {
+    "text": "Now keep picturing the turned pattern. 6 things appear inside the circle, mixed together: 3 dots to remember, 3 stars to judge as on-pattern or not on-pattern.",
+    "source": "demos.caption46"
+  },
+  {
+    "text": "Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the dot tests begin.",
+    "source": "dual.iDInstructionNode.page3#0:script"
+  },
+  {
+    "text": "We chose No — that was incorrect; the correct answer was Yes, so the question mark turns red.",
+    "source": "demos.caption67"
+  },
+  {
+    "text": "You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture — if it's fuzzy, just do your best.",
+    "source": "imagery.iOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "One quick reminder. Please make sure your audio volume is still at the level you set earlier. When you're ready, press Space to see a demonstration of Task 2.",
+    "source": "memory.tOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "We chose On-pattern — that was incorrect; the correct answer was Not on-pattern, so the star turns red.",
+    "source": "demos.caption73"
+  },
+  {
+    "text": "Here are the responses. Press Yes if you heard this tone before. Press No if you did not. You will have 3 seconds to provide your response. If you answer in time, the central question mark can change colour while it is still on the screen: it turns green if you were correct, or red if you were not, so you can learn from each test.",
+    "source": "memory.tOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "After the dots, we will test your memory 3 times. Each time, a white dot will be shown for 3 seconds, and you have to say whether the dot was shown in that location. Just keep watching the centre of the circle, and remember each dot whenever it appears.",
+    "source": "memory.dOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Then 6 things appear inside the circle one at a time, mixed together. 3 stars — for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And 3 dots — remember which locations they appear in, for the dot tests at the end of the trial.",
+    "source": "dual.iDInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Before we begin the tasks, let's get you set up. This study works best when you are seated comfortably and stay in roughly the same position for the rest of the session. Please take a moment to set yourself up. Sit so that your eyes are about an arm's length, roughly 60 centimetres, away from the monitor. Centre yourself in front of the screen: your eyes should be directly in front of the middle of the monitor, not off to one side. Make sure the screen is roughly at eye level — adjust your chair or the monitor if needed. And try to stay in this position for the rest of the study — moving your head closer or farther between trials can change how the task looks, and how well you can do it. When you are settled in this position, click the button below to continue.",
+    "source": "viewing-distance.viewingDistanceTrial.timeline[0].stimulus#0:script"
+  },
+  {
+    "text": "Take a one-minute rest. The task will resume automatically.",
+    "source": "rest.intraBlockRestNode.stimulus#0"
+  },
+  {
+    "text": "You have 3 seconds for each test. Aim for accuracy first, but don't dwell. If you answer in time, the dot turns green for correct or red for incorrect while it is still on screen. Press Space for the Task 1 demonstration.",
+    "source": "memory.dOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +15°).",
+    "source": "demos.caption7"
+  },
+  {
+    "text": "We chose Not on-pattern — that was incorrect; the correct answer was On-pattern, so the star turns red.",
+    "source": "demos.caption71"
+  },
+  {
+    "text": "After the 6 things, we test your dot memory 3 times. Each time a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown here. Press No, the left arrow, if it was not. You have 3 seconds for each star and each dot test. If you answer in time, the star or dot turns green for correct or red for incorrect.",
+    "source": "dual.iDInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the dot tests begin. Press Space for the Task 4 demonstration.",
+    "source": "dual.iDInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Replaying the demonstration…",
+    "source": "demos.caption61"
+  },
+  {
+    "text": "Tone 3 — keep listening for each tone.",
+    "source": "demos.caption33"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +90°).",
+    "source": "demos.caption12"
+  },
+  {
+    "text": "Task 2 is like Task 1, but with sounds instead of dots. You will hear 3 short tones, one at a time. Remember each tone you hear.",
+    "source": "memory.tOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "We chose No — that was incorrect; the correct answer was Yes, so the dot turns red.",
+    "source": "demos.caption63"
+  },
+  {
+    "text": "Tone test 2 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption54"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +45°).",
+    "source": "demos.caption9"
+  },
+  {
+    "text": "Then 6 things will appear inside the circle one at a time, all mixed together. 3 stars — for each star, decide whether it lands in a location that would be covered by the rotated pattern you are picturing, just like Task 3. Press On-pattern if the star falls on your pictured pattern, or Not on-pattern if it does not. And 3 dots — try to remember which locations the dots appear in, so you can answer the dot tests at the end of the trial, just like Task 1.",
+    "source": "dual.iDInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +60°).",
+    "source": "demos.caption10"
+  },
+  {
+    "text": "Test 1 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption38"
+  },
+  {
+    "text": "Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the tone tests begin. Please make sure your audio volume is still at the level you set earlier. Press Space for the Task 5 demonstration.",
+    "source": "dual.iTInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Memorize each of the tones that will play one at a time.",
+    "source": "demos.caption27"
+  },
+  {
+    "text": "Then 3 bright stars will flash inside the circle, one at a time. For each star, decide whether it lands on the rotated pattern you are picturing. Press On-pattern, the right arrow, if the star falls on your pictured pattern. Press Not on-pattern, the left arrow, if it does not.",
+    "source": "imagery.iOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "The question mark means the tone tests begin. You may let the picture go and focus on the tones.",
+    "source": "demos.caption57"
+  },
+  {
+    "text": "Star 3 of 3 — judge it against your turned pattern.",
+    "source": "demos.caption44"
+  },
+  {
+    "text": "Thank you for completing the experiment. Your work on these trials is enormously helpful to our research, and we are very grateful for your time and attention. We'll save your data now — this usually takes a few seconds. After that, there are a couple of short questionnaires and then you'll be returned to Prolific. Press Space to continue.",
+    "source": "runner-intros.endOfTaskIntroNode.stimulus#0"
+  },
+  {
+    "text": "Test 3 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption38"
+  },
+  {
+    "text": "Dot 1 — keep tracking each location.",
+    "source": "demos.caption17"
+  },
+  {
+    "text": "Open your computer's volume control (in the system toolbar or settings) and set the master volume to roughly the middle of its range . On the next page, you will hear a sequence of tones. You will use an on-screen slider to fine-tune the loudness to a comfortable level — so leaving your system volume near the middle gives that slider room to move in either direction. When your system volume is set, click Continue.",
+    "source": "volume.speakerVolumeInstructionTrial.stimulus#0"
+  },
+  {
+    "text": "Would you like to watch the demonstration again? (this is the last replay you can request) Click the button below to watch it again.",
+    "source": "demos.caption56"
+  },
+  {
+    "text": "Thank you for completing the trials. Your work is enormously helpful to our research, and we are grateful for your time and attention. A couple of short questionnaires are next. Once you finish them, your data will be saved and you will be returned to Prolific. Press Space to continue.",
+    "source": "runner-intros.endOfTaskIntroNode.stimulus#0"
+  },
+  {
+    "text": "Step 1 of 3 — Here is the pattern. Picture it in your mind.",
+    "source": "demos.caption0"
+  },
+  {
+    "text": "Now on to Task 2. This task works just like Task 1, but now you will hear sounds instead of seeing dots. You will hear 3 short tones, one at a time. Try to remember each tone you hear.",
+    "source": "memory.tOnlyInstructionNode.page0#0:script"
+  },
+  {
+    "text": "One last thing, and this is very important. Keep the picture of the rotated pattern in your mind during the entire trial. The only moment you may let the picture go is when the central question mark appears — that is when the dot tests begin, and at that point you can drop the image and focus only on the dot tests. When you're ready, press Space to see a demonstration of Task 4.",
+    "source": "dual.iDInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Dot test 3 of 3: was a dot shown in this location?",
+    "source": "demos.caption50"
+  },
+  {
+    "text": "Dot test 1 of 3: was a dot shown in this location?",
+    "source": "demos.caption48"
+  },
+  {
+    "text": "Now for the responses. Press Yes if you remember you saw a dot in that location. Press No if you did not. You will have 3 seconds to provide your response. Try to get it right rather than answer quickly, but please don't take too long either.",
+    "source": "memory.dOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Star 1 — judge it against your turned pattern.",
+    "source": "demos.caption41"
+  },
+  {
+    "text": "Step 3 of 3 — This is how your rotated mental image should look. Hold this picture in your mind.",
+    "source": "demos.caption13"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -15°).",
+    "source": "demos.caption6"
+  },
+  {
+    "text": "You have 3 seconds for each test. If you answer in time, the central question mark turns green for correct or red for incorrect. Please make sure your audio volume is still at the level you set earlier. Press Space for the Task 2 demonstration.",
+    "source": "memory.tOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Star 1 of 3 — judge it against your turned pattern.",
+    "source": "demos.caption40"
+  },
+  {
+    "text": "The question mark means the dot tests begin. You may let the picture go and focus on the dots.",
+    "source": "demos.caption51"
+  },
+  {
+    "text": "Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the tone tests begin. Please make sure your audio volume is still at the level you set earlier.",
+    "source": "dual.iTInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Last tone — keep remembering each one.",
+    "source": "demos.caption28"
+  },
+  {
+    "text": "Now the main task begins. There are two blocks of 60 trials. Each block includes a 30-second rest after trials 20 and 40, and there is another 30-second rest between the two blocks. Same controls as the practice: Yes / On-pattern on one response key, No / Not on-pattern on the other. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
+    "text": "You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture — if it's fuzzy, just do your best. Press Space for the Task 3 demonstration.",
+    "source": "imagery.iOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Last dot — remember its location.",
+    "source": "demos.caption16"
+  },
+  {
+    "text": "Now on to the last task, Task 5. This task combines Task 3, the pattern, with Task 2, the tones. Each trial begins with the arrow, which tells you to turn the pattern in your mind. Hold this turned pattern in mind for the whole trial.",
+    "source": "dual.iTInstructionNode.page0#0:script"
+  },
+  {
+    "text": "Test 3 of 3: was a dot just shown in this location?",
+    "source": "demos.caption25"
+  },
+  {
+    "text": "Test 1 of 3: was a dot just shown in this location?",
+    "source": "demos.caption23"
+  },
+  {
+    "text": "Picture the rotated pattern, memorize the dot locations, and judge whether each star falls on the rotated pattern.",
+    "source": "demos.caption49"
+  },
+  {
+    "text": "Tone 3 — listen and remember it.",
+    "source": "demos.caption34"
+  },
+  {
+    "text": "Test 3 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption40"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +30°).",
+    "source": "demos.caption8"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +75°).",
+    "source": "demos.caption11"
+  },
+  {
+    "text": "Now on to Task 4. This task combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow, which tells you to turn the pattern in your mind. Hold this turned pattern in mind for the whole trial.",
+    "source": "dual.iDInstructionNode.page0#0:script"
+  },
+  {
+    "text": "One last thing. If you answer in time, the dot can turn green if you were correct, or red if you were not. This colour change happens while the dot is still on the screen, so you can learn from each test. You will now do a short practice for this task before moving on to the next. When you're ready, press Space to see a demonstration of Task 1.",
+    "source": "memory.dOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Your previous setting was outside the range we can use. Please make sure you have an actual credit card in hand. On the next screen, hold the card flat against your monitor and drag the slider until the on-screen rectangle matches the card's width. If you don't have a credit card available, just continue — we will use your best estimate.",
+    "source": "screen.screenCalibrationWithRetry.timeline[0].timeline[0].stimulus#0"
+  },
+  {
+    "text": "A few more things to know. You will have 3 seconds for each star. Try to get it right rather than answer quickly, but please don't take too long either. If you answer in time, the star can turn green if you were correct, or red if you were not. This colour change happens while the star is still on the screen, so you can learn from each star. Be honest about what you actually see in your mind. If your picture is fuzzy, just do your best — there is no expectation of a perfect mental picture. When you're ready, press Space to see a demonstration of Task 3.",
+    "source": "imagery.iOnlyInstructionNode.page3#0:script"
+  },
+  {
+    "text": "Star 3 — judge it against your turned pattern.",
+    "source": "demos.caption45"
+  },
+  {
+    "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by -75°).",
+    "source": "demos.caption2"
+  },
+  {
+    "text": "24 tones will start playing in a loop in a moment, from low to high. Each box lights up while its tone plays. Use the slider below to set a level that is clearly audible but never uncomfortably loud , even on the very lowest and very highest tones. When the level feels right, click I'm comfortable — continue .",
+    "source": "tone-fam.toneAudibilityAndComfortTrial.stimulus#0"
+  },
+  {
+    "text": "Tone test 1 of 3: was that tone one of the ones you just heard?",
+    "source": "demos.caption58"
+  },
+  {
+    "text": "Tone 1 — listen and try to remember it.",
+    "source": "demos.caption27"
+  },
+  {
+    "text": "We chose On-pattern — that was the correct answer, so the star turns green.",
+    "source": "demos.caption72"
+  },
+  {
+    "text": "After the 6 things, we will test your tone memory 3 times. Each time, a tone will be played, and you will have 3 seconds to decide whether it was one of the tones you just heard. Press Yes if you heard this tone before. Press No if you did not. You will have 3 seconds for each star and for each tone test. If you answer in time, the star or central question mark can turn green if you were correct, or red if you were not, while it is still on the screen, so you can learn from each response.",
+    "source": "dual.iTInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Press Space when you are ready to start the practice.",
+    "source": "demos.caption60"
+  },
+  {
+    "text": "Now keep picturing the turned pattern. 6 things happen, mixed together: 3 tones to remember, 3 stars (inside the circle) to judge as on-pattern or not on-pattern.",
+    "source": "demos.caption51"
+  },
+  {
+    "text": "Thank you for completing the experiment. We'll save your data now — this usually takes a few seconds. Press Space to continue.",
+    "source": "runner-intros.endOfTaskIntroNode.stimulus#0"
+  },
+  {
+    "text": "Each trial begins with an arrow. The arrow tells you to turn the pattern in your mind in the direction it points, like rotating a piece of paper. Hold this turned pattern in mind. You'll have 5 seconds to imagine and turn the pattern, then the trial continues automatically.",
+    "source": "imagery.iOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "We chose Yes — that was the correct answer, so the dot turns green.",
+    "source": "demos.caption64"
+  },
+  {
+    "text": "Tone 2 — keep listening for each tone.",
+    "source": "demos.caption31"
+  },
+  {
+    "text": "Press both Left ← and Right → arrow keys to start the next trial.",
+    "source": "rest.resumeAfterRestGateNode.stimulus#0"
+  },
+  {
+    "text": "Hold the tones in mind for a moment.",
+    "source": "demos.caption35"
+  },
+  {
+    "text": "Take a 30-second rest. The task will resume automatically.",
+    "source": "rest.intraBlockRestNode.stimulus#0"
+  },
+  {
+    "text": "Then 3 bright stars will flash inside the circle, one at a time. For each star, decide whether it lands in a location that would be covered by the rotated pattern you are picturing. Press On-pattern if the star falls on your pictured pattern. Press Not on-pattern if it does not.",
+    "source": "imagery.iOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Last block. 60 more trials, same controls, with 30-second rests after trials 20 and 40. Press Space to begin Block 2.",
+    "source": "runner-intros.mainBIntroNode.stimulus#0"
+  },
+  {
+    "text": "Here's how each trial starts. On each trial, an arrow will briefly appear. The arrow tells you to turn the pattern in your mind in the direction it points, like rotating a piece of paper. Hold this turned pattern in mind.",
+    "source": "imagery.iOnlyInstructionNode.page1#0:script"
+  },
+  {
+    "text": "Practice is over. The main trials start now. There are two blocks of 60 trials. Each block includes a 30-second rest after trials 20 and 40, and there is another 30-second rest between the two blocks. Same controls as the practice: Yes / On-pattern on the → RIGHT arrow key, No / Not on-pattern on the ← LEFT arrow key. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
+    "text": "Test 2 of 3: was a dot just shown in this location?",
+    "source": "demos.caption24"
+  },
+  {
+    "text": "Test 2 of 3: was this tone one of the ones you just heard?",
+    "source": "demos.caption37"
+  },
+  {
+    "text": "Tone 1 — keep listening for each tone.",
+    "source": "demos.caption29"
+  }
+]

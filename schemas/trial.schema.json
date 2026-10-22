@@ -1,0 +1,653 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wm-img-followup:schemas:trial",
+  "title": "Per-trial data row — WM × Imagery follow-up experiment",
+  "description": "JSON Schema for one row of jsPsych data emitted during a session. Every row carries a `phase` discriminator; per-phase fields are documented as optional in this top-level schema and constrained by the `oneOf` per-phase variants in `$defs`. Engineering non-negotiable #6 in design/Coding_Agent_Prompt.md: every row written by the runner validates against this document.",
+  "type": "object",
+  "required": ["phase"],
+  "additionalProperties": true,
+  "properties": {
+    "phase": {
+      "type": "string",
+      "description": "The phase discriminator. Locked taxonomy below — analysis scripts filter on this field. Adding a new phase requires updating both this enum and the runtime emitter that writes it.",
+      "enum": [
+        "desktop_gate",
+        "desktop_gate_fail",
+        "consent",
+        "consent_declined",
+        "demographics",
+        "viewing_distance",
+        "hand_placement",
+        "display_mode_check",
+        "screen_calibration",
+        "screen_calibration_start",
+        "screen_calibration_retry_hint",
+        "screen_calibration_outcome",
+        "screen_calibration_fail",
+        "speaker_volume_instruction",
+        "enter_fullscreen",
+        "visibility_recorder_start",
+        "visibility_event",
+        "tone_audibility_and_comfort",
+        "tone_audibility_fail",
+        "headphone_check_intro",
+        "headphone_check_plan",
+        "headphone_check_trial",
+        "headphone_check_summary",
+        "pitch_check_plan",
+        "pitch_check_trial",
+        "pitch_check_summary",
+        "pitch_check_gate",
+        "pitch_check_retry_hint",
+        "audio_check_fail",
+        "timing_probe",
+        "timing_probe_hint",
+        "timing_probe_fail",
+        "display_guard_event",
+        "display_guard_stop",
+        "session_start",
+        "unload_attempt",
+        "back_pressed",
+        "session_info",
+        "instructions_overview",
+        "instructions_memory_d_only",
+        "instructions_memory_t_only",
+        "instructions_imagery_i_only",
+        "instructions_dual_i_d",
+        "instructions_dual_i_t",
+        "demo_d_only",
+        "demo_t_only",
+        "demo_i_only",
+        "demo_i_d",
+        "demo_i_t",
+        "attention_check",
+        "attention_check_summary",
+        "practice_iteration_start",
+        "practice_readiness",
+        "practice_feedback",
+        "practice_disqualification",
+        "main_a_intro",
+        "main_b_intro",
+        "rest",
+        "rest_resume_gate",
+        "pattern_phase",
+        "iti",
+        "d_only_trial_start",
+        "d_only_encoding",
+        "d_only_retention",
+        "d_only_probe",
+        "t_only_trial_start",
+        "t_only_encoding",
+        "t_only_retention",
+        "t_only_probe",
+        "i_only_arrow_cue",
+        "i_only_imagination",
+        "i_only_trial_start",
+        "i_only_encoding",
+        "i_only_star",
+        "i_only_iti",
+        "i_d_arrow_cue",
+        "i_d_imagination",
+        "i_d_trial_start",
+        "i_d_encoding",
+        "i_d_star",
+        "i_d_retention",
+        "i_d_probe",
+        "i_t_arrow_cue",
+        "i_t_imagination",
+        "i_t_trial_start",
+        "i_t_encoding",
+        "i_t_star",
+        "i_t_retention",
+        "i_t_probe",
+        "end_of_task_intro",
+        "questionnaire_intro",
+        "strategy_memory_only",
+        "strategy_tone_only",
+        "strategy_imagery_only",
+        "strategy_i_d",
+        "strategy_i_t",
+        "music_experience_intro",
+        "music_experience",
+        "upload_session_end",
+        "completion_redirect"
+      ]
+    },
+    "trial_type": {
+      "type": "string",
+      "description": "jsPsych built-in: the plugin name that produced this row (e.g. 'html-keyboard-response', 'survey-html-form'). It is NOT the experimental condition; use `condition`."
+    },
+    "trial_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "jsPsych built-in: zero-based index of the row across the entire session."
+    },
+    "time_elapsed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "jsPsych built-in: ms since experiment start when this trial completed."
+    },
+    "internal_node_id": {
+      "type": "string",
+      "description": "jsPsych built-in: dotted-path locator of the timeline node that produced this row."
+    },
+    "rt": {
+      "type": ["number", "null"],
+      "description": "jsPsych built-in: response time in ms (null if no response was given)."
+    },
+    "response": {
+      "description": "jsPsych built-in: the response payload. String for keyboard plugins, object for survey plugins. Null when no response."
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Auto-incrementing sequence number stamped by the IndexedDB storage layer (`storage.js`). Used by the chunked uploader to advance the upload cursor."
+    },
+    "trial_index_in_block": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Index of the trial in its condition's 24-trial pool (0-23). It is NOT the order of presentation and it repeats across conditions and across main_a / main_b; identify a trial with `trial_uid`, order trials with `presentation_index`. On `pattern_phase` rows the value is the presentation position in the block of the trial that follows."
+    },
+    "rotation_deg": {
+      "type": "number",
+      "description": "Rotation of the grid and pattern for the trial, an integer in -90..90 (clockwise positive). Drawn from six 30-degree strata (-90..-61, -60..-31, -30..-1, 1..30, 31..60, 61..90), 4 per stratum in each 24-trial condition, 0 not used. Absent for d_only and t_only."
+    },
+    "display_rotation_deg": {
+      "type": "number",
+      "description": "Rotation at which the grid is shown in a d_only trial, an integer in -90..90 (clockwise positive), drawn from the same six 30-degree strata as `rotation_deg`. Present on d_only rows only."
+    },
+    "probe_position": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Serial position of the probe within the trial's 3-probe sequence (0-indexed)."
+    },
+    "encoding_position": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Encoding position (0-2) tied to the probe by the scheduler. For a target probe it is the position of the item that was probed. For a foil it is a label only (no item was encoded for it). Present on probe rows of all four memory conditions."
+    },
+    "probe_type": {
+      "type": "string",
+      "enum": ["T_on", "T_off", "F_on", "F_off"],
+      "description": "Four-probe-type taxonomy from design §6.2: T = target (was-encoded), F = foil (never-encoded); on/off = on- vs off-pattern cell."
+    },
+    "probed_cell": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 24,
+      "description": "Cell index on the 5×5 grid (0–24) where the probe appeared."
+    },
+    "probe_pattern_label": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "Whether the probed cell is on the 13-cell gray pattern (minus centre) or off it."
+    },
+    "probed_tone_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23,
+      "description": "Index into the 24-tone bank for the probed tone (T-only / I+T only)."
+    },
+    "probed_tone_freq_hz": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Frequency of the probed tone in Hz (log-equally spaced between config.tones.low_freq_hz and config.tones.high_freq_hz)."
+    },
+    "is_target": {
+      "type": "boolean",
+      "description": "True iff the probe is a target (was encoded), false for foils."
+    },
+    "responded": {
+      "type": "boolean",
+      "description": "True iff the participant pressed a valid response key within the response window."
+    },
+    "said_yes": {
+      "type": ["boolean", "null"],
+      "description": "Yes/no response on memory-probe rows. Null if no response (timeout / wrong key)."
+    },
+    "said_on": {
+      "type": ["boolean", "null"],
+      "description": "On/off response on imagery-star rows (i.e., did the participant judge the star to be on the pattern?). Null if no response."
+    },
+    "response_key": {
+      "type": ["string", "null"],
+      "description": "Raw key pressed (e.g., 'arrowright', 'j'). Null if no response."
+    },
+    "response_rt_ms": {
+      "type": ["number", "null"],
+      "description": "Response time in ms relative to stimulus onset (`performance.now()` deltas). Null if no response."
+    },
+    "probe_correct": {
+      "type": "boolean",
+      "description": "Whether the participant's yes/no probe response was correct (true) or incorrect / non-response (false). Memory-probe rows."
+    },
+    "star_correct": {
+      "type": "boolean",
+      "description": "Whether the participant's star response (on/off judgement) was correct. Imagery-star rows."
+    },
+    "feedback_shown_at_ms": {
+      "type": ["number", "null"],
+      "description": "performance.now() at the moment feedback was rendered. Null if no feedback (e.g., main blocks suppress feedback per design §11.1)."
+    },
+    "slot_index_in_seq": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "Slot index within the trial's 6-slot M/S sequence (0-indexed; design §8.1)."
+    },
+    "pattern_label": {
+      "type": "string",
+      "enum": ["on", "off"],
+      "description": "Whether a star or dot occupied an on-pattern or off-pattern cell."
+    },
+    "is_on_pattern": {
+      "type": "boolean",
+      "description": "Boolean form of `pattern_label` (true = on-pattern)."
+    },
+    "attention_check_id": {
+      "type": "string",
+      "pattern": "^ac\\d+_",
+      "description": "Identifier for the typed-instruction attention check (design §11.4)."
+    },
+    "attention_check_raw": {
+      "type": "string",
+      "description": "Raw participant typed input (un-normalised) for the attention check."
+    },
+    "attention_check_passed": {
+      "type": "boolean",
+      "description": "True iff `normalise(raw) === normalise(expected_answer)` (trim + lowercase, no punctuation strip)."
+    },
+    "attention_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total attention checks administered, stamped on the `attention_check_summary` row."
+    },
+    "attention_passed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total attention checks passed."
+    },
+    "attention_failed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total attention checks failed."
+    },
+    "exit_reason": {
+      "type": "string",
+      "enum": [
+        "desktop_required",
+        "consent_declined",
+        "tones_not_audible",
+        "screen_calibration_failed",
+        "audio_check_failed",
+        "timing_check_failed",
+        "practice_criterion_not_met"
+      ],
+      "description": "Why the session ended early. Present only on the exit row (`desktop_gate_fail`, `consent_declined`, `tone_audibility_fail`, `screen_calibration_fail`, `audio_check_fail`, `timing_probe_fail`, `practice_disqualification`)."
+    },
+    "attention_excluded": {
+      "type": "boolean",
+      "description": "True iff `attention_failed > config.attention_checks.instruction_max_failures` (strict-greater-than)."
+    },
+    "attention_threshold": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The exclusion threshold applied (mirror of `config.attention_checks.instruction_max_failures`)."
+    },
+    "strategy_section": {
+      "type": "string",
+      "enum": ["memory_only", "tone_only", "imagery_only", "i_d", "i_t"],
+      "description": "Section identifier for the strategy questionnaire row, matching the trailing portion of the row's `phase` (e.g. `strategy_i_d` → `i_d`)."
+    },
+    "strategy_responses": {
+      "type": "object",
+      "description": "Map from strategy item id (`strategy_q01`..`strategy_q19`) to the participant's selected option value (a string in {'1','2','3','4','5'} on the 5-point agreement Likert; 1 = Strongly disagree, 5 = Strongly agree) or null if blank. Each of the five strategy_* rows carries only the items belonging to its section; the analyst collapses them via `scoreStrategy` (src/questionnaire/strategy.js).",
+      "additionalProperties": {
+        "type": ["string", "null"],
+        "enum": ["1", "2", "3", "4", "5", null]
+      }
+    },
+    "music_experience_responses": {
+      "type": "object",
+      "description": "Map from music-experience item id (me_q01–me_q08) to the participant's selected option value (string code, e.g. '4-5', '1.5', 'intermediate', 'yes') or null if blank. Items me_q01..me_q07 are the Goldsmiths Musical Sophistication Index — Musical Training subscale verbatim (Müllensiefen, Gingras, Musil & Stewart, 2014, *PLOS ONE* 9(2) e89642), each scored 1..7 (item 7 uses 5 named anchors mapped to {1, 2.5, 4, 5.5, 7}); the composite is their sum, range 7..49 (analyst computes via `goldMsiMtComposite`). Item me_q08 is a self-reported absolute-pitch flag, kept outside the composite. Categorical covariate fields used for sensitivity analysis after the §3.2 non-musical tone-bank redesign (draft revisions 2026-05-05 and 2026-05-07).",
+      "additionalProperties": {
+        "type": ["string", "null"]
+      }
+    },
+    "consented": {
+      "type": "boolean",
+      "description": "True iff the participant clicked the 'I consent' button on the consent screen."
+    },
+    "cc_px_width": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Credit-card calibration width in CSS pixels at the moment the participant clicked 'this matches my card'."
+    },
+    "px_per_mm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Derived px/mm conversion for the participant's display, stamped on the screen-calibration row."
+    },
+    "tones_audible": {
+      "type": "boolean",
+      "description": "Stamped on `tone_audibility_and_comfort` rows. True iff the participant clicked 'I'm comfortable — continue' before the 10-sweep cap was hit; false iff the sweep cycled through the bank ten times without a press, which routes to the `tone_audibility_fail` exit."
+    },
+    "user_playback_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Final position of the in-page playback-volume slider (0..100) at the moment the participant pressed Yes (or at the moment the 10-sweep timeout fired). Stamped on `tone_audibility_and_comfort` rows."
+    },
+    "user_playback_gain": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Linear scalar (`user_playback_pct / 100`) applied to every subsequent tone the experiment plays via `playSineTone` / `playStereoSine` / `playPinkNoise`. Stamped on `tone_audibility_and_comfort` rows."
+    },
+    "sweeps_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Number of full 24-tone sweeps that started before the participant pressed Yes (or before the 10-sweep cap halted the loop). Stamped on `tone_audibility_and_comfort` rows."
+    },
+    "completion_redirect_url": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "URL the participant was redirected to at session end (or null if the placeholder URL skipped redirect)."
+    },
+    "completion_was_placeholder": {
+      "type": "boolean",
+      "description": "True iff the configured completion URL still contained the `PLACEHOLDER` token at session end (test-build flag)."
+    },
+    "arrow_cue_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded to whole ms, since document time origin) at which the rotation-arrow cue became visible. Stamped on `i_only_arrow_cue` / `i_d_arrow_cue` / `i_t_arrow_cue` rows. Use with `trial_start_gate_onset_ts_ms` to recover the cue→gate latency exactly; use with `gate_passed_at_ms` (relative to gate onset) to derive a session-stable pre-imagine duration."
+    },
+    "trial_start_gate_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) when the trial-start gate rendered (the empty-circle frame the participant looks at while pre-imagining the rotated pattern and pressing both arrow keys). Stamped on `*_trial_start` rows. Combine with `gate_passed_at_ms` (relative offset already on the row) to compute the absolute moment the participant armed the trial."
+    },
+    "encoding_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the encoding node's grid frame mounted (i.e. when the on_load hook fired). Stamped on `d_only_encoding`, `t_only_encoding`, `i_only_encoding`, `i_d_encoding`, `i_t_encoding` rows. For imagery conditions, the first encoded slot starts ROTATION_ANIMATION_MS + POST_ROTATION_MS later than this timestamp; for D-only / T-only the first slot starts immediately."
+    },
+    "slot_onsets_ts_ms": {
+      "type": "array",
+      "items": {
+        "type": ["integer", "null"]
+      },
+      "description": "Per-slot performance.now() timestamps (rounded ms) captured at the moment each of the 6 encoding-sequence slots began. Index aligns with `slot_index_in_seq` (0..5). Slots with no event in this trial remain null. Stamped on every `*_encoding` row. For T-only / I+T M-slots the visible event is the tone, but the timestamp still marks the slot's local start (when `playToneByCell` was scheduled)."
+    },
+    "slot_audio_context_times_ms": {
+      "type": "array",
+      "items": {
+        "type": ["integer", "null"]
+      },
+      "description": "Web Audio `AudioContext.currentTime` converted to ms (`× 1000`, rounded) at the moment each M-slot tone was scheduled. Length 6, with `null` entries for non-tone slots (S-slots and any slots not in this trial). Stamped on `t_only_encoding` and `i_t_encoding` rows only. The audio clock has its own time origin (separate from `performance.now()`), so use deltas within this array — not subtractions against `slot_onsets_ts_ms`."
+    },
+    "retention_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the retention frame mounted. Stamped on `d_only_retention`, `t_only_retention`, `i_d_retention`, `i_t_retention` rows. The retention window is `RETENTION_MS` long (config.memory.retention_interval_ms = 2000), so `retention_onset_ts_ms + 2000` ≈ first probe onset."
+    },
+    "probe_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at the moment the probe stimulus was added on top of the mounted frame (white dot for D-only / I+D, tone scheduled for T-only / I+T). Stamped on every `*_probe` row. `response_rt_ms` on the same row is measured relative to this onset, so absolute response time = `probe_onset_ts_ms + response_rt_ms`."
+    },
+    "star_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which a star stimulus rendered inside an imagery encoding sequence. Stamped on `i_only_star`, `i_d_star`, `i_t_star` aux rows. Combined with the surrounding `slot_onsets_ts_ms` array on the encoding row, this lets analysts recover the exact inter-star spacing each participant experienced."
+    },
+    "audio_context_time_at_onset_ms": {
+      "type": "integer",
+      "description": "Web Audio `AudioContext.currentTime × 1000` (rounded ms) at the moment the probe tone was scheduled. Stamped on `t_only_probe` and `i_t_probe` rows. The audio clock has its own time origin separate from `performance.now()`."
+    },
+    "iti_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the post-trial inter-trial-interval frame mounted. Stamped on `iti` and `i_only_iti` rows. The ITI is fixed at 800 ms by default (the `itiNode` `ms` parameter), so `iti_onset_ts_ms + 800` ≈ next trial's preamble onset."
+    },
+    "rest_started_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the inter-block rest screen rendered. Stamped on `rest` rows. The rest is locked at `config.blocks.rest_duration_s` (30 s) so `rest_ended_ts_ms - rest_started_ts_ms` should reproduce that constant within a frame."
+    },
+    "rest_ended_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the rest countdown reached zero and the node finished. Stamped on `rest` rows. Use with `rest_started_ts_ms` to compute the realised inter-block delay."
+    },
+    "condition": {
+      "type": "string",
+      "enum": ["d_only", "t_only", "i_only", "i_d", "i_t"],
+      "description": "Experimental condition of the trial. Stamped on every row of a trial (gate, cue, imagination, encoding, retention, probe, star, ITI, pattern phase)."
+    },
+    "trial_uid": {
+      "type": "string",
+      "pattern": "^(main_[ab]-\\d{3}-(d_only|t_only|i_only|i_d|i_t)|practice-(d_only|t_only|i_only|i_d|i_t)-\\d{2})$",
+      "description": "Trial identifier, unique within a session for main trials (block, presentation index, condition), e.g. main_a-007-i_d. Practice identifiers are unique within a practice pass; a repeated practice pass reuses them (the exporter numbers the passes in `attempt`)."
+    },
+    "presentation_index": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 120,
+      "description": "Order of the trial over the whole main task, 1-120 across main_a and main_b. Null in practice."
+    },
+    "block_position": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "0-based position of the trial inside its block, in presentation order."
+    },
+    "pool_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23,
+      "description": "Same value as `trial_index_in_block` (index in the condition's 24-trial pool); stamped under an unambiguous name."
+    },
+    "is_practice": {
+      "type": "boolean",
+      "description": "True for practice trials."
+    },
+    "block_label": {
+      "type": "string",
+      "enum": ["practice", "main_a", "main_b", "intra_main_a", "intra_main_b"],
+      "description": "Block the row belongs to."
+    },
+    "background_shade": {
+      "type": ["string", "null"],
+      "enum": ["white", "gray", null],
+      "description": "Page background of the trial. Exactly 12 white and 12 gray per condition, 6 and 6 in each main block."
+    },
+    "sequence": {
+      "type": "string",
+      "pattern": "^[MS]{6}$",
+      "description": "Six-slot sequence of the trial, M = memory-item slot, S = star slot. One of 14 sequences (run length at most 2, three of each letter)."
+    },
+    "trial_spec": {
+      "type": "object",
+      "description": "Plan of the whole trial as drawn by the scheduler, stamped on the encoding row: condition, rotation_deg (imagery conditions, else null), display_rotation_deg (d_only, else null), sequence, memory_items [{slot, encoding_position, cell, pattern_label}], stars [{slot, probe_position, cell, pattern_label}], dummies [{slot, cell}] (placeholders; never visible) and probes [{probe_position, encoding_position, type, cell, is_target, pattern_label}]. Slots are 0-based. The exporter reads it so that a star or probe row that was not recorded can still be listed."
+    },
+    "probe_frame_rotation_deg": {
+      "type": "number",
+      "description": "Rotation of the frame the recognition probe was drawn in (0 = upright grid)."
+    },
+    "probe_x_mm": {
+      "type": "number",
+      "description": "Horizontal position of the probe cell centre on the screen, mm, origin at fixation, x right, after `probe_frame_rotation_deg`."
+    },
+    "probe_y_mm": {
+      "type": "number",
+      "description": "Vertical position of the probe cell centre on the screen, mm, origin at fixation, y down."
+    },
+    "probe_radius_mm": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Distance of the probe cell centre from fixation, mm (does not depend on rotation)."
+    },
+    "star_frame_rotation_deg": {
+      "type": "number",
+      "description": "Rotation of the grid the star was drawn in (the trial rotation)."
+    },
+    "star_x_mm": {
+      "type": "number",
+      "description": "Horizontal screen position of the star centre, mm, origin at fixation, x right."
+    },
+    "star_y_mm": {
+      "type": "number",
+      "description": "Vertical screen position of the star centre, mm, origin at fixation, y down."
+    },
+    "star_radius_mm": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Distance of the star cell centre from fixation, mm."
+    },
+    "session_id": {
+      "type": ["string", "null"],
+      "description": "Prolific session id."
+    },
+    "prolific_pid": {
+      "type": ["string", "null"],
+      "description": "Prolific participant id."
+    },
+    "study_id": {
+      "type": ["string", "null"],
+      "description": "Prolific study id."
+    },
+    "prng_algorithm": {
+      "type": "string",
+      "description": "Name of the generator behind the schedule."
+    },
+    "prng_seed_string": {
+      "type": ["string", "null"],
+      "description": "Seed string: PROLIFIC_PID|STUDY_ID|SESSION_ID (a random preview string when the URL has no Prolific parameters). The whole schedule can be rebuilt from it."
+    },
+    "prng_seed_uint32": {
+      "type": ["integer", "null"],
+      "description": "32-bit seed derived from `prng_seed_string`."
+    },
+    "build_id": {
+      "type": "string",
+      "description": "Build identifier (config.build_id)."
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version (config.schema_version)."
+    },
+    "screen_width_px": {
+      "type": ["integer", "null"],
+      "description": "Screen width, CSS px."
+    },
+    "screen_height_px": {
+      "type": ["integer", "null"],
+      "description": "Screen height, CSS px."
+    },
+    "inner_width_px": {
+      "type": ["integer", "null"],
+      "description": "Window inner width, CSS px."
+    },
+    "inner_height_px": {
+      "type": ["integer", "null"],
+      "description": "Window inner height, CSS px."
+    },
+    "device_pixel_ratio": {
+      "type": ["number", "null"],
+      "description": "window.devicePixelRatio."
+    },
+    "grid_cells_per_side": {
+      "type": "integer",
+      "description": "Cells per side of the square grid (5)."
+    },
+    "cell_size_mm": {
+      "type": "number",
+      "description": "Side of one grid cell, mm."
+    },
+    "grid_size_mm": {
+      "type": "number",
+      "description": "Side of the grid, mm."
+    },
+    "dot_diameter_mm": {
+      "type": "number",
+      "description": "Diameter of a memory dot, mm."
+    },
+    "star_size_mm": {
+      "type": "number",
+      "description": "Bounding diameter of a star, mm."
+    },
+    "open_square_size_mm": {
+      "type": "number",
+      "description": "Side of a placeholder square, mm (placeholders are mounted but not shown)."
+    },
+    "on_pattern_cells": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 24
+      },
+      "description": "The 12 on-pattern cells (pattern cells without the centre)."
+    },
+    "rotation_min_deg": {
+      "type": "number",
+      "description": "Lower end of the rotation range."
+    },
+    "rotation_max_deg": {
+      "type": "number",
+      "description": "Upper end of the rotation range."
+    },
+    "rotation_strata": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "description": "Angle strata used to draw rotations."
+    },
+    "main_trials_per_condition": {
+      "type": "integer",
+      "description": "Main-task trials per condition (24)."
+    },
+    "cell_table": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "required": ["cell", "row", "col", "x_mm", "y_mm", "radius_mm", "pattern_label"],
+        "properties": {
+          "cell": {
+            "type": "integer"
+          },
+          "row": {
+            "type": "integer"
+          },
+          "col": {
+            "type": "integer"
+          },
+          "x_mm": {
+            "type": "number"
+          },
+          "y_mm": {
+            "type": "number"
+          },
+          "radius_mm": {
+            "type": "number"
+          },
+          "radius_cells": {
+            "type": "number"
+          },
+          "pattern_label": {
+            "enum": ["on", "off", "centre"]
+          }
+        }
+      },
+      "description": "All 25 cells: row, column, upright-grid position (mm from fixation), distance from fixation and on / off / centre label."
+    }
+  },
+  "$defs": {
+    "_phase_field_documentation_only_": {
+      "description": "This document intentionally does not enumerate per-phase required-field constraints (e.g. via `oneOf` over `phase`-discriminated branches). Reason: per-phase variation is large (50+ phase tags), the constraints would duplicate the runtime contracts already locked by unit tests, and a stricter schema would make minor field additions during pilot painful for marginal validation gain. Analysts who want stricter per-phase shapes should write Pandera / Pydantic schemas downstream from this raw-row schema."
+    }
+  }
+}

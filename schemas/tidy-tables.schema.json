@@ -1,0 +1,595 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tidy tables - WM x Imagery follow-up experiment",
+  "description": "Rows of trials.csv, stars.csv and probes.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid.",
+  "version": "1.0.0",
+  "$defs": {
+    "trial": {
+      "title": "trial row",
+      "description": "One row per trial. Unique key: participant_id, trial_seq_session. Missing values are NA in the CSV.",
+      "type": "object",
+      "required": ["participant_id", "trial_seq_session"],
+      "additionalProperties": false,
+      "properties": {
+        "participant_id": {
+          "type": ["string", "null"],
+          "description": "Prolific participant id."
+        },
+        "trial_seq_session": {
+          "type": ["integer", "null"],
+          "description": "Running number of trial-start gates in the session (practice included), in presentation order. Unique per participant."
+        },
+        "trial_uid": {
+          "type": ["string", "null"],
+          "description": "Trial name from the runtime, e.g. main_a-007-i_d. Unique for main trials; practice names repeat when a practice pass is repeated."
+        },
+        "attempt": {
+          "type": ["integer", "null"],
+          "description": "Pass number of the trial: 1 for main trials, 1 or 2 for practice trials (practice can run twice)."
+        },
+        "condition": {
+          "type": ["string", "null"],
+          "description": "d_only, t_only, i_only, i_d or i_t."
+        },
+        "block_label": {
+          "type": ["string", "null"],
+          "description": "practice, main_a or main_b."
+        },
+        "is_practice": {
+          "type": ["boolean", "null"],
+          "description": "True for practice trials."
+        },
+        "presentation_index": {
+          "type": ["integer", "null"],
+          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+        },
+        "presentation_index_stamped": {
+          "type": ["integer", "null"],
+          "description": "Value written by the runtime, for comparison with presentation_index."
+        },
+        "block_position": {
+          "type": ["integer", "null"],
+          "description": "0-based position in the block."
+        },
+        "pool_index": {
+          "type": ["integer", "null"],
+          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows). Not unique across conditions."
+        },
+        "rotation_deg": {
+          "type": ["integer", "null"],
+          "description": "Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only."
+        },
+        "rotation_abs_deg": {
+          "type": ["integer", "null"],
+          "description": "Absolute rotation."
+        },
+        "rotation_sign": {
+          "type": ["integer", "null"],
+          "description": "-1 counter-clockwise, 1 clockwise."
+        },
+        "rotation_stratum": {
+          "type": ["integer", "null"],
+          "description": "Index 1-6 of the 30-degree stratum the angle was drawn from (-90..-61 = 1 ... 61..90 = 6)."
+        },
+        "background_shade": {
+          "type": ["string", "null"],
+          "description": "white or gray."
+        },
+        "sequence": {
+          "type": ["string", "null"],
+          "description": "Six-slot sequence, M = memory-item slot, S = star slot."
+        },
+        "n_stars_planned": {
+          "type": ["integer", "null"],
+          "description": "Stars planned for the trial (3 in imagery conditions, 0 otherwise)."
+        },
+        "n_star_rows": {
+          "type": ["integer", "null"],
+          "description": "Star rows recorded."
+        },
+        "n_probes_planned": {
+          "type": ["integer", "null"],
+          "description": "Recognition probes planned (3 in memory conditions, 0 otherwise)."
+        },
+        "n_probe_rows": {
+          "type": ["integer", "null"],
+          "description": "Probe rows recorded."
+        },
+        "pattern_phase_before_trial": {
+          "type": ["boolean", "null"],
+          "description": "True if the pattern reminder was shown at the start of this trial."
+        },
+        "trials_since_pattern_phase": {
+          "type": ["integer", "null"],
+          "description": "Trials since the last pattern reminder (0 when this trial had one); empty before the first."
+        },
+        "rest_before_trial": {
+          "type": ["boolean", "null"],
+          "description": "True if a rest screen came directly before this trial."
+        },
+        "trial_has_stars": {
+          "type": ["boolean", "null"],
+          "description": "True for conditions that contain stars."
+        },
+        "n_stars_correct": {
+          "type": ["integer", "null"],
+          "description": "Stars answered correctly."
+        },
+        "n_stars_incorrect": {
+          "type": ["integer", "null"],
+          "description": "Stars answered incorrectly."
+        },
+        "n_stars_no_response": {
+          "type": ["integer", "null"],
+          "description": "Stars with no response (recorded rows only)."
+        },
+        "n_stars_anticipatory": {
+          "type": ["integer", "null"],
+          "description": "Stars answered faster than 250 ms."
+        },
+        "n_stars_missing_row": {
+          "type": ["integer", "null"],
+          "description": "Planned stars with no recorded row."
+        },
+        "trial_star_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
+        },
+        "n_probes_correct": {
+          "type": ["integer", "null"],
+          "description": "Probes answered correctly."
+        },
+        "n_probes_no_response": {
+          "type": ["integer", "null"],
+          "description": "Probes with no response (recorded rows only)."
+        },
+        "n_probes_anticipatory": {
+          "type": ["integer", "null"],
+          "description": "Probes answered faster than 250 ms."
+        },
+        "n_probes_missing_row": {
+          "type": ["integer", "null"],
+          "description": "Planned probes with no recorded row."
+        },
+        "encoding_onset_ts_ms": {
+          "type": ["integer", "null"],
+          "description": "performance.now() at encoding onset (ms)."
+        },
+        "plan_source": {
+          "type": ["string", "null"],
+          "description": "trial_spec when the runtime plan was recorded on the encoding row; null otherwise."
+        },
+        "build_id": {
+          "type": ["string", "null"],
+          "description": "Build identifier."
+        },
+        "schema_version": {
+          "type": ["string", "null"],
+          "description": "Schema version."
+        },
+        "px_per_mm": {
+          "type": ["number", "null"],
+          "description": "Pixels per mm from the card calibration."
+        },
+        "cell_size_mm": {
+          "type": ["number", "null"],
+          "description": "Cell size, mm."
+        },
+        "prng_seed_uint32": {
+          "type": ["integer", "null"],
+          "description": "Seed of the schedule."
+        }
+      }
+    },
+    "star": {
+      "title": "star row",
+      "description": "One row per star. Unique key: participant_id, trial_seq_session, star_serial_position. Missing values are NA in the CSV.",
+      "type": "object",
+      "required": ["participant_id", "trial_seq_session", "star_serial_position"],
+      "additionalProperties": false,
+      "properties": {
+        "participant_id": {
+          "type": ["string", "null"],
+          "description": "Prolific participant id."
+        },
+        "trial_seq_session": {
+          "type": ["integer", "null"],
+          "description": "Running number of trial-start gates in the session (practice included), in presentation order. Unique per participant."
+        },
+        "star_serial_position": {
+          "type": ["integer", "null"],
+          "description": "Star number within the trial, 1-3, in order of presentation."
+        },
+        "trial_uid": {
+          "type": ["string", "null"],
+          "description": "Trial name from the runtime, e.g. main_a-007-i_d. Unique for main trials; practice names repeat when a practice pass is repeated."
+        },
+        "attempt": {
+          "type": ["integer", "null"],
+          "description": "Pass number of the trial: 1 for main trials, 1 or 2 for practice trials (practice can run twice)."
+        },
+        "condition": {
+          "type": ["string", "null"],
+          "description": "d_only, t_only, i_only, i_d or i_t."
+        },
+        "block_label": {
+          "type": ["string", "null"],
+          "description": "practice, main_a or main_b."
+        },
+        "is_practice": {
+          "type": ["boolean", "null"],
+          "description": "True for practice trials."
+        },
+        "presentation_index": {
+          "type": ["integer", "null"],
+          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+        },
+        "pool_index": {
+          "type": ["integer", "null"],
+          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows). Not unique across conditions."
+        },
+        "rotation_deg": {
+          "type": ["integer", "null"],
+          "description": "Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only."
+        },
+        "rotation_sign": {
+          "type": ["integer", "null"],
+          "description": "-1 counter-clockwise, 1 clockwise."
+        },
+        "rotation_stratum": {
+          "type": ["integer", "null"],
+          "description": "Index 1-6 of the 30-degree stratum the angle was drawn from (-90..-61 = 1 ... 61..90 = 6)."
+        },
+        "background_shade": {
+          "type": ["string", "null"],
+          "description": "white or gray."
+        },
+        "sequence": {
+          "type": ["string", "null"],
+          "description": "Six-slot sequence, M = memory-item slot, S = star slot."
+        },
+        "slot": {
+          "type": ["integer", "null"],
+          "description": "Slot of the event in the six-slot sequence, 1-6."
+        },
+        "cell": {
+          "type": ["integer", "null"],
+          "description": "Cell index 0-24, row-major; 12 is the centre."
+        },
+        "cell_row": {
+          "type": ["integer", "null"],
+          "description": "Row of the cell, 0-4."
+        },
+        "cell_col": {
+          "type": ["integer", "null"],
+          "description": "Column of the cell, 0-4."
+        },
+        "cell_x_mm": {
+          "type": ["number", "null"],
+          "description": "Cell centre x in the upright grid, mm from fixation."
+        },
+        "cell_y_mm": {
+          "type": ["number", "null"],
+          "description": "Cell centre y in the upright grid, mm from fixation (down positive)."
+        },
+        "x_mm": {
+          "type": ["number", "null"],
+          "description": "Screen x of the stimulus after rotation, mm from fixation. Empty for tones."
+        },
+        "y_mm": {
+          "type": ["number", "null"],
+          "description": "Screen y of the stimulus after rotation, mm from fixation (down positive). Empty for tones."
+        },
+        "radius_mm": {
+          "type": ["number", "null"],
+          "description": "Distance of the cell centre from fixation, mm."
+        },
+        "radius_cells": {
+          "type": ["number", "null"],
+          "description": "Same distance in cell widths."
+        },
+        "pattern_label": {
+          "type": ["string", "null"],
+          "description": "on or off the 12-cell pattern."
+        },
+        "is_on_pattern": {
+          "type": ["boolean", "null"],
+          "description": "True if the cell is on the pattern."
+        },
+        "row_recorded": {
+          "type": ["boolean", "null"],
+          "description": "False if the planned event has no row in the data."
+        },
+        "responded": {
+          "type": ["boolean", "null"],
+          "description": "True if a valid key was pressed in the window."
+        },
+        "said_on": {
+          "type": ["boolean", "null"],
+          "description": "True if the participant answered on-pattern."
+        },
+        "star_correct": {
+          "type": ["boolean", "null"],
+          "description": "Correct star response."
+        },
+        "rt_ms": {
+          "type": ["integer", "null"],
+          "description": "Response time, ms from stimulus onset."
+        },
+        "response_key": {
+          "type": ["string", "null"],
+          "description": "Key pressed."
+        },
+        "excluded_anticipatory": {
+          "type": ["boolean", "null"],
+          "description": "True if rt_ms < 250."
+        },
+        "star_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Star onset relative to encoding onset, ms."
+        },
+        "trial_star_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
+        },
+        "position_matches_runtime": {
+          "type": ["boolean", "null"],
+          "description": "True if the exporter position equals the position logged at runtime; empty if none was logged."
+        },
+        "px_per_mm": {
+          "type": ["number", "null"],
+          "description": "Pixels per mm from the card calibration."
+        },
+        "build_id": {
+          "type": ["string", "null"],
+          "description": "Build identifier."
+        }
+      }
+    },
+    "probe": {
+      "title": "probe row",
+      "description": "One row per probe. Unique key: participant_id, trial_seq_session, probe_position. Missing values are NA in the CSV.",
+      "type": "object",
+      "required": ["participant_id", "trial_seq_session", "probe_position"],
+      "additionalProperties": false,
+      "properties": {
+        "participant_id": {
+          "type": ["string", "null"],
+          "description": "Prolific participant id."
+        },
+        "trial_seq_session": {
+          "type": ["integer", "null"],
+          "description": "Running number of trial-start gates in the session (practice included), in presentation order. Unique per participant."
+        },
+        "probe_position": {
+          "type": ["integer", "null"],
+          "description": "Probe number within the trial, 1-3."
+        },
+        "trial_uid": {
+          "type": ["string", "null"],
+          "description": "Trial name from the runtime, e.g. main_a-007-i_d. Unique for main trials; practice names repeat when a practice pass is repeated."
+        },
+        "attempt": {
+          "type": ["integer", "null"],
+          "description": "Pass number of the trial: 1 for main trials, 1 or 2 for practice trials (practice can run twice)."
+        },
+        "condition": {
+          "type": ["string", "null"],
+          "description": "d_only, t_only, i_only, i_d or i_t."
+        },
+        "block_label": {
+          "type": ["string", "null"],
+          "description": "practice, main_a or main_b."
+        },
+        "is_practice": {
+          "type": ["boolean", "null"],
+          "description": "True for practice trials."
+        },
+        "presentation_index": {
+          "type": ["integer", "null"],
+          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+        },
+        "pool_index": {
+          "type": ["integer", "null"],
+          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows). Not unique across conditions."
+        },
+        "rotation_deg": {
+          "type": ["integer", "null"],
+          "description": "Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only."
+        },
+        "background_shade": {
+          "type": ["string", "null"],
+          "description": "white or gray."
+        },
+        "sequence": {
+          "type": ["string", "null"],
+          "description": "Six-slot sequence, M = memory-item slot, S = star slot."
+        },
+        "modality": {
+          "type": ["string", "null"],
+          "description": "dot (visual probe) or tone (auditory probe)."
+        },
+        "probe_type": {
+          "type": ["string", "null"],
+          "description": "T_on, T_off, F_on or F_off."
+        },
+        "is_target": {
+          "type": ["boolean", "null"],
+          "description": "True if the probe matches an encoded item."
+        },
+        "pattern_label": {
+          "type": ["string", "null"],
+          "description": "on or off the 12-cell pattern."
+        },
+        "cell": {
+          "type": ["integer", "null"],
+          "description": "Cell index 0-24, row-major; 12 is the centre."
+        },
+        "cell_row": {
+          "type": ["integer", "null"],
+          "description": "Row of the cell, 0-4."
+        },
+        "cell_col": {
+          "type": ["integer", "null"],
+          "description": "Column of the cell, 0-4."
+        },
+        "cell_x_mm": {
+          "type": ["number", "null"],
+          "description": "Cell centre x in the upright grid, mm from fixation."
+        },
+        "cell_y_mm": {
+          "type": ["number", "null"],
+          "description": "Cell centre y in the upright grid, mm from fixation (down positive)."
+        },
+        "probe_frame_rotation_deg": {
+          "type": ["integer", "null"],
+          "description": "Rotation of the frame the probe was drawn in (0 = upright)."
+        },
+        "x_mm": {
+          "type": ["number", "null"],
+          "description": "Screen x of the stimulus after rotation, mm from fixation. Empty for tones."
+        },
+        "y_mm": {
+          "type": ["number", "null"],
+          "description": "Screen y of the stimulus after rotation, mm from fixation (down positive). Empty for tones."
+        },
+        "radius_mm": {
+          "type": ["number", "null"],
+          "description": "Distance of the cell centre from fixation, mm."
+        },
+        "radius_cells": {
+          "type": ["number", "null"],
+          "description": "Same distance in cell widths."
+        },
+        "encoding_position": {
+          "type": ["integer", "null"],
+          "description": "Encoding position 1-3 tied to the probe. For a foil it is a design label only."
+        },
+        "target_slot": {
+          "type": ["integer", "null"],
+          "description": "Slot (1-6) of the probed item; empty for foils."
+        },
+        "enc1_cell": {
+          "type": ["integer", "null"],
+          "description": "Cell of the item encoded first."
+        },
+        "enc1_pattern_label": {
+          "type": ["string", "null"],
+          "description": "on or off label of the first item."
+        },
+        "enc1_x_mm": {
+          "type": ["number", "null"],
+          "description": "Screen x of the first encoded dot (rotated), mm. Dot conditions only."
+        },
+        "enc1_y_mm": {
+          "type": ["number", "null"],
+          "description": "Screen y of the first encoded dot (rotated), mm."
+        },
+        "enc2_cell": {
+          "type": ["integer", "null"],
+          "description": "Cell of the item encoded second."
+        },
+        "enc2_pattern_label": {
+          "type": ["string", "null"],
+          "description": "on or off label of the second item."
+        },
+        "enc2_x_mm": {
+          "type": ["number", "null"],
+          "description": "Screen x of the second encoded dot, mm."
+        },
+        "enc2_y_mm": {
+          "type": ["number", "null"],
+          "description": "Screen y of the second encoded dot, mm."
+        },
+        "enc3_cell": {
+          "type": ["integer", "null"],
+          "description": "Cell of the item encoded third."
+        },
+        "enc3_pattern_label": {
+          "type": ["string", "null"],
+          "description": "on or off label of the third item."
+        },
+        "enc3_x_mm": {
+          "type": ["number", "null"],
+          "description": "Screen x of the third encoded dot, mm."
+        },
+        "enc3_y_mm": {
+          "type": ["number", "null"],
+          "description": "Screen y of the third encoded dot, mm."
+        },
+        "min_enc_dist_mm": {
+          "type": ["number", "null"],
+          "description": "Smallest distance between the probe screen position and the screen positions of the encoded dots, mm. Dot conditions only."
+        },
+        "nearest_enc_position": {
+          "type": ["integer", "null"],
+          "description": "Encoding position (1-3) of the encoded dot nearest to the probe on screen."
+        },
+        "own_enc_dist_mm": {
+          "type": ["number", "null"],
+          "description": "For a target: distance between the probe and its own encoded dot on screen, mm (0 when the probe frame and encoding frame have the same rotation)."
+        },
+        "tone_index": {
+          "type": ["integer", "null"],
+          "description": "Index 0-23 of the probe tone. Tone conditions only."
+        },
+        "tone_freq_hz": {
+          "type": ["number", "null"],
+          "description": "Frequency of the probe tone, Hz."
+        },
+        "min_tone_rank_gap": {
+          "type": ["integer", "null"],
+          "description": "Smallest rank distance between the probe tone and the encoded tones."
+        },
+        "row_recorded": {
+          "type": ["boolean", "null"],
+          "description": "False if the planned event has no row in the data."
+        },
+        "responded": {
+          "type": ["boolean", "null"],
+          "description": "True if a valid key was pressed in the window."
+        },
+        "said_yes": {
+          "type": ["boolean", "null"],
+          "description": "True if the participant answered yes."
+        },
+        "probe_correct": {
+          "type": ["boolean", "null"],
+          "description": "Correct probe response."
+        },
+        "rt_ms": {
+          "type": ["integer", "null"],
+          "description": "Response time, ms from stimulus onset."
+        },
+        "response_key": {
+          "type": ["string", "null"],
+          "description": "Key pressed."
+        },
+        "excluded_anticipatory": {
+          "type": ["boolean", "null"],
+          "description": "True if rt_ms < 250."
+        },
+        "probe_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Probe onset relative to encoding onset, ms."
+        },
+        "trial_star_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
+        },
+        "position_matches_runtime": {
+          "type": ["boolean", "null"],
+          "description": "True if the exporter position equals the position logged at runtime; empty if none was logged."
+        },
+        "px_per_mm": {
+          "type": ["number", "null"],
+          "description": "Pixels per mm from the card calibration."
+        },
+        "build_id": {
+          "type": ["string", "null"],
+          "description": "Build identifier."
+        }
+      }
+    }
+  }
+}

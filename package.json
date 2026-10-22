@@ -1,0 +1,51 @@
+{
+  "name": "wm-img-followup",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Online follow-up experiment for Nourbakhshi, Pourmirzaei, & Cowan — visuospatial WM × visual imagery × auditory probing. Deployed on Prolific.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src scripts",
+    "lint:fix": "eslint src scripts --fix",
+    "format": "prettier --write \"src/**/*.{js,html,css,json}\" \"index.html\"",
+    "format:check": "prettier --check \"src/**/*.{js,html,css,json}\" \"index.html\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "preflight": "node scripts/preflight.js",
+    "preflight:strict": "node scripts/preflight.js --strict-deployment",
+    "pilot-summary": "node scripts/pilot-summary.js",
+    "csv-export": "node scripts/csv-export.js",
+    "simulate-pilot": "node scripts/simulate-pilot.js",
+    "harvest-voiceover": "node scripts/harvest-voiceover.js",
+    "render-voiceover-edge": "node scripts/render-voiceover-edge.js",
+    "verify-voiceover": "node scripts/verify-voiceover.js",
+    "deploy": "bash scripts/deploy.sh"
+  },
+  "dependencies": {
+    "@jspsych/plugin-call-function": "^2.1.0",
+    "@jspsych/plugin-fullscreen": "^2.1.0",
+    "@jspsych/plugin-html-button-response": "^2.1.0",
+    "@jspsych/plugin-html-keyboard-response": "^2.1.0",
+    "@jspsych/plugin-instructions": "^2.1.0",
+    "@jspsych/plugin-preload": "^2.1.0",
+    "@jspsych/plugin-survey-html-form": "^2.1.0",
+    "jspsych": "^8.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "fake-indexeddb": "^6.2.5",
+    "globals": "^15.14.0",
+    "jsdom": "^25.0.1",
+    "msedge-tts": "^2.0.5",
+    "prettier": "^3.4.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

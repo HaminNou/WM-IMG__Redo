@@ -1,0 +1,413 @@
+{
+  "_doc": "Pre-registration record for the study protocol. The `pre_reg_lock_*` fields identify the build and schema version that this document describes; `tests/pre-reg.test.js` pins the live `src/config.js` to the `config_locked` block below so that the deployed build cannot drift from the document, and checks the thresholds in `collection_time_screen_outs` against the constants in the source. After the document is filed with a registry, any change to `config_locked` or `collection_time_screen_outs` constitutes an amendment.\n\nThe runtime config must canonicalise byte-identically to `config_locked` below; `tests/pre-reg.test.js` enforces this. Values in square brackets are placeholders that are filled in before launch (`scripts/preflight.js --strict-deployment` fails while any remain in participant-facing text).",
+  "pre_reg_lock_iso": "2026-05-05",
+  "pre_reg_lock_build_id": "v1",
+  "pre_reg_lock_schema_version": "1.2.0",
+  "study": {
+    "title": "Interactions Between Visual Imagery Use and Visuo-Spatial Working Memory: Cross-modal Follow-up"
+  },
+  "design_summary": {
+    "type": "Within-subjects factorial",
+    "trial_types": ["D_only", "T_only", "I_only", "I_D", "I_T"],
+    "trials_per_type_main": 24,
+    "main_blocks": 2,
+    "trials_per_main_block": 60,
+    "main_trials_total_per_participant": 120,
+    "memory_set_size": 3,
+    "imagery_stars_per_trial": 3,
+    "probes_per_memory_trial": 3,
+    "session_length_minutes": 110,
+    "d_only_display_rotation": "d_only trials show the grid rotated by display_rotation_deg (integer, -90..90, 0 not used), drawn from the same six 30-degree strata as the imagery angles and ordered under the same same-sign run limit and minimum angle step."
+  },
+  "hypotheses": [
+    {
+      "id": "H1",
+      "label": "Dual-task cost (visual modality)",
+      "claim": "Memory accuracy in I+D < D_only.",
+      "test": "One-tailed paired t-test, α = 0.05.",
+      "smallest_effect_of_interest_d": 0.4,
+      "equivalence_test": "TOST with d_bound = 0.1 if the directional test fails."
+    },
+    {
+      "id": "H2",
+      "label": "Cross-modal generalisation",
+      "claim": "Memory accuracy in I+T < T_only.",
+      "test": "One-tailed paired t-test, α = 0.05."
+    },
+    {
+      "id": "H3",
+      "label": "Modality specificity (Modality × Load interaction)",
+      "claim": "The 2 (modality: dots, tones) × 2 (load: single, dual) within-subjects interaction discriminates a modality-general account (similar ΔAccuracy) from a visuo-spatial-specific account (greater I+D cost).",
+      "test": "Bayesian model comparison with default JZS prior r = sqrt(2)/2 (≈ 0.707). Decision rule: BF10 > 3 supports interaction; BF01 > 3 supports null (modality-general).",
+      "prior": {
+        "family": "JZS Cauchy",
+        "scale_r": 0.7071067811865476
+      }
+    },
+    {
+      "id": "H4",
+      "label": "Symmetric imagery cost",
+      "claim": "Star accuracy in I+D < I_only AND I+T < I_only.",
+      "test": "Two one-tailed paired t-tests; both must reach α = 0.05."
+    },
+    {
+      "id": "H5",
+      "label": "On-letter facilitation replicates and is amplified under dual-task",
+      "claim": "Within memory-bearing conditions, accuracy(T_on) > accuracy(T_off); the on/off effect is larger when imagery is concurrent (I+D, I+T) than in single-task (D_only, T_only).",
+      "test": "Repeated-measures ANOVA on probe_type × concurrency, with planned contrast on the interaction."
+    }
+  ],
+  "exploratory_analyses": [
+    "Star × probe-type contingency: does dual-task release happen more cleanly when star is off the cell of the upcoming probe?",
+    "Strategy × dual-task cost: pre-registered Spearman rho on the Structural Chunking composite (strategy_q01 + strategy_q02 + strategy_q03, range 3–15) against per-participant ΔAccuracy (single − dual), separately for I+D and I+T.",
+    "Imagery-maintenance composite × accuracy: Spearman rho on imagery_maintenance_id (strategy_q13 + strategy_q15, range 2–10) against I+D star accuracy, and imagery_maintenance_it (strategy_q16 + strategy_q18, range 2–10) against I+T star accuracy — construct-validity check that endorsement of continuous-visualization / phase-specific-focus tracks the imagery-maintenance manipulation.",
+    "Per-modality serial-position curves (post-star release pattern).",
+    "Strategy-questionnaire item-level Spearman screening across the 19 items (5-point Likert) against overall accuracy and ΔAccuracy."
+  ],
+  "sampling_plan": {
+    "recruitment_target_n": 60,
+    "retained_n_minimum": 40,
+    "platform": "Prolific",
+    "stopping_rule": "If retained N < 40 after exclusions, recruit additional batches of 10 until retained N >= 40.",
+    "power_analysis": {
+      "effect_target": "Modality × Load interaction, f = 0.25 (medium)",
+      "power": 0.85,
+      "alpha": 0.05,
+      "tool": "G*Power",
+      "computed_n": 38,
+      "headroom_factor_for_exclusions": 1.58,
+      "exclusion_rate_estimate_low": 0.25,
+      "exclusion_rate_estimate_high": 0.35
+    },
+    "filters": {
+      "prolific_prescreeners": [
+        "Age: 18 to 40 years",
+        "Vision: normal or corrected-to-normal vision (glasses or contacts)",
+        "Hearing: normal hearing",
+        "Language: fluent in English",
+        "Device: a desktop or laptop computer, used with headphones"
+      ],
+      "other_filters": "[OTHER_FILTERS]",
+      "note": "Eligibility is determined only by the Prolific prescreeners above; the study does not test age, hearing or vision."
+    },
+    "compensation": {
+      "pay_amount": "[PAY_AMOUNT]",
+      "pay_rate_per_hour": "[PAY_RATE_PER_HOUR]",
+      "estimated_session_minutes": 110,
+      "payment_for_screened_out_time": "[PAYMENT_POLICY]",
+      "single_submission_only": true
+    }
+  },
+  "exclusion_rules": {
+    "applied_in_analysis_not_at_collection": true,
+    "rules": [
+      {
+        "id": "display_guard_flags",
+        "rule": "A trial whose row has a non-empty `guard_flags` is dropped from analysis. `guard_flags` lists the display-guard events since the previous trial (zoom change, fullscreen exit, resize, tab hidden or visible, window blur or focus, --mm reset, pause, resume)."
+      },
+      {
+        "id": "screen_calibration_inconsistent",
+        "rule": "Participants whose screen calibration outcome is `inconsistent_accepted` (the two card settings of the last attempt differ by more than the consistency tolerance but were accepted) are excluded."
+      },
+      {
+        "id": "instructional_attention_checks",
+        "rule": "Fails > 1 of the 3 typed-instruction attention checks (strict greater-than; equality at threshold is not exclusion)."
+      },
+      {
+        "id": "single_task_floor",
+        "rule": "Overall recognition accuracy <= 0.55 in EITHER D_only OR T_only single-task condition."
+      },
+      {
+        "id": "rt_cutoff",
+        "rule": "Per-trial RT < 250 ms is treated as anticipatory and excluded from RT analyses (logged but not enforced at collection)."
+      }
+    ],
+    "_doc": "Rules applied at analysis. Checks that end a session at collection are listed separately under `collection_time_screen_outs`."
+  },
+  "collection_time_screen_outs": {
+    "_doc": "Checks that end a session during data collection. They are task-capability checks, not eligibility screening, and are disclosed in the consent form. A participant who fails one is shown an explanation and sent to Prolific with the screen-out completion code; the rows collected so far are uploaded first. Thresholds are the constants in the source files named in each entry.",
+    "rules": [
+      {
+        "id": "desktop_check",
+        "when": "very start, before consent",
+        "rule": "A phone or tablet is detected from the user agent (iPhone, iPod, iPad, iPadOS reporting a Macintosh user agent with more than one touch point, Android, other mobile user agents), or the device has neither hover nor a fine pointer.",
+        "source": "src/calibration/desktop-detect.js"
+      },
+      {
+        "id": "screen_size_calibration",
+        "when": "after consent, demographics, viewing-distance and display-mode screens",
+        "rule": "Two card-width settings per attempt (one starting low, one high, random order), up to 3 attempts. An attempt is usable if both settings moved the slider, px per mm lies in the bounds and the implied screen width lies in the bounds. A usable attempt is accepted if the two settings agree within the tolerance; a usable but inconsistent attempt is accepted only on the last attempt and flagged. If no attempt is accepted the session ends.",
+        "card_width_mm": 85.6,
+        "px_per_mm_min": 2.2,
+        "px_per_mm_max": 9.0,
+        "implied_screen_width_mm_min": 180,
+        "implied_screen_width_mm_max": 1200,
+        "min_slider_move_px": 8,
+        "consistency_tolerance_relative": 0.05,
+        "max_attempts": 3,
+        "source": "src/calibration/screen.js"
+      },
+      {
+        "id": "tone_audibility",
+        "when": "after the volume instruction and fullscreen",
+        "rule": "The tone sweep plays up to 10 times; if the participant never reports the tones as clearly and comfortably audible, the session ends.",
+        "max_sweeps": 10,
+        "source": "src/calibration/tone-familiarisation.js"
+      },
+      {
+        "id": "headphone_check",
+        "when": "after the tone audibility step",
+        "rule": "6 trials (three 200 Hz tones, say which is quietest); passing is 5 or more correct. Recorded as `headphones_pass`; never ends the session.",
+        "n_trials": 6,
+        "pass_min": 5,
+        "source": "src/calibration/audio-check.js"
+      },
+      {
+        "id": "pitch_discrimination",
+        "when": "after the headphone check",
+        "rule": "8 trials with two adjacent tones of the bank at the participant's playback level; 7 or more correct is required. One retry after a prompt to raise the volume; a second failure ends the session. A further block of 8 trials 12 dB lower is recorded only.",
+        "n_trials": 8,
+        "pass_min": 7,
+        "max_attempts": 2,
+        "margin_db": -12,
+        "source": "src/calibration/audio-check.js"
+      },
+      {
+        "id": "timing_probe",
+        "when": "after the pitch check, in fullscreen",
+        "rule": "Frame timing and timer accuracy are sampled; the check fails if any threshold below is violated. One retry after a prompt to close other programs; a second failure ends the session.",
+        "max_attempts": 2,
+        "thresholds": {
+          "probe_ms": 3000,
+          "skip_first_frames": 5,
+          "max_median_frame_ms": 20.5,
+          "max_p95_frame_ms": 34,
+          "max_dropped_frac": 0.05,
+          "max_clock_resolution_ms": 1.0,
+          "max_timeout_overshoot_p95_ms": 25
+        },
+        "source": "src/calibration/device-probe.js"
+      },
+      {
+        "id": "practice_accuracy",
+        "when": "after the practice trials",
+        "rule": "Cumulative practice accuracy must reach the criterion; one repeat of the whole practice is allowed (2 attempts). Failing the second attempt ends the session.",
+        "accuracy_criterion": 0.7,
+        "max_loops": 1,
+        "source": "src/instructions/index.js"
+      },
+      {
+        "id": "display_guard_escape",
+        "when": "any time during the trials",
+        "rule": "If the zoom or fullscreen change cannot be restored, the pause overlay offers an end-the-session button after 30 s; using it ends the session. The guard is switched off after the last trial.",
+        "escape_after_ms": 30000,
+        "source": "src/calibration/display-guard.js"
+      }
+    ]
+  },
+  "counterbalance_invariants": [
+    {
+      "id": "on_off_pattern",
+      "claim": "On/off-pattern membership computed from gray_pattern = [1,2,3,7,10,11,12,13,14,17,21,22,23] minus centre cell 12; 12 on-pattern + 12 off-pattern non-centre cells.",
+      "tested_in": "tests/grid.test.js"
+    },
+    {
+      "id": "single_dual_duration_parity",
+      "claim": "Every single-task (D_only, T_only, I_only) trial places open-square dummies at the slot positions the matched dual-task condition uses for its other modality, and each dummy slot runs on the envelope of the event it stands in for: D_only and T_only dummies stand in for the matched I+D / I+T star and run on the S-slot envelope (3000 ms + 500 ms), while I_only dummies stand in for the matched I+D / I+T memory item and run on the M-slot envelope (1000 ms + 500 ms). Total slot count per trial and total encoding-window duration are therefore identical between each single-task condition and the dual-task condition it stands in for.",
+      "tested_in": "tests/within-trial.test.js + tests/imagery-block.test.js"
+    },
+    {
+      "id": "within_trial_run_length",
+      "claim": "Run-length cap = 2 for memory-vs-star sequencing within a dual-task trial. For each 24-trial condition block, 24 sequences are drawn (with replacement) from the 14 valid length-6 binary strings (3 zeros + 3 ones, no run > 2), with the added constraint that each of the 6 slot positions hosts M on exactly 12 trials and S on exactly 12 trials. There are 14 valid length-6 strings, so the 24 sequences of a block are drawn with replacement; the slot-position 12/12 balance is enforced by construction in `src/scheduler/within-trial.js`.",
+      "tested_in": "tests/within-trial.test.js + tests/memory-block.test.js + tests/imagery-block.test.js + tests/dual-block.test.js"
+    },
+    {
+      "id": "exact_probe_type_counterbalance",
+      "claim": "Across 24 trials of a given memory-bearing condition, each of {T_on, T_off, F_on, F_off} appears exactly 18 times (72 probes / 4 = 18), with each probe serial position receiving six instances of each type. In the dual-task conditions, each encoding-position-to-probe-position mapping (3 encoding positions × 3 probe positions = 9 cells) appears exactly 8 times.",
+      "tested_in": "tests/probe-pool.test.js + tests/memory-block.test.js + tests/dual-block.test.js"
+    },
+    {
+      "id": "exact_serial_position_counterbalance",
+      "claim": "Across the 24 trials of any condition, each of the 6 within-trial slot positions hosts a memory-item position on exactly 12 trials and a star-or-placeholder position on exactly 12 trials.",
+      "tested_in": "tests/within-trial.test.js + tests/memory-block.test.js + tests/imagery-block.test.js + tests/dual-block.test.js"
+    },
+    {
+      "id": "exact_memory_label_balance",
+      "claim": "Across each 24-trial memory-bearing condition, 36 encoded memory items are on-pattern and 36 are off-pattern, and each of the three encoding positions receives exactly 12 on-pattern and 12 off-pattern items.",
+      "tested_in": "tests/memory-block.test.js + tests/dual-block.test.js"
+    },
+    {
+      "id": "exact_star_label_balance",
+      "claim": "Across each 24-trial imagery-bearing condition, 36 stars are on-pattern and 36 are off-pattern, and each of the three star serial positions receives exactly 12 on-pattern and 12 off-pattern stars.",
+      "tested_in": "tests/imagery-block.test.js + tests/dual-block.test.js"
+    },
+    {
+      "id": "across_block_run_length",
+      "claim": "Run-length cap = 2 for trial-type interleaving across the block.",
+      "tested_in": "tests/trial-type.test.js"
+    },
+    {
+      "id": "rotation_angles_and_order",
+      "claim": "In each 24-trial condition with a rotation (I_only, I_D, I_T imagery angles and D_only display angles) the angle is drawn from six 30-degree strata (-90..-61, -60..-31, -30..-1, 1..30, 31..60, 61..90), 4 per stratum, no angle repeated within a condition, 0 not used. In a main block the trials of one condition are reordered among themselves so that, over all rotated trials, no more than 6 consecutive rotations have the same sign and consecutive angles differ by at least 3 degrees. D_only display angles are drawn after all other draws of the D_only block, so the other counterbalance draws do not depend on them.",
+      "tested_in": "tests/schedule-balance.test.js + tests/rotation-balance.test.js + tests/memory-block.test.js"
+    },
+    {
+      "id": "deterministic_seed",
+      "claim": "Every counterbalance step consumes from a single Mulberry32 PRNG seeded from a hash of PROLIFIC_PID. Two participants with different PIDs get different schedules; the same PID always produces the same schedule.",
+      "tested_in": "tests/main-blocks.test.js (reproducibility from same seed; divergence under different seeds)"
+    }
+  ],
+  "data_record": {
+    "schema_path": "schemas/trial.schema.json",
+    "claim": "Every per-trial data row written by the runner validates against schemas/trial.schema.json (the per-row JSON Schema). Phase tags listed in the schema's `phase` enum are exhaustive — adding a phase requires editing both the runner emitter and the schema.",
+    "csv_export_compatibility": "Analysis scripts read column conventions from `Ast_*`, `Dot_*`, `Qmark_*` and `Mid_Q_*` prefixes. The CSV export transforms the per-row JSON to those columns; it is not pre-registered (it is a downstream transform of the locked raw record)."
+  },
+  "instrumentation": {
+    "strategy": {
+      "instrument": "Strategy questionnaire — 19 items adapted from a longer instrument; items written in the pattern/star/circle/tone vocabulary of this study and selected under retention rules (a) |ρ| ≥ .30 with accuracy or dual-task cost at p ≤ .075, (b) component of the GLM-validated Structural Chunking composite, (c) theoretical centrality to imagery maintenance; 5 items for the tone-only and image+tone conditions (Pitch Labeling, Auditory Imagery, Contour Encoding, Tonal Chunking, Concurrent Auditory Rehearsal) anchored in Dowling (1978), Hubbard (2010), Williamson et al. (2010), and Logie (1995); 1 rotation item (Probe Rotation Alternative; Cooper 1975 / Carpenter & Just 1985).",
+      "items": 19,
+      "sections": 5,
+      "section_phases": [
+        "strategy_memory_only",
+        "strategy_tone_only",
+        "strategy_imagery_only",
+        "strategy_i_d",
+        "strategy_i_t"
+      ],
+      "scale": "5-point agreement Likert; 1 = Strongly disagree, 5 = Strongly agree",
+      "scoring_conventions_exposed": [
+        "structural_chunking_composite",
+        "imagery_maintenance_id",
+        "imagery_maintenance_it"
+      ],
+      "composites": {
+        "structural_chunking_composite": "sum(strategy_q01, strategy_q02, strategy_q03); range 3-15; GLM-validated predictor (β = 0.415, z = 7.68, p < .001)",
+        "imagery_maintenance_id": "sum(strategy_q13, strategy_q15); range 2-10; Continuous Visualization + Phase-Specific Focus, I+D condition",
+        "imagery_maintenance_it": "sum(strategy_q16, strategy_q18); range 2-10; same constructs applied to the new I+T condition for cross-modal generalisation"
+      },
+      "tested_in": "tests/strategy.test.js"
+    },
+    "attention_checks": {
+      "count": 3,
+      "format": "typed single-word response, normalised by trim+lowercase (no punctuation strip)",
+      "items": ["ac1_direct_instruction", "ac2_third_word", "ac3_arrow_mapping"],
+      "max_failures_threshold": 1,
+      "comparator": "strict greater-than (failed > max_failures triggers exclusion; equality does not)",
+      "session_termination": "no — failed participant completes the session and receives full pay; the flag is recorded for analysis-level exclusion only",
+      "tested_in": "tests/attention-checks.test.js + tests/instructions.test.js"
+    }
+  },
+  "open_questions_at_lock_time": {
+    "_doc": "These items are deliberately NOT pinned in the `config_locked` snapshot because they require researcher-side decisions before filing. Each is tracked as a deployment-readiness item, not a methodological undecidable. Once the document is filed, the `post_registration_amendment_required_if` field on each item describes the conditions under which a later change would constitute an amendment.",
+    "items": [
+      {
+        "id": "hosting_endpoint",
+        "status": "Placeholder DataPipe experiment id in config.js; replace before launch.",
+        "fallback": "Uploader returns 'no_endpoint'; debrief node triggers JSON download for participant to email.",
+        "post_registration_amendment_required_if": "Hosting choice changes data-retention policy or introduces an additional identifier in the URL."
+      },
+      {
+        "id": "prolific_completion_code",
+        "status": "Placeholder in config.js (pinned in config_locked); replace with the study's completion codes before launch.",
+        "post_registration_amendment_required_if": "Completion-code substitution changes payment logic (it does not — Prolific cc is study-level)."
+      },
+      {
+        "id": "osf_link",
+        "status": "TBD — set after filing.",
+        "post_registration_amendment_required_if": "n/a (OSF link is a pointer, not a methodological commitment)."
+      },
+      {
+        "id": "strategy_questionnaire",
+        "status": "19-item English questionnaire (`src/questionnaire/strategy.js`) with 5 sections; used in exploratory analyses only (see `exploratory_analyses` entries 2 and 3).",
+        "post_registration_amendment_required_if": "Strategy-questionnaire data are used in confirmatory (not exploratory) analyses."
+      }
+    ]
+  },
+  "config_locked": {
+    "attention_checks": {
+      "instruction_max_failures": 1,
+      "instruction_typed_count": 3
+    },
+    "blocks": {
+      "main_block_count": 2,
+      "main_trials_per_type": 24,
+      "practice_trials_per_type": 2,
+      "rest_duration_s": 30
+    },
+    "build_id": "v1",
+    "dummies": {
+      "open_square_size_mm": 5,
+      "open_square_stroke_mm": 0.4
+    },
+    "grid": {
+      "cell_size_mm": 10,
+      "cells_per_side": 5,
+      "centre_cell_index": 12,
+      "rotation_max_deg": 90,
+      "rotation_min_deg": -90
+    },
+    "imagery": {
+      "imagination_duration_ms": 3500,
+      "inter_star_interval_ms": 500,
+      "post_rotation_delay_ms": 1000,
+      "rotation_animation_ms": 500,
+      "rotation_arrow_size_px": 100,
+      "star_duration_ms": 3000,
+      "star_size_mm": 5,
+      "stars_per_trial": 3
+    },
+    "locale": "en",
+    "memory": {
+      "dot_diameter_mm": 5,
+      "dot_duration_ms": 1000,
+      "inter_stimulus_interval_ms": 500,
+      "retention_interval_ms": 2000,
+      "set_size": 3
+    },
+    "pattern": {
+      "gray_pattern_cells": [1, 2, 3, 7, 10, 11, 12, 13, 14, 17, 21, 22, 23],
+      "pattern_phase_duration_ms": 4000,
+      "pattern_phase_frequency_trials": 8
+    },
+    "practice": {
+      "accuracy_criterion": 0.7,
+      "max_loops": 1
+    },
+    "prng": {
+      "deterministic_override": null
+    },
+    "probes": {
+      "feedback_duration_ms": 500,
+      "response_window_ms": 3000
+    },
+    "prolific": {
+      "completion_url": "https://app.prolific.com/submissions/complete?cc=CQ6EH8Q1",
+      "screen_out_completion_code": "CED70N6J",
+      "payment_policy_text": "[PAYMENT_POLICY]"
+    },
+    "rt_cutoff_ms": 250,
+    "schema_version": "1.2.0",
+    "sequencing": {
+      "between_trial_run_length_cap": 2,
+      "within_trial_run_length_cap": 2
+    },
+    "tones": {
+      "cosine_ramp_ms": 10,
+      "count": 24,
+      "duration_ms": 350,
+      "high_freq_hz": 3900,
+      "low_freq_hz": 200,
+      "target_db_spl": 70,
+      "target_phon_level": 70
+    },
+    "uploader": {
+      "datapipe_experiment_id": "epIpSzIi9r7O",
+      "endpoint": "https://pipe.jspsych.org/api/data/",
+      "provider": "datapipe",
+      "retry_initial_backoff_ms": 1000,
+      "retry_max": 5,
+      "request_timeout_ms": 15000,
+      "session_end_max_wait_ms": 120000
+    }
+  }
+}
