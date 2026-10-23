@@ -224,7 +224,7 @@ const DEMO_HIDDEN_FILLER_SLOT_MS = 1000;
  * The live task samples any integer in [-90, +90] per the design; these
  * 12 values are a representative subset that's quick to read and
  * unmistakably a rotation.  */
-export const DEMO_ROTATION_ANGLE_POOL = Object.freeze([
+const DEMO_ROTATION_ANGLE_POOL = Object.freeze([
   -90, -75, -60, -45, -30, -15, 15, 30, 45, 60, 75, 90,
 ]);
 
@@ -318,8 +318,7 @@ function demoFrameTemplate(taskNumber, title) {
        * and after the last replay is consumed.
        *
        * To prevent screen crowding when banner + buttons coexist, the
-       * banner is slimmer than the earlier version (1.15rem font with
-       * 0.4rem 1.1rem padding rather than 1.6rem / 0.85rem 1.6rem). The
+       * banner is compact (1.15rem font, 0.4rem 1.1rem padding). The
        * uppercase + bold + dashed-border treatment keeps it salient
        * without dominating the column. Single line within the 38rem
        * max-width on a typical viewport. */
@@ -745,8 +744,8 @@ function addStandaloneArrow(frame, angleDeg) {
   img.className = 'rotation-arrow-cue demo-arrow';
   /* The rotation-arrow PNG is mid-gray. On the light demo card it would
    * disappear into the background, so apply the same `brightness(0)` tint
-   * that `rotation-arrow.js` uses on trial frames — the cue
-   * renders as a solid black chevron exactly as in the live trial. */
+   * used on trial frames — the cue renders as a solid black chevron
+   * exactly as in the live trial. */
   img.setAttribute(
     'style',
     [
@@ -2101,17 +2100,6 @@ export function iTDemoNode() {
     factory: iTDemoNode,
   });
 }
-
-/* Surfaced for tests — they assert on the full set without depending on
- * config fields beyond what the demo phases use. */
-export const DEMO_TRIAL_TYPES = Object.freeze(['d_only', 't_only', 'i_only', 'i_d', 'i_t']);
-
-/* Re-exported helpers for testability. Not part of the runtime API. */
-export const __test__ = Object.freeze({
-  makeDemoController,
-  pickDemoRotationAngle,
-  pressOutcomeCaption,
-});
 
 /**
  * Enumerate every narration string the demos can ever speak — the literal

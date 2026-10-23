@@ -15,7 +15,8 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { generateImageryBlock } from '../src/scheduler/imagery-block.js';
-import { resetSequencePools, isValidSequence } from '../src/scheduler/within-trial.js';
+import { resetSequencePools } from '../src/scheduler/within-trial.js';
+import { isValidSequence } from './helpers/valid-sequence.js';
 import { setSessionPRNG } from '../src/prng.js';
 import { onPatternCells, offPatternCells, nonCentreCells } from '../src/grid.js';
 import { config } from '../src/config.js';

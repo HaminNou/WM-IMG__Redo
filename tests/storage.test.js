@@ -17,7 +17,6 @@ import {
   initStorage,
   _resetStorageForTests,
   appendTrialRow,
-  getRunId,
   getAllTrialRows,
   getTrialRowsAfter,
   getUploadCursor,
@@ -28,7 +27,6 @@ import {
   getSessionId,
   setSessionStartedAt,
   getSessionStartedAt,
-  clearAll,
   recordWriteFailure,
   getStorageFailureSummary,
 } from '../src/storage.js';
@@ -57,6 +55,8 @@ describe('storage init', () => {
   });
 });
 
+const RUN_ID = expect.stringMatching(/^.{8}$/);
+
 describe('appendTrialRow + getAllTrialRows', () => {
   it('assigns monotonically increasing seq starting at 1', async () => {
     const s1 = await appendTrialRow({ phase: 'a' });
@@ -70,8 +70,8 @@ describe('appendTrialRow + getAllTrialRows', () => {
     await appendTrialRow({ phase: 'b', value: 20 });
     const rows = await getAllTrialRows();
     expect(rows).toEqual([
-      { seq: 1, run_id: getRunId(), phase: 'a', value: 10 },
-      { seq: 2, run_id: getRunId(), phase: 'b', value: 20 },
+      { seq: 1, run_id: RUN_ID, phase: 'a', value: 10 },
+      { seq: 2, run_id: RUN_ID, phase: 'b', value: 20 },
     ]);
   });
 
@@ -79,8 +79,8 @@ describe('appendTrialRow + getAllTrialRows', () => {
     await appendTrialRow({ phase: 'a' });
     await appendTrialRow({ phase: 'b' });
     const rows = await getAllTrialRows();
-    expect(getRunId()).toMatch(/^.{8}$/);
-    expect(new Set(rows.map((r) => r.run_id))).toEqual(new Set([getRunId()]));
+    expect(rows[0].run_id).toMatch(/^.{8}$/);
+    expect(new Set(rows.map((r) => r.run_id)).size).toBe(1);
   });
 
   it('keeps a run id the caller supplies', async () => {
@@ -188,28 +188,5 @@ describe('storage failure summary', () => {
     await initStorage({ backend: 'memory' });
     expect(getStorageFailureSummary().writeFailures).toBe(0);
     expect(getStorageFailureSummary().lastError).toBeNull();
-  });
-});
-
-describe('clearAll', () => {
-  it('drops all trials and resets seq numbering', async () => {
-    await appendTrialRow({ x: 1 });
-    await appendTrialRow({ x: 2 });
-    await clearAll();
-    expect(await getAllTrialRows()).toEqual([]);
-    /* Next seq should restart at 1 — important so a re-run of clearAll
-     * doesn't produce out-of-order sequences. */
-    const nextSeq = await appendTrialRow({ x: 3 });
-    expect(nextSeq).toBe(1);
-  });
-
-  it('drops all meta values', async () => {
-    await setUploadCursor(99);
-    await setCompletionUrl('http://x');
-    await setSessionId('s');
-    await clearAll();
-    expect(await getUploadCursor()).toBe(0);
-    expect(await getCompletionUrl()).toBeUndefined();
-    expect(await getSessionId()).toBeUndefined();
   });
 });

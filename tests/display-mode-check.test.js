@@ -23,7 +23,6 @@ vi.mock('../src/hidden-nav.js', () => ({
 }));
 
 import { displayModeCheckTrial } from '../src/calibration/display-mode.js';
-import { DISPLAY_COLOUR_LOCK_CLASS } from '../src/visuals/display-colour-lock.js';
 
 /**
  * Mount the slide stimulus + render the Continue button exactly as
@@ -81,11 +80,11 @@ describe('displayModeCheckTrial — Continue gate (first visit, lock not yet eng
   it('clicking "Force light mode" engages the lock and enables Continue', () => {
     const node = displayModeCheckTrial();
     const { lockBtn, lockStatus, gateHint, continueBtn } = mountTrial(node);
-    expect(document.documentElement.classList.contains(DISPLAY_COLOUR_LOCK_CLASS)).toBe(false);
+    expect(document.documentElement.classList.contains('display-colour-locked')).toBe(false);
 
     lockBtn.click();
 
-    expect(document.documentElement.classList.contains(DISPLAY_COLOUR_LOCK_CLASS)).toBe(true);
+    expect(document.documentElement.classList.contains('display-colour-locked')).toBe(true);
     expect(continueBtn.disabled).toBe(false);
     expect(continueBtn.getAttribute('aria-disabled')).toBe('false');
     expect(continueBtn.style.cursor).toBe('');
@@ -122,7 +121,7 @@ describe('displayModeCheckTrial — Continue gate (re-entry, lock already engage
   it('reflects the locked state and pre-enables Continue when re-entering the slide', () => {
     /* Simulate the participant having engaged the lock on a previous
      * visit to this slide (or any code path that engaged it). */
-    document.documentElement.classList.add(DISPLAY_COLOUR_LOCK_CLASS);
+    document.documentElement.classList.add('display-colour-locked');
 
     const node = displayModeCheckTrial();
     const { lockBtn, lockStatus, gateHint, continueBtn } = mountTrial(node);
@@ -136,7 +135,7 @@ describe('displayModeCheckTrial — Continue gate (re-entry, lock already engage
   });
 
   it('on_finish stamps display_colour_locked=true on re-entry', () => {
-    document.documentElement.classList.add(DISPLAY_COLOUR_LOCK_CLASS);
+    document.documentElement.classList.add('display-colour-locked');
     const node = displayModeCheckTrial();
     mountTrial(node);
     const data = {};

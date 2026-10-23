@@ -97,7 +97,7 @@ const SIM_CLOCK_BASE_MS = 1_000_000; /* arbitrary non-zero base for relativity *
  *   --out <path>            Write to file (default: stdout)
  *   --participants <N>      Emit N participants concatenated (default: 1)
  */
-export function parseSimulateArgs(argv) {
+function parseSimulateArgs(argv) {
   const args = Array.isArray(argv) ? argv.slice(2) : [];
   const opts = {
     seed: null,
@@ -151,7 +151,7 @@ function gaussian(rng) {
  *   (rt < RT_FLOOR_MS) to exercise Criterion1's filter. Negatives are
  *   clamped to 100 ms.
  */
-export function sampleResponse(rng, opts) {
+function sampleResponse(rng, opts) {
   const responded = rng.next() < opts.responseRate;
   if (!responded) return { responded: false, correct: null, rt_ms: null };
   const correct = rng.next() < opts.accuracy;

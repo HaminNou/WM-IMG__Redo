@@ -53,14 +53,7 @@
  *     the download fallback handles the data egress.
  */
 import { config } from './config.js';
-import {
-  getAllTrialRows,
-  getTrialRowsAfter,
-  getUploadCursor,
-  setUploadCursor,
-  getCompletionUrl,
-  getSessionId,
-} from './storage.js';
+import { getAllTrialRows, getTrialRowsAfter, getUploadCursor, setUploadCursor } from './storage.js';
 
 const midSessionUploaded = new Set();
 
@@ -773,7 +766,3 @@ export function buildScreenOutUrl() {
 export function isPlaceholderScreenOutUrl(url) {
   return typeof url === 'string' && url.includes('PLACEHOLDER');
 }
-
-/* Re-export storage helpers used by the debrief node so its imports stay
- * focused on the upload layer. */
-export { getCompletionUrl, getSessionId };

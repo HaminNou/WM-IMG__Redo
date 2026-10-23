@@ -25,7 +25,7 @@ import {
   consumeDeveloperSkip,
   __resetHiddenNavForTests,
 } from '../src/hidden-nav.js';
-import { isAudioMuted, setAudioMuted } from '../src/audio/dsp.js';
+import { __isAudioMutedForTests, setAudioMuted } from '../src/audio/dsp.js';
 
 function makeTrackedNode(stepId, phase = stepId) {
   const timeline = [];
@@ -568,9 +568,9 @@ describe('audio mute gate around hidden-nav skip', () => {
       finishTrial: vi.fn(),
     };
     installHiddenNav(jsp);
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
     dispatchKey('u');
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
   });
 
   it('U on a registered checkpoint ALSO engages the gate (demo loops are fire-and-forget too)', () => {
@@ -591,9 +591,9 @@ describe('audio mute gate around hidden-nav skip', () => {
     node.type = { info: { name: 'html-keyboard-response' } };
     const jsp = makeStubJsPsych({ node });
     installHiddenNav(jsp);
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
     dispatchKey('u');
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
   });
 
   it('the on_trial_start hook drops the gate on a non-checkpoint when no skip is armed', () => {
@@ -611,12 +611,12 @@ describe('audio mute gate around hidden-nav skip', () => {
     const jsp = makeStubJsPsych({ node });
     installHiddenNav(jsp);
     dispatchKey('u');
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
 
     const hook = getHiddenNavTrialStartHook();
     const practiceTrial = { trial_duration: 5000 };
     hook(practiceTrial);
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
     /* And nothing was neutralised — the practice trial runs normally. */
     expect(practiceTrial.trial_duration).toBe(5000);
   });
@@ -638,20 +638,20 @@ describe('audio mute gate around hidden-nav skip', () => {
     };
     installHiddenNav(jsp);
     dispatchKey('u');
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
 
     const hook = getHiddenNavTrialStartHook();
     const checkpoint = { _hidden_nav_checkpoint: true, trial_duration: 5000 };
     hook(checkpoint);
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
     expect(checkpoint.trial_duration).toBe(5000);
 
     /* Sub-case 2: gate raised manually (as if R from a trial set it). */
     setAudioMuted(true);
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
     const checkpoint2 = { _hidden_nav_checkpoint: true, trial_duration: 1234 };
     hook(checkpoint2);
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
   });
 
   it('R from a trial-context KEEPS the gate up so any in-flight scheduler is silenced through the splice', () => {
@@ -679,7 +679,7 @@ describe('audio mute gate around hidden-nav skip', () => {
     };
     installHiddenNav(jsp);
     dispatchKey('r');
-    expect(isAudioMuted()).toBe(true);
+    expect(__isAudioMutedForTests()).toBe(true);
   });
 
   it('R from a registered checkpoint clears the gate (defensive — no async loops to suppress)', () => {
@@ -697,6 +697,6 @@ describe('audio mute gate around hidden-nav skip', () => {
 
     setAudioMuted(true);
     dispatchKey('r');
-    expect(isAudioMuted()).toBe(false);
+    expect(__isAudioMutedForTests()).toBe(false);
   });
 });

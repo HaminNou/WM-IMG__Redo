@@ -45,12 +45,12 @@
  * choice is robust to volume-setting variability.
  */
 
-/* ISO 226:2003 Annex A — 60-phon equal-loudness contour SPL values
- * (dB SPL) at standard 1/3-octave centre frequencies. Verbatim from the
- * standard; cross-checked against Suzuki & Takeshima (2004) Table I,
- * 60-phon column. The 1000 Hz value is 60.0 by definition (loudness
- * level in phons equals SPL at 1 kHz). */
-const ISO226_60_PHON_FREQ = Object.freeze([
+/* ISO 226:2003 Annex A — standard 1/3-octave centre frequencies (Hz) and the
+ * 60-phon equal-loudness contour SPL values (dB SPL) at those frequencies.
+ * Cross-checked against Suzuki & Takeshima (2004) Table I, 60-phon column.
+ * The 1000 Hz value is 60.0 by definition (loudness level in phons equals
+ * SPL at 1 kHz). */
+const ISO226_FREQ_HZ = Object.freeze([
   20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600,
   2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500,
 ]);
@@ -59,78 +59,26 @@ const ISO226_60_PHON_SPL_DB = Object.freeze([
   57.7, 60.0, 61.5, 60.7, 58.3, 55.7, 55.7, 59.5, 65.3, 71.7, 78.3, 80.6, 81.0,
 ]);
 
-const FREQ_MIN = ISO226_60_PHON_FREQ[0];
-const FREQ_MAX = ISO226_60_PHON_FREQ[ISO226_60_PHON_FREQ.length - 1];
-const REFERENCE_FREQ_HZ = 1000;
-const REFERENCE_SPL_DB = 60.0; /* 60-phon contour intersects 1 kHz at 60 dB SPL by definition */
-
-/**
- * Sound-pressure level (dB SPL) of a pure tone at frequency `freqHz` that
- * elicits 60 phons of loudness, by tabulated lookup (linear interpolation
- * in log-frequency between ISO 226:2003 Annex A centre frequencies).
- *
- * @param {number} freqHz  in [20, 12500] Hz
- * @returns {number} dB SPL
- */
-export function iso226SplFor60Phon(freqHz) {
-  if (!(freqHz >= FREQ_MIN && freqHz <= FREQ_MAX)) {
-    throw new RangeError(
-      `equal-loudness: frequency ${freqHz} Hz is outside ISO 226 domain ` +
-        `[${FREQ_MIN}, ${FREQ_MAX}] Hz`
-    );
-  }
-  let i = 0;
-  while (i < ISO226_60_PHON_FREQ.length - 1 && ISO226_60_PHON_FREQ[i + 1] < freqHz) i++;
-  const fLo = ISO226_60_PHON_FREQ[i];
-  const fHi = ISO226_60_PHON_FREQ[i + 1];
-  if (freqHz === fLo) return ISO226_60_PHON_SPL_DB[i];
-  if (freqHz === fHi) return ISO226_60_PHON_SPL_DB[i + 1];
-  const t = (Math.log(freqHz) - Math.log(fLo)) / (Math.log(fHi) - Math.log(fLo));
-  return ISO226_60_PHON_SPL_DB[i] + t * (ISO226_60_PHON_SPL_DB[i + 1] - ISO226_60_PHON_SPL_DB[i]);
-}
-
-/**
- * Equal-loudness gain (dB) for a tone at `freqHz` relative to a 1 kHz
- * reference at 60 phons. Positive return values mean the tone needs MORE
- * digital amplitude than the reference to sound equally loud (typical for
- * the low end of the band, e.g. ≈ +7 dB at 200 Hz); negative values mean
- * LESS (typical near the ear's 2–4 kHz sensitivity peak, e.g. ≈ −4 dB
- * at 2.5–3 kHz).
- *
- * Apply by scaling the digital peak: `peak * 10^(gainDb / 20)`.
- *
- * @param {number} freqHz   in [20, 12500] Hz
- * @returns {number} dB
- */
-export function equalLoudnessGainDb60Phon(freqHz) {
-  return iso226SplFor60Phon(freqHz) - REFERENCE_SPL_DB;
-}
-
-/**
- * Convert a dB gain to a linear amplitude factor.
- *
- * @param {number} gainDb
- * @returns {number}  10^(gainDb / 20)
- */
-export function dbToLinear(gainDb) {
-  return Math.pow(10, gainDb / 20);
-}
-
-/* ISO 226:2003 Annex A — 80-phon equal-loudness contour SPL values
- * (dB SPL) at the same 1/3-octave centre frequencies. Cross-checked
- * against Suzuki & Takeshima (2004) Table I, 80-phon column. */
+/* ISO 226:2003 Annex A — 80-phon contour SPL values (dB SPL) at the same
+ * centre frequencies. Cross-checked against Suzuki & Takeshima (2004) Table I,
+ * 80-phon column. */
 const ISO226_80_PHON_SPL_DB = Object.freeze([
   117.3, 112.4, 108.4, 104.2, 100.4, 96.9, 93.6, 91.1, 88.3, 86.0, 84.3, 82.0, 80.1, 78.7, 77.8,
   77.1, 77.0, 80.0, 82.0, 80.7, 77.4, 74.5, 74.8, 79.1, 85.3, 91.6, 98.1, 101.4, 102.6,
 ]);
 
-const REFERENCE_SPL_80 = 80.0; /* 80-phon contour intersects 1 kHz at 80 dB SPL by definition */
+const FREQ_MIN = ISO226_FREQ_HZ[0];
+const FREQ_MAX = ISO226_FREQ_HZ[ISO226_FREQ_HZ.length - 1];
+
+/* Each contour intersects 1 kHz at its own phon level in dB SPL by definition. */
+const REFERENCE_SPL_60 = 60.0;
+const REFERENCE_SPL_80 = 80.0;
 
 /**
- * Sound-pressure level (dB SPL) of a pure tone at frequency `freqHz` that
- * elicits 80 phons of loudness, by tabulated lookup.
+ * dB SPL at `freqHz` on a tabulated contour, by linear interpolation in
+ * log-frequency between the ISO 226:2003 Annex A centre frequencies.
  */
-function iso226SplFor80Phon(freqHz) {
+function interpolateContour(splDb, freqHz) {
   if (!(freqHz >= FREQ_MIN && freqHz <= FREQ_MAX)) {
     throw new RangeError(
       `equal-loudness: frequency ${freqHz} Hz is outside ISO 226 domain ` +
@@ -138,13 +86,13 @@ function iso226SplFor80Phon(freqHz) {
     );
   }
   let i = 0;
-  while (i < ISO226_60_PHON_FREQ.length - 1 && ISO226_60_PHON_FREQ[i + 1] < freqHz) i++;
-  const fLo = ISO226_60_PHON_FREQ[i];
-  const fHi = ISO226_60_PHON_FREQ[i + 1];
-  if (freqHz === fLo) return ISO226_80_PHON_SPL_DB[i];
-  if (freqHz === fHi) return ISO226_80_PHON_SPL_DB[i + 1];
+  while (i < ISO226_FREQ_HZ.length - 1 && ISO226_FREQ_HZ[i + 1] < freqHz) i++;
+  const fLo = ISO226_FREQ_HZ[i];
+  const fHi = ISO226_FREQ_HZ[i + 1];
+  if (freqHz === fLo) return splDb[i];
+  if (freqHz === fHi) return splDb[i + 1];
   const t = (Math.log(freqHz) - Math.log(fLo)) / (Math.log(fHi) - Math.log(fLo));
-  return ISO226_80_PHON_SPL_DB[i] + t * (ISO226_80_PHON_SPL_DB[i + 1] - ISO226_80_PHON_SPL_DB[i]);
+  return splDb[i] + t * (splDb[i + 1] - splDb[i]);
 }
 
 /**
@@ -156,6 +104,11 @@ function iso226SplFor80Phon(freqHz) {
  * definition, so the interpolated 70-phon contour is the correct target
  * for a 70 dB SPL listening level.
  *
+ * Positive values mean the tone needs MORE digital amplitude than the
+ * reference to sound equally loud (low end of the band); negative values
+ * mean LESS (near the ear's 2-4 kHz sensitivity peak). Apply by scaling the
+ * digital peak: `peak * 10^(gainDb / 20)`.
+ *
  * The interpolation error relative to the exact ISO 226 parametric formula
  * is < 0.5 dB across the 200-3900 Hz range — below the just-noticeable
  * difference for loudness.
@@ -164,13 +117,7 @@ function iso226SplFor80Phon(freqHz) {
  * @returns {number} dB
  */
 export function equalLoudnessGainDb70Phon(freqHz) {
-  const corr60 = iso226SplFor60Phon(freqHz) - REFERENCE_SPL_DB;
-  const corr80 = iso226SplFor80Phon(freqHz) - REFERENCE_SPL_80;
+  const corr60 = interpolateContour(ISO226_60_PHON_SPL_DB, freqHz) - REFERENCE_SPL_60;
+  const corr80 = interpolateContour(ISO226_80_PHON_SPL_DB, freqHz) - REFERENCE_SPL_80;
   return (corr60 + corr80) / 2;
 }
-
-/* Exposed for tests and for one-off documentation tables only. */
-export const ISO226_60_PHON_TABLE = Object.freeze(
-  ISO226_60_PHON_FREQ.map((f, i) => Object.freeze({ freq_hz: f, spl_db: ISO226_60_PHON_SPL_DB[i] }))
-);
-export { REFERENCE_FREQ_HZ, REFERENCE_SPL_DB };

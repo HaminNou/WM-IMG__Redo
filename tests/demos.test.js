@@ -22,9 +22,7 @@ import {
   iOnlyDemoNode,
   iDDemoNode,
   iTDemoNode,
-  DEMO_TRIAL_TYPES,
-  DEMO_ROTATION_ANGLE_POOL,
-  __test__,
+  enumerateDemoNarrationStrings,
 } from '../src/instructions/demos.js';
 import { assembleInstructionsAndPractice } from '../src/instructions/index.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
@@ -41,10 +39,6 @@ beforeEach(() => {
 });
 
 describe('per-type demo node accessors', () => {
-  it('exposes one factory per trial type', () => {
-    expect(DEMO_TRIAL_TYPES).toEqual(['d_only', 't_only', 'i_only', 'i_d', 'i_t']);
-  });
-
   it('each demo node is tagged with its locked phase', () => {
     expect(dOnlyDemoNode().data.phase).toBe('demo_d_only');
     expect(tOnlyDemoNode().data.phase).toBe('demo_t_only');
@@ -145,100 +139,19 @@ describe('per-type demo node accessors', () => {
   });
 });
 
-describe('rotation-angle pool (imagery-bearing demos)', () => {
-  it('contains 12 unique integer angles within ±90° excluding 0°', () => {
-    expect(DEMO_ROTATION_ANGLE_POOL).toHaveLength(12);
-    const set = new Set(DEMO_ROTATION_ANGLE_POOL);
-    expect(set.size).toBe(12); /* unique */
-    for (const a of DEMO_ROTATION_ANGLE_POOL) {
-      expect(Number.isInteger(a)).toBe(true);
-      expect(a).toBeGreaterThanOrEqual(-90);
-      expect(a).toBeLessThanOrEqual(90);
+describe('narration enumeration', () => {
+  it('covers the rotation-arrow caption for 12 distinct angles within +/-90 degrees, never 0', () => {
+    const angles = enumerateDemoNarrationStrings()
+      .map((t) => t.match(/^Step 2 of 3 .* by ([+-]?\d+)°\)\.$/))
+      .filter(Boolean)
+      .map((m) => Number(m[1]));
+    expect(new Set(angles).size).toBe(12);
+    for (const a of angles) {
+      expect(Math.abs(a)).toBeLessThanOrEqual(90);
       expect(a).not.toBe(0);
     }
-  });
-
-  it('the pool spans the full ±90° range so participants see large rotations too', () => {
-    expect(DEMO_ROTATION_ANGLE_POOL).toContain(-90);
-    expect(DEMO_ROTATION_ANGLE_POOL).toContain(90);
-  });
-
-  it('pickDemoRotationAngle always returns a member of the pool (PRNG-driven)', () => {
-    const seen = new Set();
-    for (let i = 0; i < 50; i++) seen.add(__test__.pickDemoRotationAngle());
-    /* Every drawn angle is in the pool. */
-    for (const a of seen) expect(DEMO_ROTATION_ANGLE_POOL).toContain(a);
-    /* With 50 draws from a 12-element pool we expect substantial variety
-     * (not always-the-same-value). Lower bound 4 distinct values is a
-     * very loose check that won't false-fail under any reasonable PRNG. */
-    expect(seen.size).toBeGreaterThanOrEqual(4);
-  });
-});
-
-describe('press-outcome caption (button-press demonstration)', () => {
-  /* Caption is label-driven : the participant-facing voice
-   * names the chosen response by its meaning ("Yes" / "No" for memory
-   * probes, "On-pattern" / "Not on-pattern" for star judgements) rather
-   * than by keyboard side. Directional language ("Right arrow" / "Left
-   * arrow") does not apply. */
-  it('green wording when the chosen label matches the correct label', () => {
-    const text = __test__.pressOutcomeCaption({
-      pressedLabel: 'Yes',
-      correctLabel: 'Yes',
-      isCorrect: true,
-      stimulusName: 'dot',
-    });
-    expect(text).toContain('Yes');
-    expect(text.toLowerCase()).toContain('correct');
-    expect(text.toLowerCase()).toContain('green');
-    expect(text.toLowerCase()).toContain('dot');
-  });
-
-  it('red wording when the chosen label differs from the correct label, naming both', () => {
-    const text = __test__.pressOutcomeCaption({
-      pressedLabel: 'Not on-pattern',
-      correctLabel: 'On-pattern',
-      isCorrect: false,
-      stimulusName: 'star',
-    });
-    expect(text).toContain('Not on-pattern');
-    expect(text).toContain('On-pattern');
-    expect(text.toLowerCase()).toContain('incorrect');
-    expect(text.toLowerCase()).toContain('red');
-    expect(text.toLowerCase()).toContain('star');
-  });
-
-  it('uses the supplied stimulus name (so dot/star/question-mark phrasing matches the visible feedback target)', () => {
-    expect(
-      __test__.pressOutcomeCaption({
-        pressedLabel: 'Yes',
-        correctLabel: 'No',
-        isCorrect: false,
-        stimulusName: 'question mark',
-      })
-    ).toContain('question mark');
-  });
-
-  it('caption never names a keyboard side ("Right" / "Left" / arrow)', () => {
-    /* With 3 items per trial there is no directional language across
-     * participant-facing copy. The caption must not leak it back. */
-    for (const args of [
-      { pressedLabel: 'Yes', correctLabel: 'Yes', isCorrect: true, stimulusName: 'dot' },
-      { pressedLabel: 'No', correctLabel: 'Yes', isCorrect: false, stimulusName: 'dot' },
-      {
-        pressedLabel: 'On-pattern',
-        correctLabel: 'Not on-pattern',
-        isCorrect: false,
-        stimulusName: 'star',
-      },
-    ]) {
-      const text = __test__.pressOutcomeCaption(args).toLowerCase();
-      expect(text).not.toMatch(/\bright\b/);
-      expect(text).not.toMatch(/\bleft\b/);
-      expect(text).not.toContain('arrow');
-      expect(text).not.toContain('→');
-      expect(text).not.toContain('←');
-    }
+    expect(angles).toContain(-90);
+    expect(angles).toContain(90);
   });
 });
 
@@ -284,7 +197,7 @@ describe('demo wiring in the instructions composer', () => {
     const chain = assembleInstructionsAndPractice();
     const inner = chain[1].timeline;
     const resolved = inner.map((n) => (typeof n.data === 'function' ? n.data() : n.data));
-    for (const trialType of DEMO_TRIAL_TYPES) {
+    for (const trialType of ['d_only', 't_only', 'i_only', 'i_d', 'i_t']) {
       const demoIdx = resolved.findIndex((d) => d?.phase === `demo_${trialType}`);
       expect(demoIdx).toBeGreaterThan(-1);
       /* Look forward — the next practice-block-labelled node should appear

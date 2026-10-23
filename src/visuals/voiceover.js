@@ -136,7 +136,7 @@ export function isVoiceoverEnabled() {
   }
 }
 
-export function setVoiceoverEnabled(enabled) {
+function setVoiceoverEnabled(enabled) {
   try {
     window.localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');
   } catch {
@@ -151,7 +151,7 @@ export function setVoiceoverEnabled(enabled) {
  * False on older Safari (pre-7), some embedded browsers, and any context
  * where window is undefined (Node / jsdom without polyfill).
  */
-export function isSpeechAvailable() {
+function isSpeechAvailable() {
   return (
     typeof window !== 'undefined' &&
     typeof window.speechSynthesis !== 'undefined' &&
@@ -163,10 +163,8 @@ export function isSpeechAvailable() {
  * Pick the most natural-sounding voice from `voices`. Returns the first
  * pattern match, then any English voice, then null (caller falls back to
  * the system default by leaving `utterance.voice` unset).
- *
- * Exported for tests.
  */
-export function pickPreferredVoice(voices) {
+function pickPreferredVoice(voices) {
   if (!Array.isArray(voices) || voices.length === 0) return null;
   for (const pattern of VOICE_NAME_PATTERNS) {
     const match = voices.find((v) => pattern.test(v.name));
@@ -180,8 +178,6 @@ export function pickPreferredVoice(voices) {
  * Strip HTML tags from `html` and return the plain text used for
  * narration. Whitespace is collapsed; HTML entities are decoded by the
  * browser when assigned to `textContent`.
- *
- * Exported for tests.
  */
 export function htmlToNarrationText(html) {
   if (html === null || html === undefined) return '';
@@ -207,10 +203,8 @@ export function htmlToNarrationText(html) {
  * offsets into the original `text`. Used both to drive boundary→reveal
  * mapping (matches `charIndex` on the utterance) and to render per-word
  * spans into the host element.
- *
- * Exported for tests.
  */
-export function tokeniseWords(text) {
+function tokeniseWords(text) {
   const out = [];
   /* `\S+` matches any run of non-whitespace as one "word" (including
    * punctuation glued to it, e.g. "dots." → one token). The Web Speech
@@ -237,10 +231,8 @@ export function tokeniseWords(text) {
  *
  * Used to map a `boundary` event's `charIndex` to the right span to
  * reveal. Linear scan is fine — typical slide is < 200 words.
- *
- * Exported for tests.
  */
-export function tokenIndexAtChar(tokens, charIndex) {
+function tokenIndexAtChar(tokens, charIndex) {
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     if (t.kind !== 'word') continue;
@@ -260,10 +252,8 @@ export function tokenIndexAtChar(tokens, charIndex) {
  *
  * The host's existing children are replaced; tests should pass a
  * disposable element.
- *
- * Exported for tests.
  */
-export function renderWordSpans(host, tokens) {
+function renderWordSpans(host, tokens) {
   /* Build a fresh fragment so the swap is atomic — no flicker between
    * empty host and partially-filled host. */
   const frag = host.ownerDocument.createDocumentFragment();
@@ -285,10 +275,8 @@ export function renderWordSpans(host, tokens) {
 /**
  * Reveal the word at `tokenIndex` (and any preceding word tokens that may
  * have been skipped — e.g. when boundary events arrive late). Idempotent.
- *
- * Exported for tests.
  */
-export function revealUpTo(host, tokenIndex) {
+function revealUpTo(host, tokenIndex) {
   const spans = host.querySelectorAll(`.${CSS_WORD}`);
   for (const span of spans) {
     const idx = Number(span.getAttribute('data-vo-index'));
@@ -351,8 +339,6 @@ function revealAll(host) {
  * Pre-collecting text nodes before mutating is mandatory: walking and
  * mutating the same tree confuses live NodeList ordering. We snapshot
  * every text node first, then rewrite each one independently.
- *
- * Exported for tests.
  */
 export function wrapWordsInPlace(host) {
   const tokens = [];
@@ -445,10 +431,8 @@ export function wrapWordsInPlace(host) {
  * Returns `null` on platforms without `crypto.subtle` (very old Safari,
  * non-secure contexts on http://) — caller treats `null` as "no manifest
  * match possible" and falls through to Web Speech.
- *
- * Exported for tests.
  */
-export async function sha256Hex(text) {
+async function sha256Hex(text) {
   if (typeof crypto === 'undefined' || !crypto.subtle?.digest) return null;
   if (typeof TextEncoder === 'undefined') return null;
   try {
@@ -927,8 +911,7 @@ class VoiceoverEngine {
     };
 
     /* Web Speech path, factored out so the async audio-first start() can
-     * delegate to it cleanly on manifest miss. Body is unchanged from
-     * the previous all-Web-Speech implementation. */
+     * delegate to it cleanly on manifest miss. */
     const startWebSpeech = () => {
       const utterance = new window.SpeechSynthesisUtterance(text);
       utterance.rate = opts.rate ?? 1.0;

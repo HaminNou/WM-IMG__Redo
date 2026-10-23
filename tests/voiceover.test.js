@@ -12,14 +12,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import {
   isVoiceoverEnabled,
-  setVoiceoverEnabled,
-  isSpeechAvailable,
-  pickPreferredVoice,
   htmlToNarrationText,
-  tokeniseWords,
-  tokenIndexAtChar,
-  renderWordSpans,
-  revealUpTo,
   wrapWordsInPlace,
   getVoiceover,
   __resetVoiceover,
@@ -117,98 +110,6 @@ describe('htmlToNarrationText', () => {
   });
 });
 
-describe('tokeniseWords', () => {
-  it('splits into alternating word + space tokens with correct offsets', () => {
-    const tokens = tokeniseWords('Hello  world');
-    expect(tokens).toEqual([
-      { kind: 'word', text: 'Hello', start: 0, end: 5 },
-      { kind: 'space', text: '  ', start: 5, end: 7 },
-      { kind: 'word', text: 'world', start: 7, end: 12 },
-    ]);
-  });
-  it('keeps punctuation glued to its word', () => {
-    const tokens = tokeniseWords('Press Space.');
-    expect(tokens.map((t) => t.text)).toEqual(['Press', ' ', 'Space.']);
-  });
-  it('handles empty string', () => {
-    expect(tokeniseWords('')).toEqual([]);
-  });
-});
-
-describe('tokenIndexAtChar', () => {
-  it('returns the index of the word containing charIndex', () => {
-    const tokens = tokeniseWords('one two three');
-    /* "one" 0..3, " " 3..4, "two" 4..7, " " 7..8, "three" 8..13 */
-    expect(tokenIndexAtChar(tokens, 0)).toBe(0);
-    expect(tokenIndexAtChar(tokens, 4)).toBe(2);
-    expect(tokenIndexAtChar(tokens, 6)).toBe(2);
-    expect(tokenIndexAtChar(tokens, 8)).toBe(4);
-  });
-  it('returns -1 for whitespace charIndex', () => {
-    const tokens = tokeniseWords('one two');
-    expect(tokenIndexAtChar(tokens, 3)).toBe(-1);
-  });
-  it('returns -1 for out-of-range charIndex', () => {
-    const tokens = tokeniseWords('one');
-    expect(tokenIndexAtChar(tokens, 999)).toBe(-1);
-  });
-});
-
-describe('pickPreferredVoice', () => {
-  it('prefers Microsoft Aria Natural over David', () => {
-    const voices = [
-      { name: 'Microsoft David Desktop', lang: 'en-US' },
-      { name: 'Microsoft Aria Online (Natural) - English (United States)', lang: 'en-US' },
-    ];
-    expect(pickPreferredVoice(voices).name).toMatch(/Aria/);
-  });
-  it('prefers Google US English when no Microsoft Natural voice is available', () => {
-    const voices = [
-      { name: 'Microsoft David Desktop', lang: 'en-US' },
-      { name: 'Google US English', lang: 'en-US' },
-    ];
-    expect(pickPreferredVoice(voices).name).toMatch(/Google US English/);
-  });
-  it('falls back to any en-* voice', () => {
-    const voices = [
-      { name: 'SomeUnknownVoice', lang: 'fr-FR' },
-      { name: 'Generic English', lang: 'en-GB' },
-    ];
-    expect(pickPreferredVoice(voices).name).toBe('Generic English');
-  });
-  it('returns null on empty list', () => {
-    expect(pickPreferredVoice([])).toBeNull();
-    expect(pickPreferredVoice(undefined)).toBeNull();
-  });
-});
-
-describe('renderWordSpans + revealUpTo', () => {
-  it('wraps each word in a vo-word span with data-vo-index', () => {
-    const host = document.createElement('div');
-    const tokens = tokeniseWords('one two three');
-    renderWordSpans(host, tokens);
-    const spans = host.querySelectorAll(`.${CSS_WORD}`);
-    expect(spans).toHaveLength(3);
-    expect(spans[0].textContent).toBe('one');
-    expect(spans[2].textContent).toBe('three');
-    expect(spans[1].getAttribute('data-vo-index')).toBe('2');
-  });
-  it('preserves whitespace between spans', () => {
-    const host = document.createElement('div');
-    renderWordSpans(host, tokeniseWords('one two'));
-    expect(host.textContent).toBe('one two');
-  });
-  it('revealUpTo flips the revealed class progressively', () => {
-    const host = document.createElement('div');
-    renderWordSpans(host, tokeniseWords('a b c'));
-    revealUpTo(host, 2); /* first word at idx 0, second at idx 2 */
-    const spans = host.querySelectorAll(`.${CSS_WORD}`);
-    expect(spans[0].classList.contains(CSS_WORD_REVEALED)).toBe(true);
-    expect(spans[1].classList.contains(CSS_WORD_REVEALED)).toBe(true);
-    expect(spans[2].classList.contains(CSS_WORD_REVEALED)).toBe(false);
-  });
-});
-
 describe('wrapWordsInPlace', () => {
   it('wraps each word in a vo-word span while preserving paragraph + list structure', () => {
     const host = document.createElement('div');
@@ -287,6 +188,12 @@ describe('wrapWordsInPlace', () => {
 /* ---------- Engine integration ---------- */
 
 describe('VoiceoverEngine.narrate', () => {
+  it('prefers a natural English voice from the available list', () => {
+    const host = document.createElement('div');
+    getVoiceover().narrate(host, 'Hello world');
+    expect(mockSynth.spoken[0].voice.name).toMatch(/Aria/);
+  });
+
   it('renders word spans synchronously and starts speaking', () => {
     const host = document.createElement('div');
     const vo = getVoiceover();
@@ -493,21 +400,11 @@ describe('voiceover preference persistence', () => {
   it('defaults to enabled when no localStorage entry exists', () => {
     expect(isVoiceoverEnabled()).toBe(true);
   });
-  it('round-trips through setVoiceoverEnabled', () => {
-    setVoiceoverEnabled(false);
+  it('round-trips through the engine mute toggle', () => {
+    getVoiceover().setMuted(true);
     expect(isVoiceoverEnabled()).toBe(false);
-    setVoiceoverEnabled(true);
+    getVoiceover().setMuted(false);
     expect(isVoiceoverEnabled()).toBe(true);
-  });
-});
-
-describe('isSpeechAvailable', () => {
-  it('returns true when the API is mounted on window', () => {
-    expect(isSpeechAvailable()).toBe(true);
-  });
-  it('returns false when the API is unavailable', () => {
-    delete window.speechSynthesis;
-    expect(isSpeechAvailable()).toBe(false);
   });
 });
 
@@ -813,7 +710,7 @@ describe('audio-manifest playback', () => {
     expect(spans[2].classList.contains(CSS_WORD_REVEALED)).toBe(false);
 
     /* currentTime = 1.8 s → "Dot", "1", and "remember" have all ended.
-     * `revealUpTo` flips every span with data-vo-index ≤ "remember"'s
+     * the reveal flips every span with data-vo-index ≤ "remember"'s
      * token index, which includes the em-dash (span 2) as a side
      * effect — so spans 0, 1, 2, 3 are revealed; span 4 ("its", ends
      * at 1839 ms) is NOT yet. The reveal trails the voice, not leads

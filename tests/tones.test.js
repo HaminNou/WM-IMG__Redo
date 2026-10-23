@@ -35,7 +35,7 @@
  *   5. Frequency rank parity matches pattern label (odd rank → on, even → off).
  */
 import { describe, it, expect } from 'vitest';
-import { getToneBank, toneByIndex, toneForCell, cellForToneIndex } from '../src/audio/tones.js';
+import { getToneBank, toneForCell } from '../src/audio/tones.js';
 import { config } from '../src/config.js';
 import { onPatternCells, offPatternCells, patternLabel } from '../src/grid.js';
 
@@ -48,12 +48,12 @@ describe('tones: log-equal, non-musical frequency bank', () => {
   });
 
   it('first tone is the configured low anchor (200 Hz by default)', () => {
-    expect(toneByIndex(0).freq_hz).toBeCloseTo(config.tones.low_freq_hz, 9);
+    expect(getToneBank()[0].freq_hz).toBeCloseTo(config.tones.low_freq_hz, 9);
     expect(config.tones.low_freq_hz).toBe(200);
   });
 
   it('last tone is the configured high anchor (3900 Hz by default)', () => {
-    expect(toneByIndex(COUNT - 1).freq_hz).toBeCloseTo(config.tones.high_freq_hz, 6);
+    expect(getToneBank()[COUNT - 1].freq_hz).toBeCloseTo(config.tones.high_freq_hz, 6);
     expect(config.tones.high_freq_hz).toBe(3900);
   });
 
@@ -190,10 +190,9 @@ describe('tones: cell pairing bijection', () => {
     expect(seen.size).toBe(COUNT);
   });
 
-  it('toneForCell and cellForToneIndex are inverses', () => {
+  it('toneForCell maps each paired cell back to its tone', () => {
     for (const t of getToneBank()) {
       expect(toneForCell(t.paired_cell).index).toBe(t.index);
-      expect(cellForToneIndex(t.index)).toBe(t.paired_cell);
     }
   });
 
@@ -240,17 +239,8 @@ describe('tones: on/off label distribution', () => {
 });
 
 describe('tones: input validation', () => {
-  it('toneByIndex throws on out-of-range', () => {
-    expect(() => toneByIndex(-1)).toThrow();
-    expect(() => toneByIndex(COUNT)).toThrow();
-  });
-
   it('toneForCell throws on the centre cell or out-of-range', () => {
     expect(() => toneForCell(config.grid.centre_cell_index)).toThrow();
     expect(() => toneForCell(99)).toThrow();
-  });
-
-  it('cellForToneIndex throws on unmapped indices', () => {
-    expect(() => cellForToneIndex(99)).toThrow();
   });
 });

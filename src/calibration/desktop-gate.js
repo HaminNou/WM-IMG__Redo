@@ -17,8 +17,6 @@ import callFunction from '@jspsych/plugin-call-function';
 import { screenOutExit } from '../screen-out.js';
 import { evaluateEnvironment, readEnvironment } from './desktop-detect.js';
 
-export { evaluateEnvironment } from './desktop-detect.js';
-
 /**
  * Synchronous data-only node — runs the classifier once and writes a
  * `desktop_gate` row. Place at the very start of the calibration chain

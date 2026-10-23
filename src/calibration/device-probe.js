@@ -27,7 +27,7 @@ export const TIMING_THRESHOLDS = Object.freeze({
 });
 
 /** Longest the whole probe may take beyond its sampling time. */
-export const PROBE_SLACK_MS = 8000;
+const PROBE_SLACK_MS = 8000;
 
 export function readDisplaySnapshot() {
   const w = window;
@@ -142,7 +142,7 @@ export function scoreTiming(m, th = TIMING_THRESHOLDS) {
   return { timing_ok: reasons.length === 0, timing_fail_reasons: reasons };
 }
 
-export async function runTimingProbe(th = TIMING_THRESHOLDS) {
+async function runTimingProbe(th = TIMING_THRESHOLDS) {
   const stamps = await sampleFrames(th.probe_ms);
   const deltas = [];
   for (let i = th.skip_first_frames + 1; i < stamps.length; i++)

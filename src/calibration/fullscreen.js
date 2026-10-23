@@ -37,7 +37,7 @@ function persistEvent(event) {
   });
 }
 
-export function startVisibilityRecorder() {
+function startVisibilityRecorder() {
   if (unsubscribe) return;
   const onVisibility = () => {
     persistEvent({
@@ -61,15 +61,6 @@ export function startVisibilityRecorder() {
     document.removeEventListener('visibilitychange', onVisibility);
     document.removeEventListener('fullscreenchange', onFsChange);
   };
-}
-
-/** Test helper: stop the listener and clear the in-memory event log. */
-export function _resetVisibilityRecorderForTests() {
-  if (unsubscribe) {
-    unsubscribe();
-    unsubscribe = null;
-  }
-  events.length = 0;
 }
 
 export function getVisibilityEvents() {

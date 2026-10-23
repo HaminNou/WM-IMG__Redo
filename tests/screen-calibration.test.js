@@ -21,7 +21,6 @@ vi.mock('../src/calibration/display-guard.js', () => ({
 import {
   _testHelpers,
   evaluateAttempt,
-  getCalibration,
   screenCalibrationWithRetry,
 } from '../src/calibration/screen.js';
 
@@ -201,7 +200,6 @@ describe('screen calibration timeline', () => {
     expect(startDisplayGuard).toHaveBeenCalledTimes(1);
     expect(n.loop.loop_function()).toBe(false);
     expect(n.fail.conditional_function()).toBe(false);
-    expect(getCalibration().status).toBe('ok');
   });
 
   it('retries after inconsistent passes and accepts the third attempt with a flag', () => {
@@ -238,7 +236,6 @@ describe('screen calibration timeline', () => {
     expect(outcomes.every((o) => o.reasons.includes('px_per_mm_out_of_range'))).toBe(true);
     expect(n.loop.loop_function()).toBe(false);
     expect(n.fail.conditional_function()).toBe(true);
-    expect(getCalibration()).toBeNull();
     expect(startDisplayGuard).not.toHaveBeenCalled();
     expect(document.documentElement.style.getPropertyValue('--mm')).toBe('');
   });

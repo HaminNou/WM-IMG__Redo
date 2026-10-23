@@ -128,10 +128,6 @@ function require_active() {
  * appends to the same IndexedDB store; the id lets analysis separate runs. */
 const RUN_ID = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 8);
 
-export function getRunId() {
-  return RUN_ID;
-}
-
 export async function appendTrialRow(row) {
   return require_active().appendTrialRow({ run_id: RUN_ID, ...row });
 }
@@ -187,10 +183,6 @@ export async function getSessionObject() {
   return require_active().getMeta(META_KEYS.sessionObject);
 }
 
-export async function clearAll() {
-  return require_active().clearAll();
-}
-
 /* ---------- Memory backend (tests + fallback) ---------- */
 
 function MemoryBackend() {
@@ -215,11 +207,6 @@ function MemoryBackend() {
     },
     async setMeta(key, value) {
       meta.set(key, value);
-    },
-    async clearAll() {
-      trials.length = 0;
-      meta.clear();
-      nextSeq = 1;
     },
   };
 }
@@ -249,17 +236,6 @@ async function IndexedDBBackend() {
     },
     async setMeta(key, value) {
       await idbRun(db, STORE_META, 'readwrite', (store) => store.put({ key, value }));
-    },
-    async clearAll() {
-      /* Backend asymmetry: IDB's `store.clear()` empties the records but does
-       * NOT reset the autoIncrement counter (per IDB spec — autoIncrement is
-       * persistent until the store is deleted). The MemoryBackend resets
-       * `nextSeq` to 1 on clearAll. The runner never calls clearAll mid-
-       * session, so the divergence is non-impactful in production; tests that
-       * compare seq sequences across a clear should assert monotonicity, not
-       * an absolute starting value. */
-      await idbRun(db, STORE_TRIALS, 'readwrite', (store) => store.clear());
-      await idbRun(db, STORE_META, 'readwrite', (store) => store.clear());
     },
   };
 }

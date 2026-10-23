@@ -27,7 +27,7 @@ import { AUDIO_CHECK } from '../src/calibration/audio-check.js';
 import { _testHelpers as screenCal } from '../src/calibration/screen.js';
 import { MAX_SWEEPS } from '../src/calibration/tone-familiarisation.js';
 import { ESCAPE_AFTER_MS } from '../src/calibration/display-guard.js';
-import { canonicaliseValue, canonicaliseConfig } from '../src/pre-reg/fingerprint.js';
+import { canonicaliseValue, canonicaliseConfig } from './helpers/fingerprint.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PRE_REG_PATH = resolve(__dirname, '..', 'pre-reg', 'pre-reg.json');

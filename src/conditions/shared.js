@@ -408,8 +408,7 @@ export function arrowCueNode({
    * otherwise the source mid-gray PNG shows through unmodified. */
   /* Inked-black silhouette plus a four-direction white drop-shadow halo so
    * the chevron stays legible against any backdrop a participant's OS
-   * (light / dark mode) may compose. See `rotation-arrow.js` for the full
-   * rationale. */
+   * (light / dark mode) may compose. */
   const tintFilter = background_shade
     ? ' filter: brightness(0) saturate(100%) drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);'
     : '';

@@ -118,9 +118,3 @@ function safeImportMetaEnv() {
     return {};
   }
 }
-
-/* Exposed for tests so they can lock the constants without re-importing them. */
-export const _pilotModeInternals = Object.freeze({
-  PILOT_LABEL_MAX_LEN,
-  PILOT_LABEL_PATTERN: PILOT_LABEL_PATTERN.source,
-});

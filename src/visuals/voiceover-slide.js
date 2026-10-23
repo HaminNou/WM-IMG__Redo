@@ -151,27 +151,3 @@ function renderToggleContent(el) {
     ? '<span class="vo-toggle__icon" aria-hidden="true">🔊</span><span>Voice on</span>'
     : '<span class="vo-toggle__icon" aria-hidden="true">🔇</span><span>Voice off</span>';
 }
-
-/**
- * Bind Spacebar to "skip narration → advance" semantics on the active
- * slide. First press skips remaining narration; second press advances
- * (the host plugin handles advance itself once narration is done).
- *
- * Returns an `unbind()` function. Caller wires this to a node's
- * `on_load` / `on_finish` if it wants the gating; pages that want
- * Space to advance without gating can ignore it.
- */
-export function bindSkipOnSpace(_target) {
-  const handler = (ev) => {
-    if (ev.code !== 'Space' && ev.key !== ' ') return;
-    const vo = getVoiceover();
-    if (vo.current && !vo.current._state.finished) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      vo.current.skip();
-    }
-    /* Otherwise let the keypress fall through to the host plugin. */
-  };
-  window.addEventListener('keydown', handler, { capture: true });
-  return () => window.removeEventListener('keydown', handler, { capture: true });
-}

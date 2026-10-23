@@ -36,7 +36,6 @@ import { equalLoudnessGainDb70Phon } from './equal-loudness.js';
 
 let TONE_BANK = null;
 let CELL_TO_TONE = null;
-let TONE_TO_CELL = null;
 
 function buildOnce() {
   if (TONE_BANK !== null) return;
@@ -88,13 +87,8 @@ function buildOnce() {
   TONE_BANK = Object.freeze(bank.map((t) => Object.freeze(t)));
 
   const cellMap = new Map();
-  const toneMap = new Map();
-  for (const t of TONE_BANK) {
-    cellMap.set(t.paired_cell, t);
-    toneMap.set(t.index, t.paired_cell);
-  }
+  for (const t of TONE_BANK) cellMap.set(t.paired_cell, t);
   CELL_TO_TONE = cellMap;
-  TONE_TO_CELL = toneMap;
 }
 
 export function getToneBank() {
@@ -102,7 +96,7 @@ export function getToneBank() {
   return TONE_BANK;
 }
 
-export function toneByIndex(toneIndex) {
+function toneByIndex(toneIndex) {
   buildOnce();
   const t = TONE_BANK[toneIndex];
   if (!t) throw new Error(`toneByIndex: ${toneIndex} out of range 0..${TONE_BANK.length - 1}`);
@@ -115,13 +109,6 @@ export function toneForCell(cellIndex) {
   if (!t)
     throw new Error(`toneForCell: cell ${cellIndex} has no paired tone (centre or out of range)`);
   return t;
-}
-
-export function cellForToneIndex(toneIndex) {
-  buildOnce();
-  const c = TONE_TO_CELL.get(toneIndex);
-  if (c === undefined) throw new Error(`cellForToneIndex: ${toneIndex} unmapped`);
-  return c;
 }
 
 /**

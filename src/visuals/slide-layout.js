@@ -353,7 +353,7 @@ function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG 
   /* The rotation-arrow asset is a mid-gray PNG. `filter: brightness(0)
    * saturate(100%)` re-paints every non-transparent pixel as solid black,
    * so the exemplar arrow reads as a stimulus on the gray card. Same trick
-   * as `rotation-arrow.js`'s `background_shade` branch.
+   * as the trial frames.
    *
    * Tilt is expressed in `turn` units rather than `deg` so the inline
    * `style=` text never contains an "Ndeg" or "N°" token that the

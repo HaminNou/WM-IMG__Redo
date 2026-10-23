@@ -24,7 +24,7 @@ import {
   filterAllowedFoilCells,
   _resetToneSpacingCache,
 } from '../src/scheduler/tone-spacing.js';
-import { toneForCell, cellForToneIndex } from '../src/audio/tones.js';
+import { getToneBank, toneForCell } from '../src/audio/tones.js';
 import { onPatternCells, offPatternCells } from '../src/grid.js';
 import { createPRNG } from '../src/prng.js';
 import { generateMemoryBlock } from '../src/scheduler/memory-block.js';
@@ -176,8 +176,8 @@ describe('filterAllowedFoilCells — foil constraint', () => {
     /* The user's spec example. We pass ALL non-encoded cells as candidates
      * (across both labels) to verify the rank-based filter, independent of
      * the on/off split that happens in the schedulers. */
-    const cellRank6 = cellForToneIndex(5); /* rank 6 == bank index 5 */
-    const cellRank9 = cellForToneIndex(8); /* rank 9 == bank index 8 */
+    const cellRank6 = getToneBank()[5].paired_cell; /* rank 6 == bank index 5 */
+    const cellRank9 = getToneBank()[8].paired_cell; /* rank 9 == bank index 8 */
     const encodedCells = [cellRank6, cellRank9];
 
     const allCells = [...onPatternCells(), ...offPatternCells()];
@@ -197,8 +197,8 @@ describe('filterAllowedFoilCells — foil constraint', () => {
     /* Synthetic worst case: an encoded set covering enough rank space that
      * a deliberately tight candidate pool (just one cell at distance 1 from
      * an encoded tone) collapses to empty. */
-    const cellRank10 = cellForToneIndex(9);
-    const cellRank11 = cellForToneIndex(10); /* distance 1 → forbidden */
+    const cellRank10 = getToneBank()[9].paired_cell;
+    const cellRank11 = getToneBank()[10].paired_cell; /* distance 1 → forbidden */
     expect(() => filterAllowedFoilCells([cellRank11], [cellRank10], 3)).toThrow(
       /no candidates remain/
     );

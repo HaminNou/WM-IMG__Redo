@@ -380,10 +380,6 @@ export function screenCalibrationWithRetry() {
   };
 }
 
-export function getCalibration() {
-  return cal.final;
-}
-
 export const _testHelpers = Object.freeze({
   CARD_MM_WIDTH,
   PX_PER_MM_MIN,

@@ -39,7 +39,6 @@ let base = null;
 let overlay = null;
 let paused = false;
 let pending = [];
-let totals = { zoom: 0, fs_exit: 0, resize: 0, hidden: 0, blur: 0, mm_reset: 0 };
 let hiddenSince = null;
 let requireFullscreen = false;
 let resizeTimer = null;
@@ -71,10 +70,6 @@ export function consumeGuardFlags() {
   const out = { guard_flags: Array.from(new Set(pending)).join(','), guard_n: pending.length };
   pending = [];
   return out;
-}
-
-export function getGuardTotals() {
-  return { ...totals };
 }
 
 function zoomChanged() {
@@ -167,7 +162,6 @@ function evaluate() {
   if (!started) return;
   if (mmDrifted()) {
     document.documentElement.style.setProperty('--mm', `${base.pxPerMm}px`);
-    totals.mm_reset += 1;
     log('mm_reset');
   }
   const reasons = [];
@@ -209,21 +203,16 @@ export function startDisplayGuard({ pxPerMm, fullscreen = false, onEscape }) {
   const onResize = () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if (!paused) {
-        totals.resize += 1;
-        log('resize');
-      }
+      if (!paused) log('resize');
       evaluate();
     }, RESIZE_DEBOUNCE_MS);
   };
   const onFullscreenChange = () => {
-    if (!document.fullscreenElement) totals.fs_exit += 1;
     evaluate();
   };
   const onVisibility = () => {
     if (document.hidden) {
       hiddenSince = performance.now();
-      totals.hidden += 1;
       log('hidden');
     } else {
       log('visible', {
@@ -234,7 +223,6 @@ export function startDisplayGuard({ pxPerMm, fullscreen = false, onEscape }) {
     }
   };
   const onBlur = () => {
-    totals.blur += 1;
     log('blur');
   };
   const onFocus = () => log('focus');
@@ -252,7 +240,6 @@ export function startDisplayGuard({ pxPerMm, fullscreen = false, onEscape }) {
     if (typeof window.matchMedia !== 'function') return;
     dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
     dprListener = () => {
-      if (zoomChanged()) totals.zoom += 1;
       evaluate();
       watchDpr();
     };
@@ -324,6 +311,5 @@ export function _resetGuardForTests() {
   hiddenSince = null;
   escapeHandler = null;
   pending = [];
-  totals = { zoom: 0, fs_exit: 0, resize: 0, hidden: 0, blur: 0, mm_reset: 0 };
   hideOverlay();
 }

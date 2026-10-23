@@ -46,5 +46,3 @@ export function isDisplayColourLocked() {
   if (typeof document === 'undefined') return false;
   return document.documentElement.classList.contains(LOCK_CLASS);
 }
-
-export const DISPLAY_COLOUR_LOCK_CLASS = LOCK_CLASS;

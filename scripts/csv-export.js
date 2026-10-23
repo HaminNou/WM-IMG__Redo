@@ -297,7 +297,7 @@ export function extractResponseKey(row) {
  * encoding-onset timestamp. Both inputs are absolute `performance.now()`
  * milliseconds; returns the integer delta or NA when either is missing.
  */
-export function relativeOnsetMs(absoluteTs, encodingOnsetTs) {
+function relativeOnsetMs(absoluteTs, encodingOnsetTs) {
   if (!Number.isFinite(absoluteTs) || !Number.isFinite(encodingOnsetTs)) return NA;
   return Math.round(absoluteTs - encodingOnsetTs);
 }
@@ -307,7 +307,7 @@ export function relativeOnsetMs(absoluteTs, encodingOnsetTs) {
  * `slotIdx` in the encoding row's `slot_onsets_ts_ms` array, relative to
  * `encoding_onset_ts_ms`. Returns NA if either timing field is absent.
  */
-export function slotOnsetMs(encodingRow, slotIdx) {
+function slotOnsetMs(encodingRow, slotIdx) {
   if (!encodingRow) return NA;
   const arr = encodingRow.slot_onsets_ts_ms;
   if (!Array.isArray(arr)) return NA;
@@ -866,8 +866,6 @@ const EVENTS_COLUMNS = Object.freeze([
   'Pilot_Label',
 ]);
 
-export { EVENTS_COLUMNS };
-
 /* Trial-type → kind tags for the M-slot (memory item) and S-slot (probe).
  * The encoding-side dummy is the same kind ('dummy_S') across all conditions
  * that include dummies (d_only / t_only). i_only / i_d / i_t use 'star' at
@@ -884,7 +882,7 @@ const EVENT_KIND_BY_TRIAL_TYPE = Object.freeze({
  * Compose long-form event rows for one trial group. Returns up to 9 rows
  * (6 encoding + 3 recognition); 3 rows for i_only (stars only).
  */
-export function composeEventsRows(group, sessionMeta = {}) {
+function composeEventsRows(group, sessionMeta = {}) {
   const enc = group.encoding;
   if (!enc) return [];
   const kinds = EVENT_KIND_BY_TRIAL_TYPE[group.trial_type] ?? { encodedM: null, probe: null };

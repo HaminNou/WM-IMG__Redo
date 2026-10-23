@@ -78,7 +78,6 @@ vi.mock('../src/visuals/voiceover.js', () => ({
 
 vi.mock('../src/visuals/voiceover-slide.js', () => ({
   ensureToggleMounted: vi.fn(),
-  bindSkipOnSpace: vi.fn(() => () => {}),
 }));
 
 import { toneAudibilityAndComfortTrial } from '../src/calibration/tone-familiarisation.js';

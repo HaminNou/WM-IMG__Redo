@@ -28,7 +28,6 @@ import { config } from '../config.js';
 
 const SEQUENCE_LENGTH = 6;
 const M_COUNT = 3;
-const S_COUNT = 3;
 
 let CACHED_VALID = null;
 
@@ -60,7 +59,7 @@ export function enumerateValidSequences() {
   return CACHED_VALID;
 }
 
-export function withinRunLengthCap(seq, cap) {
+function withinRunLengthCap(seq, cap) {
   let runChar = null;
   let runLen = 0;
   for (const c of seq) {
@@ -185,21 +184,4 @@ export function drawBlockSequences({
   const out = [];
   for (let i = 0; i < blockSize; i++) out.push(pool.next());
   return Object.freeze(out);
-}
-
-/**
- * Validate the run-length cap on an arbitrary sequence (exposed for tests
- * and any future external caller).
- */
-export function isValidSequence(seq) {
-  if (!Array.isArray(seq) || seq.length !== SEQUENCE_LENGTH) return false;
-  let m = 0,
-    s = 0;
-  for (const c of seq) {
-    if (c === 'M') m++;
-    else if (c === 'S') s++;
-    else return false;
-  }
-  if (m !== M_COUNT || s !== S_COUNT) return false;
-  return withinRunLengthCap(seq, config.sequencing.within_trial_run_length_cap);
 }

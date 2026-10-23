@@ -70,8 +70,8 @@ const storageReadyPromise = initStorage();
  *   - Rotation arrow PNG: kick off the network fetch now via an offscreen
  *     `Image()` so the browser cache is warm before the first imagery
  *     instruction demo (and therefore well before the first main trial).
- *     The literal URL matches `visuals/rotation-arrow.js` and the other
- *     consumers — this is a fetch-warmer, not a new asset reference. */
+ *     The literal URL matches the other consumers — this is a fetch-warmer,
+ *     not a new asset reference. */
 function warmupAssets() {
   getToneBank();
   if (typeof Image !== 'undefined') {

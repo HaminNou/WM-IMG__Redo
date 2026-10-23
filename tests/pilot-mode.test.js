@@ -15,7 +15,7 @@
  *   - The pilot fields propagate onto a bucket envelope alongside session metadata.
  */
 import { describe, it, expect } from 'vitest';
-import { readPilotMode, _pilotModeInternals } from '../src/pilot-mode.js';
+import { readPilotMode } from '../src/pilot-mode.js';
 import { buildBucketEnvelope, BUCKETS } from '../src/uploader.js';
 
 function makeSession(overrides = {}) {
@@ -79,14 +79,19 @@ describe('readPilotMode — URL source', () => {
   });
 
   it('rejects pilot_labels exceeding the length cap', () => {
-    const tooLong = 'a'.repeat(_pilotModeInternals.PILOT_LABEL_MAX_LEN + 1);
+    const tooLong = 'a'.repeat(65);
     const out = readPilotMode({ search: `?pilot=1&pilot_label=${tooLong}`, env: {} });
     expect(out.pilot_label).toBeNull();
   });
 
-  it('exposes a stable label pattern for downstream consumers', () => {
-    expect(_pilotModeInternals.PILOT_LABEL_PATTERN).toBe('^[A-Za-z0-9._-]+$');
-    expect(_pilotModeInternals.PILOT_LABEL_MAX_LEN).toBeGreaterThanOrEqual(32);
+  it('accepts a label at the length cap and rejects characters outside the pattern', () => {
+    const atCap = 'a'.repeat(64);
+    expect(readPilotMode({ search: `?pilot=1&pilot_label=${atCap}`, env: {} }).pilot_label).toBe(
+      atCap
+    );
+    expect(
+      readPilotMode({ search: '?pilot=1&pilot_label=bad%20label', env: {} }).pilot_label
+    ).toBeNull();
   });
 });
 

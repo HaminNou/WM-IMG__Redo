@@ -10,9 +10,8 @@
  *
  * Test isolation note: storage.js holds a long-lived IDB connection inside
  * `activeBackend`, so `indexedDB.deleteDatabase` would block waiting for that
- * connection to close. We open ONCE in beforeAll and use `clearAll()` between
- * cases — that resets the data while keeping the connection alive, which is
- * what the production runner does at session boundaries anyway.
+ * connection to close. Each case instead swaps in a fresh IDBFactory and
+ * re-initialises storage against it.
  *
  * What this file does NOT cover (intentional):
  *   - Browser-specific quota / partition-isolation behaviour. fake-indexeddb
@@ -24,7 +23,8 @@
  *     under the default Vitest `node` env where `indexedDB` is `undefined`.
  */
 import 'fake-indexeddb/auto';
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { IDBFactory } from 'fake-indexeddb';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   initStorage,
   _resetStorageForTests,
@@ -39,16 +39,12 @@ import {
   getSessionId,
   setSessionStartedAt,
   getSessionStartedAt,
-  clearAll,
 } from '../src/storage.js';
 
-beforeAll(async () => {
+beforeEach(async () => {
+  globalThis.indexedDB = new IDBFactory();
   _resetStorageForTests();
   await initStorage({ backend: 'indexeddb' });
-});
-
-beforeEach(async () => {
-  await clearAll();
 });
 
 describe('IndexedDB backend — kind reporting', () => {
@@ -67,9 +63,6 @@ describe('IndexedDB backend — appendTrialRow + getAllTrialRows', () => {
     await appendTrialRow({ phase: 'c' });
     const rows = await getAllTrialRows();
     expect(rows).toHaveLength(3);
-    /* IDB autoIncrement keys are monotonically increasing across the lifetime
-     * of the store and do NOT reset on `store.clear()` — see clearAll asymmetry
-     * note in storage.js. We assert monotonicity, not absolute starting value. */
     expect(rows[0].seq).toBeLessThan(rows[1].seq);
     expect(rows[1].seq).toBeLessThan(rows[2].seq);
     expect(rows.map((r) => r.phase)).toEqual(['a', 'b', 'c']);
@@ -126,21 +119,5 @@ describe('IndexedDB backend — meta store (cursor + completion URL + session)',
     await setSessionStartedAt('2000-01-01T17:30:00.000Z');
     expect(await getSessionId()).toBe('session-xyz');
     expect(await getSessionStartedAt()).toBe('2000-01-01T17:30:00.000Z');
-  });
-});
-
-describe('IndexedDB backend — clearAll', () => {
-  it('wipes both trials and meta stores', async () => {
-    await appendTrialRow({ phase: 'a' });
-    await appendTrialRow({ phase: 'b' });
-    await setUploadCursor(2);
-    await setCompletionUrl('https://example.test/cc');
-
-    await clearAll();
-
-    expect(await getAllTrialRows()).toEqual([]);
-    expect(await getCompletionUrl()).toBeUndefined();
-    /* getUploadCursor explicitly defaults missing key → 0. */
-    expect(await getUploadCursor()).toBe(0);
   });
 });

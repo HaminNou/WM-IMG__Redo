@@ -11,7 +11,6 @@ import {
   _resetStorageForTests,
   appendTrialRow,
   getAllTrialRows,
-  getRunId,
   initStorage,
 } from '../src/storage.js';
 
@@ -34,7 +33,7 @@ describe('session guard', () => {
     const start = rows.find((r) => r.phase === 'session_start');
     expect(start.prior_rows).toBe(2);
     expect(start.prior_run_ids).toEqual(['oldrun01']);
-    expect(start.run_id).toBe(getRunId());
+    expect(start.run_id).toMatch(/^.{8}$/);
     expect(start.session_id).toBe('s1');
   });
 

@@ -86,7 +86,8 @@ export function setAudioMuted(muted) {
   if (audioMuted) stopAllScheduledAudio();
 }
 
-export function isAudioMuted() {
+/** Test accessor for the mute gate. */
+export function __isAudioMutedForTests() {
   return audioMuted;
 }
 

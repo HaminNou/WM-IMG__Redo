@@ -17,13 +17,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   enumerateValidSequences,
-  withinRunLengthCap,
-  isValidSequence,
   createSequencePool,
   drawBlockSequences,
   resetSequencePools,
 } from '../src/scheduler/within-trial.js';
 import { setSessionPRNG } from '../src/prng.js';
+import { isValidSequence } from './helpers/valid-sequence.js';
 
 describe('within-trial: enumeration', () => {
   it('produces exactly 14 valid sequences', () => {
@@ -42,19 +41,11 @@ describe('within-trial: enumeration', () => {
 
   it('every sequence respects run-length cap = 2', () => {
     for (const seq of enumerateValidSequences()) {
-      expect(withinRunLengthCap(seq, 2)).toBe(true);
+      expect(seq.join('')).not.toMatch(/MMM|SSS/);
     }
   });
 
-  it('rejects sequences that violate the run-length cap', () => {
-    expect(withinRunLengthCap(['M', 'M', 'M', 'S', 'S', 'S'], 2)).toBe(false);
-    expect(withinRunLengthCap(['S', 'S', 'S', 'M', 'M', 'M'], 2)).toBe(false);
-  });
-
-  it('isValidSequence agrees with the enumeration', () => {
-    for (const seq of enumerateValidSequences()) {
-      expect(isValidSequence(seq)).toBe(true);
-    }
+  it('the helper rejects sequences that violate the run-length cap', () => {
     expect(isValidSequence(['M', 'M', 'M', 'S', 'S', 'S'])).toBe(false);
     expect(isValidSequence(['S', 'S', 'S', 'M', 'M', 'M'])).toBe(false);
     expect(isValidSequence(['M', 'S', 'M', 'S', 'M', 'S'])).toBe(true);

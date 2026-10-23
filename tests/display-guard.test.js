@@ -6,7 +6,6 @@ import {
   ESCAPE_AFTER_MS,
   _resetGuardForTests,
   consumeGuardFlags,
-  getGuardTotals,
   requireFullscreenFromNow,
   startDisplayGuard,
   stopDisplayGuard,
@@ -84,7 +83,7 @@ describe('display guard', () => {
     requireFullscreenFromNow();
     setFullscreen(null);
     document.dispatchEvent(new Event('fullscreenchange'));
-    expect(getGuardTotals().fs_exit).toBe(1);
+    expect(window.jsPsych.pauseExperiment).toHaveBeenCalledTimes(1);
   });
 
   it('restores --mm when it is overwritten', () => {
@@ -92,7 +91,7 @@ describe('display guard', () => {
     document.documentElement.style.setProperty('--mm', '9px');
     vi.advanceTimersByTime(1100);
     expect(document.documentElement.style.getPropertyValue('--mm')).toBe(`${PX_PER_MM}px`);
-    expect(getGuardTotals().mm_reset).toBe(1);
+    expect(consumeGuardFlags().guard_flags.split(',')).toContain('mm_reset');
   });
 
   it('hands accumulated events to the next trial once', () => {
@@ -182,7 +181,7 @@ describe('display guard escape route and release', () => {
     vi.advanceTimersByTime(ESCAPE_AFTER_MS);
     expect(window.jsPsych.pauseExperiment).not.toHaveBeenCalled();
     expect(document.getElementById('display-guard-overlay')).toBeNull();
-    expect(getGuardTotals().blur).toBe(0);
+    expect(consumeGuardFlags().guard_flags ?? '').not.toContain('blur');
   });
 
   it('stopDisplayGuard drops the fullscreen requirement', () => {

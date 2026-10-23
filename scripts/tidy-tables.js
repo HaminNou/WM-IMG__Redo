@@ -449,7 +449,7 @@ function stratumOf(angle) {
   return i < 0 ? null : i + 1;
 }
 
-export function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
+function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
   const trials = [];
   const stars = [];
   const probes = [];
