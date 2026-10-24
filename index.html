@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <!-- Lock the experiment to a light colour scheme. Without this, browsers
+         that apply automatic dark-mode adjustments (Chrome's Auto Dark Theme
+         on Android/Chromebook, Edge's "Force dark mode for web contents",
+         user agents honouring `prefers-color-scheme: dark`) repaint our
+         #D3D3D3 surface and #FFFFFF trial pages darker than designed –
+         which destroys the contrast between the inked-black rotation
+         arrow and the trial background and undermines stimulus-fidelity
+         calibration we did offline. `<meta name="color-scheme">` + the
+         matching `color-scheme: light only` CSS declaration tell every
+         modern browser "this page is a designed light surface; do not
+         auto-darken." A manual escape hatch on the screen-calibration
+         step ('Force light mode') covers the rare residual case where
+         a kiosk profile or user stylesheet still overrides this. -->
+    <meta name="color-scheme" content="light" />
+    <title>Online study</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        /* Set by the screen-calibration step; 1 mm = ~3.7795 px at 96 dpi until calibrated. */
+        --mm: 3.7795px;
+        /* See `<meta name="color-scheme">` in the head – pair declaration so
+         * the lock applies even to browsers that ignore the meta tag. The
+         * `only` keyword (vs bare `light`) is what prevents Chrome's Auto
+         * Dark Theme from forcing dark mode anyway. */
+        color-scheme: light only;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #d3d3d3;
+        color: #000;
+        /* Body typography: system font stack, weight 300/400. The
+         * non-trial UI shell (calibration, instructions, demos, rest,
+         * questionnaire, upload, completion) sits on a uniform light-gray
+         * page so the full viewport reads as one continuous surface. Trial bodies
+         * flip via `data-trial-bg`. */
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          Oxygen,
+          Ubuntu,
+          sans-serif;
+        font-weight: 300;
+      }
+      .jspsych-display-element {
+        background: #d3d3d3;
+        color: #000;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────
+       * Per-trial page-background flip.
+       *
+       * Every UI surface (calibration, instructions, demos, rest,
+       * questionnaire, upload, completion) keeps the default theme and only
+       * the page during trial bodies flips –
+       * the trial-start gate's `on_finish` sets `html[data-trial-bg]` via
+       * `src/visuals/page-background.js`, and the next gate's `on_load`
+       * (and the ITI's `on_finish` as defence-in-depth) clears it.
+       *
+       * The body fill is mirrored inline by the same module, but these
+       * rules cover the jsPsych display element itself so the flip reaches
+       * every nested wrapper (jsPsych v8 paints on `.jspsych-display-element`
+       * with its own background-color, not `body`'s).
+       *
+       * Stimulus / bull's-eye / fixation / pattern colour overrides are NOT
+       * driven by these CSS rules – those primitives are SVG with imperative
+       * `fill`/`stroke` attributes and the colour choice is plumbed through
+       * the trial's `background_shade` parameter into `createGridFrame` so
+       * the geometry and colour come from a single source of truth.
+       * ──────────────────────────────────────────────────────────────────── */
+      html[data-trial-bg='white'],
+      html[data-trial-bg='white'] body,
+      html[data-trial-bg='white'] .jspsych-display-element {
+        background: #ffffff;
+        color: #000;
+      }
+      html[data-trial-bg='gray'],
+      html[data-trial-bg='gray'] body,
+      html[data-trial-bg='gray'] .jspsych-display-element {
+        background: #d3d3d3;
+        color: #000;
+      }
+      /* The persistent trial-counter overlay (`.overall-trial-counter`) is
+       * `position: fixed` and lives outside `.jspsych-display-element`, so it
+       * inherits the dark-theme white-ish text by default. Switch it to dim
+       * black when the page flips to white/gray so the badge stays legible
+       * without competing with the stimulus. Specificity matches the inline
+       * style on the container (single class) – using `html[data-trial-bg]`
+       * as ancestor wins on cascade order. */
+      html[data-trial-bg='white'] .overall-trial-counter,
+      html[data-trial-bg='gray'] .overall-trial-counter {
+        color: rgba(0, 0, 0, 0.6);
+      }
+      /* The trial-start-gate hint ("Press both arrow keys to start the
+       * next trial.") renders as a self-contained pill (white background,
+       * black text, thin black border), the same pattern as the
+       * instruction-page continue hint, so it stays legible on every page
+       * background and needs no per-trial-bg override. */
+
+      /* ─────────────────────────────────────────────────────────────────────
+       * "Force light mode" escape hatch.
+       *
+       * The `color-scheme: light only` declaration on `:root` is the primary
+       * defence against browser-level dark-mode forcing (Chrome Auto Dark
+       * Theme, Edge force-dark, prefers-color-scheme overrides). The
+       * `html.display-colour-locked` class is a SECONDARY override the
+       * participant can opt into from the screen-calibration page if their
+       * display still looks darkened despite the lock – kiosk user
+       * stylesheets, embedded Prolific-mobile webviews, OS-level colour
+       * filters (Windows Night Light, macOS True Tone), and accessibility
+       * profiles can still recolour our surface in edge cases.
+       *
+       * The class pins every level of the page chrome to the design
+       * palette with `!important` (which beats per-trial inline backgroundColor
+       * set by `page-background.js`, AND any user stylesheet on the browser),
+       * and `forced-color-adjust: none` opts out of Windows High Contrast
+       * Mode's automatic palette substitution so the bull's-eye / arrow /
+       * pattern colours we paint by hand stay as authored.
+       *
+       * Per-trial flips still work – the trial-bg attribute selectors below
+       * keep their per-shade rules but become `!important` once the lock is
+       * engaged. The participant's choice is also stamped into the
+       * `screen_calibration` row so the analyst can stratify by whether the
+       * lock was needed.
+       * ──────────────────────────────────────────────────────────────────── */
+      html.display-colour-locked,
+      html.display-colour-locked body,
+      html.display-colour-locked .jspsych-display-element {
+        background-color: #d3d3d3 !important;
+        color: #000 !important;
+        forced-color-adjust: none;
+      }
+      html.display-colour-locked[data-trial-bg='white'],
+      html.display-colour-locked[data-trial-bg='white'] body,
+      html.display-colour-locked[data-trial-bg='white'] .jspsych-display-element {
+        background-color: #ffffff !important;
+      }
+      html.display-colour-locked[data-trial-bg='gray'],
+      html.display-colour-locked[data-trial-bg='gray'] body,
+      html.display-colour-locked[data-trial-bg='gray'] .jspsych-display-element {
+        background-color: #d3d3d3 !important;
+      }
+      .jspsych-content {
+        max-width: 720px;
+      }
+      /* Demo slides need the full viewport so (a) the longest task title
+       * ("Demonstration of Task 5 – Tones and pattern together") stays on
+       * one line and (b) the title/circle/hint can spread across the page
+       * height. `:has()` is supported in all evergreen browsers (Chrome 105+,
+       * Firefox 121+, Safari 15.4+) – well within Prolific's desktop matrix. */
+      .jspsych-content:has(.demo-frame) {
+        max-width: none;
+        width: 100%;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────
+       * Button + form-input theming – Light card-style controls
+       * on the dark experimental background so action surfaces read clearly
+       * across calibration / instructions / probe-feedback contexts.
+       * Hover state uses Mizzou maroon (#772139).
+       *
+       * Surface colour is `#d8d4cc` – a warm dim off-white, ~85 % luminance.
+       * The dimmer surface (rather than pure white) keeps the action legible
+       * without demanding the participant's attention. Hover lifts to `#ebe7df`
+       * (~92 % L) so the visual feedback on cursor entry is preserved.
+       * ──────────────────────────────────────────────────────────────────── */
+      .jspsych-btn,
+      .jspsych-display-element button,
+      .jspsych-display-element input[type='text'],
+      .jspsych-display-element input[type='number'],
+      .jspsych-display-element input[type='email'],
+      .jspsych-display-element select {
+        font-family: system-ui, sans-serif;
+        font-size: 16px;
+        font-weight: 400;
+        color: #222;
+        background-color: #d8d4cc;
+        border: 1px solid #222;
+        border-radius: 0;
+        box-shadow: 0 1px 0 1px rgba(0, 0, 0, 0.04);
+        padding: 0.6em 1.4em 0.5em 0.8em;
+        line-height: 1.3;
+        margin-top: 0.4em;
+        margin-bottom: 0.4em;
+        cursor: pointer;
+        -moz-appearance: none;
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      /* Buttons override the shared rule's asymmetric padding (which exists
+       * to leave room for the <select> chevron) so text sits at the
+       * geometric centre of the button. `text-align: center` is also set
+       * explicitly to defeat inheritance from instruction wrappers that
+       * set `text-align: left` on the surrounding card.
+       *
+       * `min-width: 7.5rem` and `box-sizing: border-box` give every button
+       * the same footprint regardless of label length, so a Previous/Next
+       * pair (`instructions` plugin in src/instructions/{memory,imagery,
+       * dual}.js) is visually balanced and "Continue" / "Enter fullscreen"
+       * / similar single-button screens land on a consistent floor width.
+       * Buttons whose labels naturally exceed 7.5 rem (e.g. "Enter
+       * fullscreen") expand past the floor; buttons that set their own
+       * inline min-width keep their inline override (inline style beats
+       * stylesheet rule by CSS specificity). */
+      .jspsych-btn,
+      .jspsych-display-element button {
+        padding: 0.6em 1em 0.5em 1em;
+        text-align: center;
+        min-width: 7.5rem;
+        box-sizing: border-box;
+      }
+      .jspsych-btn:hover,
+      .jspsych-display-element button:hover {
+        background-color: #ebe7df;
+        color: #772139; /* Mizzou maroon */
+        border-color: #772139;
+      }
+      .jspsych-btn:disabled,
+      .jspsych-display-element button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .jspsych-display-element input[type='text']:focus,
+      .jspsych-display-element input[type='number']:focus,
+      .jspsych-display-element select:focus {
+        outline: none;
+        border-color: #772139;
+        box-shadow: 0 0 0 3px rgba(119, 33, 57, 0.25);
+      }
+
+      /* Range slider (volume self-report). Default range styling on a black
+       * background renders as a thin grey line; widen + tint to match the
+       * Mizzou maroon accent so it's discoverable. */
+      .jspsych-display-element input[type='range'] {
+        accent-color: #772139;
+      }
+
+      /* Keyboard focus ring. Default browser outlines (blue on Chrome, dotted
+       * on Firefox) blend into the dark theme on Windows / Firefox &ndash; survey
+       * radios and selects in particular were near-invisible when tabbed to. The Mizzou
+       * maroon ring matches the existing hover state and gives keyboard-only
+       * users (a non-trivial fraction on Prolific desktop) a visible cursor.
+       * `:focus-visible` (not `:focus`) – mouse-clicked elements don't get
+       * the ring, so the visual is reserved for true keyboard navigation. */
+      .jspsych-btn:focus-visible,
+      .jspsych-display-element button:focus-visible,
+      .jspsych-display-element input[type='radio']:focus-visible,
+      .jspsych-display-element input[type='checkbox']:focus-visible,
+      .jspsych-display-element input[type='range']:focus-visible {
+        outline: 2px solid #772139;
+        outline-offset: 2px;
+      }
+      .jspsych-display-element input[type='text']:focus-visible,
+      .jspsych-display-element input[type='number']:focus-visible,
+      .jspsych-display-element input[type='email']:focus-visible,
+      .jspsych-display-element select:focus-visible {
+        /* Text-style inputs already have a maroon border + glow on `:focus`
+         * (above); reinforce with a 2 px outline so high-contrast OS modes
+         * also surface a focus indicator. */
+        outline: 2px solid #772139;
+        outline-offset: 0;
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────
+       * Voiceover word-reveal (`src/visuals/voiceover.js`).
+       *
+       * Each word in a narrated slide is rendered into a `<span class="vo-word">`
+       * that starts at opacity 0 and is faded in by the engine adding
+       * `.vo-revealed` synchronised with the speech-synth boundary event. The
+       * 80 ms ease-in is short enough to keep up with normal speech
+       * (~175 WPM ≈ 343 ms per word) but long enough that the appearance
+       * reads as a smooth fade rather than a hard switch.
+       *
+       * `prefers-reduced-motion` collapses the transition to 0 ms – words still
+       * reveal one at a time (the visual pacing is the point), but without
+       * animation, for participants who have set the OS-level preference.
+       *
+       * Fully invisible unrevealed words make fallback-narration slides look
+       * broken when speech is unavailable or delayed. Keep the upcoming text
+       * faintly visible instead so the participant can always read the whole
+       * instruction page.
+       * ──────────────────────────────────────────────────────────────────── */
+      .vo-word {
+        opacity: 0.32;
+        color: inherit;
+        transition: opacity 80ms ease-in;
+      }
+      .vo-word.vo-revealed {
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .vo-word {
+          transition: none;
+        }
+      }
+
+      /* Voiceover toggle pill – top-right of the viewport, persistent across
+       * instruction slides. Mirrors the trial-counter overlay convention
+       * (top-left, `position: fixed`, low z-index) but on the opposite side
+       * so the two never collide. Hidden by default; the engine mounts it
+       * when the first narrated slide loads. */
+      .vo-toggle {
+        position: fixed;
+        top: 12px;
+        right: 16px;
+        z-index: 1001;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        color: rgba(0, 0, 0, 0.65);
+        background: rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.18);
+        border-radius: 999px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .vo-toggle:hover {
+        background: rgba(0, 0, 0, 0.08);
+        border-color: rgba(0, 0, 0, 0.3);
+      }
+      .vo-toggle__icon {
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      /* Dim scrollbars – default WebKit scrollbars are bright white on the
+       * light gray shell; dim them so they don't compete with stimulus
+       * content during long instruction screens or surveys. Translucent black
+       * thumb on transparent track; darkens slightly on hover. */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.35);
+      }
+    </style>
+    <script type="module" crossorigin src="./assets/main-w6jWmFVw.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/uploader-Ch1V5AtJ.js">
+    <link rel="stylesheet" crossorigin href="./assets/main-BF-BwXlM.css">
+  </head>
+  <body>
+  </body>
+</html>
