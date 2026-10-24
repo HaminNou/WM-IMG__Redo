@@ -6,6 +6,9 @@
  * fixation and on/off label).
  */
 import { config } from './config.js';
+import { BUILD_COMMIT, BUILD_TIME } from './build-info.js';
+import { getToneBank } from './audio/tones.js';
+import { DEFAULT_PEAK } from './audio/dsp.js';
 import { cellGeometry, totalCells, gridSizeMm, onPatternCells } from './grid.js';
 import { ROTATION_STRATA } from './scheduler/rotation-balance.js';
 
@@ -31,10 +34,27 @@ function cellTable() {
   return out;
 }
 
+/** Parameters of the tone bank as played, so the stimulus can be rebuilt from the data. */
+function toneParams() {
+  return {
+    peak_amplitude: DEFAULT_PEAK,
+    duration_ms: config.tones.duration_ms,
+    cosine_ramp_ms: config.tones.cosine_ramp_ms,
+    bank: getToneBank().map((t) => ({
+      index: t.index,
+      freq_hz: t.freq_hz,
+      gain_compensation_db: r3(t.gain_compensation_db),
+      pattern_label: t.pattern_label,
+      paired_cell: t.paired_cell,
+    })),
+  };
+}
+
 /**
  * @param {object} session      object returned by `initSession()`
  * @param {object|null} calibration  `value` of the last `screen_calibration_outcome` row, if any
- * @param {object} [env]        browser measurements (injectable for tests)
+ * @param {object} [env]        browser measurements (injectable for tests): screen and window
+ *                              size, `clock_anchor`, `audio_context`, `content_hashes`
  */
 export function buildSessionInfo(session, calibration, env = {}) {
   return {
@@ -49,8 +69,15 @@ export function buildSessionInfo(session, calibration, env = {}) {
     prng_seed_string: session.seed_string ?? null,
     prng_seed_uint32: session.prng_seed_uint32 ?? null,
     build_id: session.build_id ?? config.build_id,
+    build_commit: BUILD_COMMIT,
+    build_time: BUILD_TIME,
+    consent_text_sha256: env.content_hashes?.consent_text_sha256 ?? null,
+    instruction_deck_sha256: env.content_hashes?.instruction_deck_sha256 ?? null,
+    strategy_items_sha256: env.content_hashes?.strategy_items_sha256 ?? null,
+    music_items_sha256: env.content_hashes?.music_items_sha256 ?? null,
     schema_version: session.schema_version ?? config.schema_version,
     started_at_iso: session.started_at_iso ?? null,
+    clock_anchor: env.clock_anchor ?? null,
     user_agent: session.user_agent ?? env.user_agent ?? null,
     px_per_mm: calibration?.px_per_mm ?? null,
     cc_px_width: calibration?.cc_px_width ?? null,
@@ -60,6 +87,8 @@ export function buildSessionInfo(session, calibration, env = {}) {
     inner_width_px: env.inner_width_px ?? null,
     inner_height_px: env.inner_height_px ?? null,
     device_pixel_ratio: env.device_pixel_ratio ?? null,
+    audio_context: env.audio_context ?? null,
+    tone_params: toneParams(),
     grid_cells_per_side: config.grid.cells_per_side,
     cell_size_mm: config.grid.cell_size_mm,
     grid_size_mm: gridSizeMm(),

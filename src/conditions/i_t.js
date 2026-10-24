@@ -39,10 +39,9 @@
 import { createEncodingNode } from './encoding-schedule.js';
 
 import { setFixation } from '../visuals/frame.js';
-import { playToneByCell, toneForCell } from '../audio/tones.js';
-import { getAudioContext } from '../audio/context.js';
+import { toneForCell } from '../audio/tones.js';
 import {
-  stampTrialData,
+  playProbeTone,
   arrowCueNode,
   imaginationNode,
   trialStartGateNode,
@@ -154,13 +153,7 @@ function probeNode(params, probe) {
       background_shade: params.background_shade,
     },
     on_onset: () => {
-      const ac = getAudioContext();
-      stampTrialData('audio_context_time_at_onset_ms', ac.currentTime * 1000);
-      stampTrialData(
-        'audio_output_latency_ms',
-        Math.round(((ac.outputLatency || 0) + (ac.baseLatency || 0)) * 1000)
-      );
-      void playToneByCell(probe.cell);
+      playProbeTone(probe.cell);
     },
     on_response: (frame, state, key) => {
       const judged = judgeProbeResponse(key, probe.is_target);
@@ -198,6 +191,6 @@ export function iTTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
-  out.push(itiNode({ background_shade: params.background_shade }));
+  out.push(itiNode({ phase: 'i_t_iti', background_shade: params.background_shade }));
   return out;
 }

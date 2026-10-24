@@ -12,7 +12,8 @@
  */
 import { getAudioContext, ensureRunning } from './context.js';
 
-const DEFAULT_PEAK = 0.25;
+/* Peak amplitude (about -12 dBFS) before the per-tone gain and the participant's volume setting. */
+export const DEFAULT_PEAK = 0.25;
 
 /* Registry of in-flight scheduled audio nodes.
  *

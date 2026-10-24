@@ -46,3 +46,15 @@ export function buildTrialMeta({
     pool_index,
   });
 }
+
+/* Pass number of the practice block being run (1 or 2). Rows written during
+ * practice carry it, because the same trials are presented again on a repeat. */
+let practiceIteration = null;
+
+export function setPracticeIteration(n) {
+  practiceIteration = n;
+}
+
+export function getPracticeIteration() {
+  return practiceIteration;
+}

@@ -34,10 +34,9 @@
 import { createEncodingNode } from './encoding-schedule.js';
 
 import { setFixation } from '../visuals/frame.js';
-import { playToneByCell, toneForCell } from '../audio/tones.js';
-import { getAudioContext } from '../audio/context.js';
+import { toneForCell } from '../audio/tones.js';
 import {
-  stampTrialData,
+  playProbeTone,
   trialStartGateNode,
   timedResponseWindowNode,
   frameNode,
@@ -85,6 +84,7 @@ function encodingNode(params) {
     data: {
       memory_items: params.memory_items.map((m) => ({
         slot: m.slot_index_in_seq,
+        encoding_position: m.encoding_position,
         cell: m.cell,
         tone_index: toneForCell(m.cell).index,
         tone_freq_hz: toneForCell(m.cell).freq_hz,
@@ -129,13 +129,7 @@ function probeNode(params, probe) {
       background_shade: params.background_shade,
     },
     on_onset: () => {
-      const ac = getAudioContext();
-      stampTrialData('audio_context_time_at_onset_ms', ac.currentTime * 1000);
-      stampTrialData(
-        'audio_output_latency_ms',
-        Math.round(((ac.outputLatency || 0) + (ac.baseLatency || 0)) * 1000)
-      );
-      void playToneByCell(probe.cell);
+      playProbeTone(probe.cell);
     },
     on_response: (frame, state, key) => {
       const judged = judgeProbeResponse(key, probe.is_target);
@@ -151,6 +145,7 @@ function probeNode(params, probe) {
     on_finish: (data, state) => {
       const judged = judgeProbeResponse(state.response_key, probe.is_target);
       data.probe_position = probe.probe_position;
+      data.encoding_position = probe.encoding_position;
       data.probe_type = probe.type;
       data.probed_cell = probe.cell;
       data.probed_tone_index = tone.index;
@@ -169,6 +164,6 @@ export function tOnlyTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
-  out.push(itiNode({ background_shade: params.background_shade }));
+  out.push(itiNode({ phase: 't_only_iti', background_shade: params.background_shade }));
   return out;
 }

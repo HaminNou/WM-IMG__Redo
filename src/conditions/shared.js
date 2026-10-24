@@ -42,6 +42,10 @@ import { createGridFrame } from '../visuals/frame.js';
 import { isValidBackgroundShade } from '../visuals/colour-palette.js';
 import { setTrialPageBackground, clearTrialPageBackground } from '../visuals/page-background.js';
 import { appendTrialRow, recordWriteFailure } from '../storage.js';
+import { rowClock } from '../clock.js';
+import { getPracticeIteration } from '../scheduler/trial-meta.js';
+import { playToneByCell } from '../audio/tones.js';
+import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { setTrialCounter, TRIAL_TYPE_TAG_COLOURS } from './trial-counter.js';
 import { unmountToggle as unmountVoiceoverToggle } from '../visuals/voiceover-slide.js';
 import { getVoiceover } from '../visuals/voiceover.js';
@@ -128,8 +132,8 @@ export function sleep(ms) {
  * unavailable (test environments) or the field is null.
  *
  * Numeric values are rounded to integer milliseconds for storage consistency
- * with the rest of the schema (`response_rt_ms`, `gate_passed_at_ms`,
- * `feedback_shown_at_ms` all use `Math.round(...)`). The user-facing
+ * with the rest of the schema (`response_rt_ms`, `gate_passed_at_ms`
+ * use `Math.round(...)`). The user-facing
  * timestamp resolution is millisecond — sub-millisecond precision from the
  * `performance.now()` clock is intentionally discarded at the storage edge.
  */
@@ -185,7 +189,7 @@ export function frameNode({
       if (timestamp_field) stampTrialData(timestamp_field, performance.now());
     },
     on_finish,
-    data: { phase, ...data },
+    data: { phase, frame_rotation_deg: rotation_deg, ...data },
   };
 }
 
@@ -312,13 +316,13 @@ export function timedResponseWindowNode({
       trialData.extra_keypresses = state.extra_keypresses;
       on_finish?.(trialData, state);
     },
-    data: { phase, ...data },
+    data: { phase, frame_rotation_deg: rotation_deg, ...data },
   };
 }
 
 /**
  * Inter-trial interval (800 ms after the last probe before
- * the next trial). Renders the grid + bull's-eye so the fixation locus is
+ * the next trial). `phase` is `<condition>_iti`. Renders the grid + bull's-eye so the fixation locus is
  * continuous across trials. The `?` glyph remains visible from the start
  * of the retention/maintenance phase through every probe, feedback frame,
  * and the final post-trial ITI — a single continuous fixation locus —
@@ -337,16 +341,10 @@ export function timedResponseWindowNode({
  * `i_only.js`'s `iOnlyTrial` composer, which calls `itiNode({ fixation: '' })`
  * to keep the post-trial gap blank.
  */
-export function itiNode({
-  ms = 800,
-  phase,
-  label = 'iti',
-  fixation = '?',
-  background_shade = null,
-} = {}) {
+export function itiNode({ ms = 800, phase, fixation = '?', background_shade = null } = {}) {
   return frameNode({
     mount_id: 'iti-mount',
-    phase: phase ?? label,
+    phase,
     trial_duration: ms,
     fixation,
     background_shade,
@@ -455,6 +453,7 @@ export function arrowCueNode({
       phase,
       trial_index_in_block,
       rotation_deg,
+      frame_rotation_deg: 0,
       duration_ms: durationMs,
       ...data,
     },
@@ -512,6 +511,7 @@ export function imaginationNode({
       phase,
       trial_index_in_block,
       rotation_deg,
+      frame_rotation_deg: 0,
       duration_ms: durationMs,
       ...data,
     },
@@ -961,7 +961,8 @@ export function judgeStarResponse(keyPressed, isOnPattern) {
  * inserted explicitly.
  */
 export function emitAuxDataRow(row) {
-  const datum = { ...row };
+  const datum = { ...rowClock(), ...row };
+  if (datum.block_label === 'practice') datum.practice_iteration = getPracticeIteration();
 
   const dataCollection = window.jsPsych?.data?.get?.();
   if (typeof dataCollection?.push === 'function') {
@@ -974,4 +975,33 @@ export function emitAuxDataRow(row) {
     console.error('[shared] storage append failed for aux row', err);
     recordWriteFailure(err);
   });
+}
+
+/**
+ * Play the tone of an auditory recognition probe at the start of its response
+ * window and write what the audio context reported at that moment on the
+ * running trial's row. A failure to play is recorded on the row
+ * (`tone_error`, `tone_error_message`) and does not stop the trial.
+ */
+export function playProbeTone(cell) {
+  const trialData = window.jsPsych?.getCurrentTrial?.()?.data;
+  stampTrialData('tone_error', false);
+  const fail = (err) => {
+    if (!trialData || typeof trialData !== 'object') return;
+    trialData.tone_error = true;
+    trialData.tone_error_message = String(err?.message ?? err);
+  };
+  try {
+    const ac = getAudioContext();
+    stampTrialData('audio_perf_at_onset_ms', performance.now());
+    stampTrialData('audio_context_time_at_onset_ms', ac.currentTime * 1000);
+    stampTrialData(
+      'audio_output_latency_ms',
+      Math.round(((ac.outputLatency || 0) + (ac.baseLatency || 0)) * 1000)
+    );
+    stampTrialData('audio_context', audioContextInfo());
+    Promise.resolve(playToneByCell(cell)).catch(fail);
+  } catch (err) {
+    fail(err);
+  }
 }

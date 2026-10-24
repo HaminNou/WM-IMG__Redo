@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   uploadPendingData: vi.fn(),
+  uploadTail: vi.fn(() => Promise.resolve({ status: 'ok', rows: 2 })),
+  appendTrialRow: vi.fn(() => Promise.resolve(1)),
   downloadAsJson: vi.fn(() => ({ filename: 'data.json', sizeBytes: 2048 })),
   getAllTrialRows: vi.fn(() => Promise.resolve([{ seq: 1 }])),
   getCompletionUrl: vi.fn(() => Promise.resolve(null)),
@@ -13,11 +15,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../src/uploader.js', () => ({
   uploadPendingData: mocks.uploadPendingData,
+  uploadTail: mocks.uploadTail,
   downloadAsJson: mocks.downloadAsJson,
   buildCompletionUrl: () => mocks.completionUrl,
   isPlaceholderCompletionUrl: (u) => typeof u === 'string' && u.includes('PLACEHOLDER'),
 }));
 vi.mock('../src/storage.js', () => ({
+  appendTrialRow: mocks.appendTrialRow,
   getAllTrialRows: mocks.getAllTrialRows,
   getCompletionUrl: mocks.getCompletionUrl,
   getStorageFailureSummary: () => ({ writeFailures: 0, lastError: null, lastFailureAtIso: null }),
@@ -181,6 +185,79 @@ describe('completionRedirectNode', () => {
     expect(data).toMatchObject({
       completion_redirect_url: mocks.completionUrl,
       completion_was_placeholder: false,
+    });
+  });
+
+  describe('last upload before the redirect', () => {
+    const session = { params: { session_id: 's' } };
+    let assign;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mocks.uploadTail.mockClear();
+      mocks.appendTrialRow.mockClear();
+      mocks.completionUrl = 'https://app.prolific.com/submissions/complete?cc=REAL';
+      assign = vi.fn();
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          set href(v) {
+            assign(v);
+          },
+        },
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('writes the completion row, sends the tail, then redirects', async () => {
+      const order = [];
+      mocks.appendTrialRow.mockImplementationOnce(async () => order.push('row'));
+      mocks.uploadTail.mockImplementationOnce(async () => order.push('tail'));
+      assign.mockImplementation(() => order.push('redirect'));
+      const node = completionRedirectNode({ redirectDelayMs: 1000, session });
+      await node.on_load();
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(order).toEqual(['row', 'tail', 'redirect']);
+      expect(mocks.appendTrialRow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          phase: 'completion_redirect',
+          completion_redirect_url: mocks.completionUrl,
+          completion_was_placeholder: false,
+        })
+      );
+      expect(assign).toHaveBeenCalledWith(mocks.completionUrl);
+    });
+
+    it('redirects even if the tail upload never answers', async () => {
+      mocks.uploadTail.mockImplementationOnce(() => new Promise(() => {}));
+      const node = completionRedirectNode({ redirectDelayMs: 1000, session });
+      await node.on_load();
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(assign).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(assign).toHaveBeenCalledWith(mocks.completionUrl);
+    });
+
+    it('does not write a second completion row when the participant already ended the trial', async () => {
+      const node = completionRedirectNode({ redirectDelayMs: 1000, session });
+      await node.on_load();
+      node.on_finish({});
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(mocks.appendTrialRow).not.toHaveBeenCalled();
+      expect(assign).toHaveBeenCalledWith(mocks.completionUrl);
+    });
+
+    it('sends the tail after the trial row of a test build (no redirect)', async () => {
+      mocks.completionUrl = 'https://app.prolific.com/submissions/complete?cc=PLACEHOLDER_X';
+      const node = completionRedirectNode({ session });
+      await node.on_load();
+      node.on_finish({});
+      expect(mocks.uploadTail).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(mocks.uploadTail).toHaveBeenCalledWith({ session });
     });
   });
 

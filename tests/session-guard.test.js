@@ -37,6 +37,20 @@ describe('session guard', () => {
     expect(start.session_id).toBe('s1');
   });
 
+  it('writes a reading of every clock on the session_start row', async () => {
+    const before = Date.now();
+    await startSessionGuard(session);
+    const start = (await getAllTrialRows()).find((r) => r.phase === 'session_start');
+    const c = start.clock_anchor;
+    expect(c.date_now_ms).toBeGreaterThanOrEqual(before);
+    expect(c.iso).toBe(new Date(c.date_now_ms).toISOString());
+    expect(c.perf_now_ms).toBeGreaterThan(0);
+    expect(c.time_origin_ms).toBe(performance.timeOrigin);
+    /* The two clocks agree: time origin + performance.now() is the wall time. */
+    expect(Math.abs(c.time_origin_ms + c.perf_now_ms - c.date_now_ms)).toBeLessThan(50);
+    expect(c).toHaveProperty('jspsych_start_ms');
+  });
+
   it('starts clean when storage is empty', async () => {
     await startSessionGuard(session);
     const start = (await getAllTrialRows()).find((r) => r.phase === 'session_start');

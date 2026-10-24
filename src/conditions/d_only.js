@@ -86,6 +86,7 @@ function encodingNode(params) {
       display_rotation_deg: params.display_rotation_deg ?? 0,
       memory_items: params.memory_items.map((m) => ({
         slot: m.slot_index_in_seq,
+        encoding_position: m.encoding_position,
         cell: m.cell,
         pattern_label: m.pattern_label,
       })),
@@ -146,6 +147,7 @@ function probeNode(params, probe) {
       const judged = judgeProbeResponse(state.response_key, probe.is_target);
       data.probe_position = probe.probe_position;
       Object.assign(data, probeRenderFields(probe, state.frame));
+      data.encoding_position = probe.encoding_position;
       data.probe_type = probe.type;
       data.probed_cell = probe.cell;
       data.probe_pattern_label = probe.pattern_label;
@@ -166,6 +168,6 @@ export function dOnlyTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
-  out.push(itiNode({ background_shade: params.background_shade }));
+  out.push(itiNode({ phase: 'd_only_iti', background_shade: params.background_shade }));
   return out;
 }

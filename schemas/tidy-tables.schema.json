@@ -159,6 +159,86 @@
           "type": ["string", "null"],
           "description": "trial_spec when the runtime plan was recorded on the encoding row; null otherwise."
         },
+        "trial_guard_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
+        },
+        "guard_flags": {
+          "type": ["string", "null"],
+          "description": "Display-guard events recorded since the previous trial, comma separated. Empty if none."
+        },
+        "guard_n": {
+          "type": ["integer", "null"],
+          "description": "Number of display-guard events behind guard_flags."
+        },
+        "user_gain": {
+          "type": ["number", "null"],
+          "description": "Playback gain set by the participant at the volume check, 0-1."
+        },
+        "gate_passed_at_ms": {
+          "type": ["integer", "null"],
+          "description": "Time from gate onset to both arrow keys being down, ms."
+        },
+        "gate_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Trial-start gate onset relative to encoding onset, ms (negative)."
+        },
+        "pattern_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Pattern reminder onset relative to encoding onset, ms. Empty if none."
+        },
+        "arrow_cue_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Rotation arrow cue onset relative to encoding onset, ms. Imagery conditions."
+        },
+        "imagination_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Imagination period onset relative to encoding onset, ms. Imagery conditions."
+        },
+        "rotation_start_ms": {
+          "type": ["integer", "null"],
+          "description": "Start of the rotation animation relative to encoding onset, ms."
+        },
+        "retention_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Retention interval onset relative to encoding onset, ms."
+        },
+        "iti_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Inter-trial interval onset relative to encoding onset, ms."
+        },
+        "planned_total_ms": {
+          "type": ["integer", "null"],
+          "description": "Planned length of the encoding node, ms."
+        },
+        "n_star_rows_expected": {
+          "type": ["integer", "null"],
+          "description": "Star rows the encoding node expected to write."
+        },
+        "keys_outside_window": {
+          "type": ["integer", "null"],
+          "description": "Arrow-key presses during encoding with no star window open."
+        },
+        "n_key_log": {
+          "type": ["integer", "null"],
+          "description": "Entries in the encoding key log."
+        },
+        "key_log_overflow": {
+          "type": ["boolean", "null"],
+          "description": "True if the key log reached its size limit and later presses were not logged."
+        },
+        "key_log_t0_offset_ms": {
+          "type": ["integer", "null"],
+          "description": "Time base of the key log relative to encoding onset, ms."
+        },
+        "n_tones_late": {
+          "type": ["integer", "null"],
+          "description": "Tones scheduled after their planned onset."
+        },
+        "n_tone_errors": {
+          "type": ["integer", "null"],
+          "description": "Tones whose playback raised an error."
+        },
         "build_id": {
           "type": ["string", "null"],
           "description": "Build identifier."
@@ -335,6 +415,50 @@
         "position_matches_runtime": {
           "type": ["boolean", "null"],
           "description": "True if the exporter position equals the position logged at runtime; empty if none was logged."
+        },
+        "early_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed before the window opened."
+        },
+        "late_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed after the window closed."
+        },
+        "extra_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed after the first response in the window."
+        },
+        "star_onset_lag_ms": {
+          "type": ["number", "null"],
+          "description": "Star onset minus its planned onset, ms."
+        },
+        "window_closed_ms": {
+          "type": ["integer", "null"],
+          "description": "Time the star window closed relative to encoding onset, ms."
+        },
+        "displayed": {
+          "type": ["boolean", "null"],
+          "description": "True if the star was drawn."
+        },
+        "truncated": {
+          "type": ["boolean", "null"],
+          "description": "True if the window was cut short when the node ended."
+        },
+        "guard_flags": {
+          "type": ["string", "null"],
+          "description": "Display-guard events recorded since the previous trial, comma separated. Empty if none."
+        },
+        "guard_n": {
+          "type": ["integer", "null"],
+          "description": "Number of display-guard events behind guard_flags."
+        },
+        "user_gain": {
+          "type": ["number", "null"],
+          "description": "Playback gain set by the participant at the volume check, 0-1."
+        },
+        "trial_guard_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
         },
         "px_per_mm": {
           "type": ["number", "null"],
@@ -580,6 +704,58 @@
         "position_matches_runtime": {
           "type": ["boolean", "null"],
           "description": "True if the exporter position equals the position logged at runtime; empty if none was logged."
+        },
+        "early_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed before the window opened."
+        },
+        "late_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed after the window closed."
+        },
+        "extra_keypresses": {
+          "type": ["integer", "null"],
+          "description": "Valid keys pressed after the first response in the window."
+        },
+        "guard_flags": {
+          "type": ["string", "null"],
+          "description": "Display-guard events recorded since the previous trial, comma separated. Empty if none."
+        },
+        "guard_n": {
+          "type": ["integer", "null"],
+          "description": "Number of display-guard events behind guard_flags."
+        },
+        "user_gain": {
+          "type": ["number", "null"],
+          "description": "Playback gain set by the participant at the volume check, 0-1."
+        },
+        "audio_output_latency_ms": {
+          "type": ["number", "null"],
+          "description": "Reported audio output latency plus base latency, ms."
+        },
+        "audio_context_time_at_onset_ms": {
+          "type": ["number", "null"],
+          "description": "AudioContext currentTime at probe onset, ms."
+        },
+        "audio_sample_rate_hz": {
+          "type": ["integer", "null"],
+          "description": "AudioContext sample rate, Hz."
+        },
+        "audio_state": {
+          "type": ["string", "null"],
+          "description": "AudioContext state at probe onset."
+        },
+        "audio_base_latency_ms": {
+          "type": ["number", "null"],
+          "description": "AudioContext base latency, ms."
+        },
+        "tone_error": {
+          "type": ["boolean", "null"],
+          "description": "True if the probe tone raised an error on playback."
+        },
+        "trial_guard_excluded": {
+          "type": ["boolean", "null"],
+          "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
         },
         "px_per_mm": {
           "type": ["number", "null"],

@@ -11,9 +11,11 @@
  *     (consent + demographics, practice, each of the five main-task
  *     conditions, music questionnaire, strategy questionnaire, and a meta
  *     bucket for everything else). Buckets that received no rows are not
- *     sent. Filenames are deterministic (`<session_id>__NN_<label>.json`) so a
- *     repeat of a bucket DataPipe already holds is reported as FILE_EXISTS and
- *     counted as delivered.
+ *     sent. Filenames are deterministic within a page load
+ *     (`<session_id>__<run_id>__NN_<label>.json`), so a repeat of a bucket
+ *     DataPipe already holds is reported as FILE_EXISTS and counted as
+ *     delivered. The run id keeps a reloaded page from being mistaken for the
+ *     earlier one, and only the rows of the current run are sent.
  *
  *   - **When uploads happen.** The consent and practice buckets are sent at
  *     the inter-block rest (`uploadConsentAndPractice`), and every rest screen
@@ -21,8 +23,10 @@
  *     (`uploadCheckpoint`). Both are cancelled when the rest ends, so no
  *     request is in flight during a trial. The remaining buckets are sent once
  *     at the debrief node (`uploadPendingData`) or, for a session ended by a
- *     check, at the exit screen. Checkpoint files are used in analysis only
- *     for sessions that did not finish.
+ *     check, at the exit screen. The rows written after that upload (the
+ *     upload summary and the completion row) are sent in a short last file
+ *     (`uploadTail`) just before the redirect. Rows that appear in a checkpoint
+ *     and a bucket file are the same rows; the exporter removes the repeats.
  *
  *   - **Bounded requests.** Each POST is aborted after
  *     `config.uploader.request_timeout_ms`, and is retried up to `retryMax`
@@ -53,9 +57,31 @@
  *     the download fallback handles the data egress.
  */
 import { config } from './config.js';
-import { getAllTrialRows, getTrialRowsAfter, getUploadCursor, setUploadCursor } from './storage.js';
+import {
+  getAllTrialRows,
+  getTrialRowsAfter,
+  getUploadCursor,
+  setUploadCursor,
+  getRunId,
+  flushPendingWrites,
+} from './storage.js';
 
 const midSessionUploaded = new Set();
+
+/* Largest checkpoint request. The assumption is that DataPipe accepts a
+ * request body of about 1 MB; a checkpoint with more rows than fit is sent as
+ * several files, each with its own seq range. */
+const CHECKPOINT_MAX_BYTES = 900_000;
+/* Time allowed for the last upload before the redirect. */
+const TAIL_TIMEOUT_MS = 2000;
+
+/* Browser storage keeps the rows of every earlier run in this browser. An
+ * upload sends the rows of the current run only; the others stay in storage
+ * for recovery. */
+function currentRunRows(rows) {
+  const run = getRunId();
+  return rows.filter((r) => r.run_id === run);
+}
 
 /* ---------- Bucket definitions ---------- */
 
@@ -66,7 +92,7 @@ const midSessionUploaded = new Set();
  *
  * Each bucket has:
  *   - `id`      stable short identifier used in envelopes and tests
- *   - `label`   file-stem suffix (becomes `<session_id>__<label>.json`)
+ *   - `label`   file-stem suffix (becomes `<session_id>__<run_id>__<label>.json`)
  *   - `matches` predicate over a single row; the first matching bucket
  *               (walking in array order) wins
  *
@@ -82,6 +108,8 @@ const midSessionUploaded = new Set();
  *     gated on `block_label ∈ {main_a, main_b}` so practice runs of the same
  *     trial types are NOT mixed in. Practice trial rows (block_label =
  *     'practice') always go to the practice bucket regardless of phase.
+ *     The inter-trial-interval rows (`<condition>_iti`) carry the condition
+ *     prefix, so they go with the rest of their trial.
  *   - The two questionnaires include their respective intro screens
  *     (`questionnaire_intro` for strategy; `music_experience_intro` for
  *     music) so each file is self-contained for analysis.
@@ -218,6 +246,7 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
     pilot_label: session.pilot_label ?? null,
     started_at_iso: session.started_at_iso,
     user_agent: session.user_agent,
+    run_id: getRunId(),
     bucket_id: bucket.id,
     bucket_label: bucket.label,
     bucket_index: bucketIndex,
@@ -231,29 +260,33 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
 }
 
 /**
- * DataPipe filename for a bucket: `<session_id>__<bucket_label>.json`.
+ * DataPipe filename for a bucket: `<session_id>__<run_id>__<bucket_label>.json`.
  *
  * Stability requirements:
- *   - **Unique per bucket per session.** DataPipe stores each POST as a
+ *   - **Unique per bucket per run.** DataPipe stores each POST as a
  *     separate file under the project; a repeated filename is refused. Each
- *     bucket's `label` is unique, so the composite is unique per session.
- *   - **Deterministic across runs of the same session.** The bucket label
- *     comes from the static `BUCKETS` table, so a retry POSTs the same
- *     filename. DataPipe rejects a name that already exists (FILE_EXISTS);
- *     the uploader counts that as delivered, and failed posts get another
- *     attempt.
+ *     bucket's `label` is unique and the run id changes with every page load,
+ *     so a reloaded page never meets the files of the earlier one.
+ *   - **Deterministic within a run.** The bucket label comes from the static
+ *     `BUCKETS` table, so a retry POSTs the same filename. DataPipe rejects a
+ *     name that already exists (FILE_EXISTS); the uploader counts that as
+ *     delivered, because the name identifies the same run, and failed posts
+ *     get another attempt.
  *   - **Sorts alphabetically in storage in canonical order.** Labels carry a
  *     two-digit prefix (`01_…` through `10_…`) so a directory listing matches
  *     the analysis-relevant order without manual sort.
  */
-export function dataPipeFilenameForBucket({ session_id, bucket_label }) {
+export function dataPipeFilenameForBucket({ session_id, run_id, bucket_label }) {
   if (!session_id) {
     throw new Error('dataPipeFilenameForBucket: session_id is required');
+  }
+  if (!run_id) {
+    throw new Error('dataPipeFilenameForBucket: run_id is required');
   }
   if (!bucket_label) {
     throw new Error('dataPipeFilenameForBucket: bucket_label is required');
   }
-  return `${session_id}__${bucket_label}.json`;
+  return `${session_id}__${run_id}__${bucket_label}.json`;
 }
 
 /**
@@ -280,6 +313,7 @@ export function buildDataPipeEnvelope({ bucketEnvelope, experimentId }) {
     experimentID: experimentId,
     filename: dataPipeFilenameForBucket({
       session_id: bucketEnvelope.session_id,
+      run_id: bucketEnvelope.run_id,
       bucket_label: bucketEnvelope.bucket_label,
     }),
     data: JSON.stringify(bucketEnvelope),
@@ -437,7 +471,7 @@ export async function uploadConsentAndPractice({ session, signal } = {}) {
     return { uploaded: [], failed: 'no_endpoint' };
   }
 
-  const allRows = await getAllTrialRows();
+  const allRows = currentRunRows(await getAllTrialRows());
   const partitioned = partitionRowsIntoBuckets(allRows);
   const targetIds = new Set(['consent_demographics', 'practice']);
   const targets = partitioned.filter((p) => targetIds.has(p.bucket.id) && p.rows.length > 0);
@@ -476,13 +510,36 @@ export async function uploadConsentAndPractice({ session, signal } = {}) {
 let checkpointCursor = 0;
 
 /**
- * Upload every row after the last checkpoint as one file named
- * `<session_id>__ckpt_<seqMin>-<seqMax>.json`. File names are unique, so no
- * overwrite is involved. Called at the rest screens, so a crash or a closed
- * tab loses at most the stretch since the last rest. The cursor advances only
- * on success, so a cancelled or failed checkpoint is included in the next
- * one. The end-of-session bucket upload is unaffected; analysis uses the
- * checkpoint files only for sessions that did not finish.
+ * Split rows (in seq order) into groups whose JSON is at most `maxBytes`.
+ * A single row larger than the limit forms a group of its own.
+ */
+function splitRowsBySize(rows, maxBytes) {
+  const parts = [];
+  let part = [];
+  let size = 0;
+  for (const row of rows) {
+    const bytes = JSON.stringify(row).length;
+    if (part.length > 0 && size + bytes > maxBytes) {
+      parts.push(part);
+      part = [];
+      size = 0;
+    }
+    part.push(row);
+    size += bytes;
+  }
+  if (part.length > 0) parts.push(part);
+  return parts;
+}
+
+/**
+ * Upload every row of this run after the last checkpoint as one file named
+ * `<session_id>__<run_id>__ckpt_<seqMin>-<seqMax>.json`. File names are
+ * unique, so no overwrite is involved. A checkpoint larger than
+ * `CHECKPOINT_MAX_BYTES` is sent as several files. Called at the rest
+ * screens, so a crash or a closed tab loses at most the stretch since the last
+ * rest. The cursor advances after each file that arrived, so a cancelled or
+ * failed checkpoint is included in the next one. The end-of-session bucket
+ * upload is unaffected.
  *
  * @param {object} opts
  * @param {object} opts.session   prolific session object
@@ -507,13 +564,74 @@ export async function uploadCheckpoint({
   if (!url || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
     return { status: 'no_endpoint' };
   }
-  const rows = (await getAllTrialRows()).filter((r) => r.seq > checkpointCursor);
+  const rows = currentRunRows(await getAllTrialRows()).filter((r) => r.seq > checkpointCursor);
   if (rows.length === 0) return { status: 'nothing' };
-  const seqMin = Math.min(...rows.map((r) => r.seq));
-  const seqMax = Math.max(...rows.map((r) => r.seq));
+  let sent = 0;
+  for (const part of splitRowsBySize(rows, CHECKPOINT_MAX_BYTES)) {
+    const seqMin = Math.min(...part.map((r) => r.seq));
+    const seqMax = Math.max(...part.map((r) => r.seq));
+    const envelope = buildBucketEnvelope({
+      session,
+      bucket: { id: 'checkpoint', label: `ckpt_${seqMin}-${seqMax}` },
+      bucketIndex: 0,
+      totalBuckets: 1,
+      rows: part,
+    });
+    const body =
+      provider === 'datapipe'
+        ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+        : envelope;
+    try {
+      await postWithRetry({ url, body, signal, fetchImpl, sleepImpl });
+    } catch (err) {
+      return { status: 'failed', error: err.message };
+    }
+    checkpointCursor = seqMax;
+    sent += part.length;
+  }
+  return { status: 'ok', rows: sent };
+}
+
+/* Set once the end-of-session upload has finished; the last upload follows it. */
+let finalUploadComplete = false;
+
+/**
+ * Send the rows written after the end-of-session upload (the upload summary
+ * and the completion row) as one small file named
+ * `<session_id>__<run_id>__tail_<seqMin>-<seqMax>.json`. One attempt only,
+ * limited to `timeoutMs`, so the redirect that follows is never held up for
+ * long. Does nothing unless the end-of-session upload finished.
+ *
+ * @param {object} opts
+ * @param {object} opts.session
+ * @param {number} [opts.timeoutMs]
+ * @param {string} [opts.endpoint]
+ * @param {string} [opts.datapipeExperimentId]
+ * @param {Function} [opts.fetchImpl]
+ * @returns {Promise<{status: string, rows?: number, error?: string}>}
+ */
+export async function uploadTail({
+  session,
+  timeoutMs = TAIL_TIMEOUT_MS,
+  endpoint,
+  datapipeExperimentId,
+  fetchImpl,
+} = {}) {
+  const url = endpoint ?? config.uploader.endpoint;
+  const provider = config.uploader.provider ?? 'raw';
+  const experimentId = datapipeExperimentId ?? config.uploader.datapipe_experiment_id ?? null;
+  if (!url || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+    return { status: 'no_endpoint' };
+  }
+  if (!finalUploadComplete) return { status: 'skipped' };
+  await flushPendingWrites();
+  const rows = currentRunRows(await getTrialRowsAfter(await getUploadCursor()));
+  if (rows.length === 0) return { status: 'nothing' };
+  const seqs = rows.map((r) => r.seq);
+  const seqMax = Math.max(...seqs);
   const envelope = buildBucketEnvelope({
     session,
-    bucket: { id: 'checkpoint', label: `ckpt_${seqMin}-${seqMax}` },
+    bucket: { id: 'tail', label: `tail_${Math.min(...seqs)}-${seqMax}` },
     bucketIndex: 0,
     totalBuckets: 1,
     rows,
@@ -523,17 +641,18 @@ export async function uploadCheckpoint({
       ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
       : envelope;
   try {
-    await postWithRetry({ url, body, signal, fetchImpl, sleepImpl });
-    checkpointCursor = seqMax;
-    return { status: 'ok', rows: rows.length };
+    await postWithRetry({ url, body, retryMax: 0, timeoutMs, fetchImpl });
   } catch (err) {
     return { status: 'failed', error: err.message };
   }
+  await setUploadCursor(seqMax);
+  return { status: 'ok', rows: rows.length };
 }
 
 /** Test helper: forget which rows were sent in checkpoints. */
 export function _resetCheckpointForTests() {
   checkpointCursor = 0;
+  finalUploadComplete = false;
 }
 
 /* ---------- Public uploader entrypoint ---------- */
@@ -542,7 +661,7 @@ export function _resetCheckpointForTests() {
  * Upload all rows in storage that haven't been uploaded yet, partitioned into
  * the canonical 10-bucket layout.
  *
- * Reads the upload cursor; pulls all rows with `seq > cursor`; partitions
+ * Reads the upload cursor; pulls the rows of this run with `seq > cursor`; partitions
  * them by bucket; POSTs each non-empty bucket in `BUCKETS` order; advances
  * the cursor past the highest uploaded seq only after every bucket succeeds.
  * On endpoint absence, returns `{status: 'no_endpoint'}` without touching the
@@ -559,6 +678,7 @@ export function _resetCheckpointForTests() {
  * @param {Function} [opts.onProgress]             called with {bucketIndex, totalBuckets, bucketId, bucketLabel, status, error?}
  * @param {Function} [opts.fetchImpl]
  * @param {Function} [opts.sleepImpl]
+ * @param {boolean}  [opts.allRuns]                send the rows of earlier runs too (the recovery page)
  * @returns {Promise<{
  *   status: 'uploaded' | 'no_endpoint' | 'partial' | 'nothing_to_upload',
  *   uploadedBuckets: number,
@@ -575,6 +695,7 @@ export async function uploadPendingData({
   onProgress,
   fetchImpl,
   sleepImpl,
+  allRuns = false,
 } = {}) {
   const url = endpoint ?? config.uploader.endpoint;
   const resolvedProvider = provider ?? config.uploader.provider ?? 'raw';
@@ -602,8 +723,10 @@ export async function uploadPendingData({
     };
   }
   const cursor = await getUploadCursor();
-  const pendingRows = await getTrialRowsAfter(cursor);
+  const stored = await getTrialRowsAfter(cursor);
+  const pendingRows = allRuns ? stored : currentRunRows(stored);
   if (pendingRows.length === 0) {
+    finalUploadComplete = true;
     return {
       status: 'nothing_to_upload',
       uploadedBuckets: 0,
@@ -677,6 +800,7 @@ export async function uploadPendingData({
   }
 
   await setUploadCursor(maxUploadedSeq);
+  finalUploadComplete = true;
 
   return {
     status: 'uploaded',

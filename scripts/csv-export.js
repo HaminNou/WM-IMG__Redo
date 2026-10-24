@@ -11,9 +11,12 @@
  * Each live session uploads up to 10 bucket envelopes to storage (one per
  * analysis-relevant slice: consent + demographics, practice, d_only, i_only
  * (= "star-only"), t_only, i_t, i_d, music questionnaire, strategy
- * questionnaire, meta). `loadAndFlattenDumps` merges them back by
- * `prolific_pid` before the wide-row builders run, so the exporter is
- * agnostic to whether its input is one big dump or 10 per-bucket files.
+ * questionnaire, meta), plus checkpoint and tail files that repeat rows.
+ * `loadAndFlattenDumps` pools the files of a participant, drops rows repeated
+ * on (run_id, seq) and splits the rows by run (a reload in the same browser
+ * starts a new run), so the exporter is agnostic to whether its input is one
+ * big dump or many files. A repeated main trial after this step makes the
+ * exit code 3.
  *
  * Original-experiment conventions preserved:
  *   prefixes  Ast_ (star/imagery), Dot_ (encoded dot), Tone_ (encoded tone),
@@ -40,6 +43,9 @@
  *                               scripts/tidy-tables.js and schemas/tidy-tables.schema.json)
  *   CALIBRATION_SUMMARY.csv     one row per participant (screen / volume +
  *                               session metadata + storage failures)
+ *   STRATEGY_SCORES.csv         one row per participant: strategy composites
+ *   MUSIC.csv                   one row per participant: music-experience items,
+ *                               Gold-MSI MT composite, absolute-pitch item
  *   STRATEGY.csv                one row per (participant × strategy item)
  *                               in long format (19 items per participant,
  *                               spread across the five condition-specific
@@ -84,6 +90,14 @@ import {
   PROBES_COLUMNS,
 } from './tidy-tables.js';
 
+/* The questionnaire modules import jsPsych, which registers itself on
+ * `window` when loaded. The scoring functions need no DOM, so Node gets a
+ * stand-in for that one assignment. */
+globalThis.window ??= globalThis;
+const { MUSIC_EXPERIENCE_ITEMS, scoreMusicExperience } =
+  await import('../src/questionnaire/music-experience.js');
+const { STRATEGY_ITEMS, scoreStrategy } = await import('../src/questionnaire/strategy.js');
+
 const GENERATOR_VERSION = '1.0.0';
 
 /* ---------- Constants ---------- */
@@ -105,6 +119,7 @@ const PROBE_TYPE_CODES = Object.freeze({
 
 const RT_FLOOR_MS = 250;
 const NA = 'NA';
+const numOrNA = (v) => (Number.isFinite(v) ? v : NA);
 
 /** Rotation of a trial: the imagined angle, or the display angle of a d_only trial. */
 function rotationOf(enc) {
@@ -571,6 +586,8 @@ export function buildWideRowDOnly(group, criterion, sessionMeta = {}) {
   const probes = sortedProbes(group.probes);
   for (let i = 0; i < 3; i++) {
     addProbeColumns(out, `Qmark_${i + 1}`, probes[i], criterion, group.encoding);
+    out[`Qmark_${i + 1}_EncPos`] =
+      probes[i] && Number.isInteger(probes[i].encoding_position) ? probes[i].encoding_position : NA;
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -589,7 +606,10 @@ function buildColumnsForDOnly() {
   for (let i = 1; i <= 3; i++) {
     cols.push(`Dot_${i}_OrderN`, `Dot_${i}_Cell`, `Dot_${i}_CellTY`, `Dot_${i}_OnsetMs`);
   }
-  for (let i = 1; i <= 3; i++) addProbeColumnNames(cols, `Qmark_${i}`);
+  for (let i = 1; i <= 3; i++) {
+    addProbeColumnNames(cols, `Qmark_${i}`);
+    cols.push(`Qmark_${i}_EncPos`);
+  }
   cols.push(...SESSION_META_COLUMNS);
   return cols;
 }
@@ -623,6 +643,8 @@ export function buildWideRowTOnly(group, criterion, sessionMeta = {}) {
       p && Number.isInteger(p.probed_tone_index) ? p.probed_tone_index : NA;
     out[`Qmark_${i + 1}_ToneFreqHz`] =
       p && Number.isFinite(p.probed_tone_freq_hz) ? p.probed_tone_freq_hz : NA;
+    out[`Qmark_${i + 1}_EncPos`] =
+      p && Number.isInteger(p.encoding_position) ? p.encoding_position : NA;
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -643,7 +665,7 @@ function buildColumnsForTOnly() {
   }
   for (let i = 1; i <= 3; i++) {
     addProbeColumnNames(cols, `Qmark_${i}`);
-    cols.push(`Qmark_${i}_ToneIdx`, `Qmark_${i}_ToneFreqHz`);
+    cols.push(`Qmark_${i}_ToneIdx`, `Qmark_${i}_ToneFreqHz`, `Qmark_${i}_EncPos`);
   }
   cols.push(...SESSION_META_COLUMNS);
   return cols;
@@ -860,6 +882,17 @@ const EVENTS_COLUMNS = Object.freeze([
   'Res',
   'ResVA',
   'RT_Ms',
+  'X_Mm',
+  'Y_Mm',
+  'Tone_Late_Ms',
+  'Tone_Error',
+  'Early_Keypresses',
+  'Late_Keypresses',
+  'Extra_Keypresses',
+  'Onset_Lag_Ms',
+  'Displayed',
+  'Truncated',
+  'Guard_Flags',
   'Build_ID',
   'Schema_Version',
   'Pilot_Run',
@@ -877,6 +910,30 @@ const EVENT_KIND_BY_TRIAL_TYPE = Object.freeze({
   i_d: { encodedM: 'dot', probe: 'probe_dot' },
   i_t: { encodedM: 'tone', probe: 'probe_tone' },
 });
+
+const boolOrNA = (v) => (typeof v === 'boolean' ? (v ? 1 : 0) : NA);
+
+function slotPositionFields(enc, slot) {
+  const pos = Array.isArray(enc.slot_positions_mm)
+    ? enc.slot_positions_mm.find((p) => p.slot === slot)
+    : null;
+  return { X_Mm: numOrNA(pos?.x_mm), Y_Mm: numOrNA(pos?.y_mm) };
+}
+
+function toneEventFields(enc, slot) {
+  const ev = Array.isArray(enc.slot_tone_events)
+    ? enc.slot_tone_events.find((e) => e.slot === slot)
+    : null;
+  return { Tone_Late_Ms: numOrNA(ev?.late_ms), Tone_Error: boolOrNA(ev?.tone_error) };
+}
+
+function keypressFields(row) {
+  return {
+    Early_Keypresses: numOrNA(row?.early_keypresses),
+    Late_Keypresses: numOrNA(row?.late_keypresses),
+    Extra_Keypresses: numOrNA(row?.extra_keypresses),
+  };
+}
 
 /**
  * Compose long-form event rows for one trial group. Returns up to 9 rows
@@ -953,8 +1010,21 @@ function composeEventsRows(group, sessionMeta = {}) {
       Res: NA,
       ResVA: NA,
       RT_Ms: NA,
+      ...slotPositionFields(enc, ev.slot),
+      ...toneEventFields(enc, ev.slot),
+      ...keypressFields(null),
+      Onset_Lag_Ms: NA,
+      Displayed: NA,
+      Truncated: NA,
+      Guard_Flags: NA,
     };
     if (ev.kind === 'star' && ev.runtime) {
+      Object.assign(row, keypressFields(ev.runtime), {
+        Onset_Lag_Ms: numOrNA(ev.runtime.star_onset_lag_ms),
+        Displayed: boolOrNA(ev.runtime.displayed),
+        Truncated: boolOrNA(ev.runtime.truncated),
+        Guard_Flags: ev.runtime.guard_flags ?? NA,
+      });
       const rt = extractRtMs(ev.runtime);
       const { res, resVA } = starResCodes(ev.runtime);
       row.Response_Key = extractResponseKey(ev.runtime);
@@ -993,6 +1063,15 @@ function composeEventsRows(group, sessionMeta = {}) {
         Res: res,
         ResVA: resVA,
         RT_Ms: Number.isFinite(rt) ? rt : NA,
+        X_Mm: numOrNA(p.probe_x_mm),
+        Y_Mm: numOrNA(p.probe_y_mm),
+        Tone_Late_Ms: NA,
+        Tone_Error: boolOrNA(p.tone_error),
+        ...keypressFields(p),
+        Onset_Lag_Ms: NA,
+        Displayed: NA,
+        Truncated: NA,
+        Guard_Flags: p.guard_flags ?? NA,
       });
     }
   }
@@ -1001,6 +1080,17 @@ function composeEventsRows(group, sessionMeta = {}) {
 }
 
 /* ---------- Auxiliary CSVs ---------- */
+
+const DECK_IDS = Object.freeze([
+  'overview',
+  'practice_readiness',
+  'd_only',
+  't_only',
+  'i_only',
+  'i_d',
+  'i_t',
+  'demo_narration',
+]);
 
 const CALIBRATION_COLUMNS = Object.freeze([
   'Participant_ID',
@@ -1029,6 +1119,53 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Upload_Status',
   'Completion_Was_Placeholder',
   'User_Agent',
+  'Exit_Reason',
+  'Build_Commit',
+  'Build_Time',
+  'Consent_Text_Sha256',
+  ...DECK_IDS.map((d) => `Instruction_Deck_Sha256_${d}`),
+  'Strategy_Items_Sha256',
+  'Music_Items_Sha256',
+  'Clock_Perf_Now_Ms',
+  'Clock_Time_Origin_Ms',
+  'Clock_Date_Now_Ms',
+  'Clock_Iso',
+  'Clock_Jspsych_Start_Ms',
+  'Screen_Width_Px',
+  'Screen_Height_Px',
+  'Inner_Width_Px',
+  'Inner_Height_Px',
+  'Device_Pixel_Ratio',
+  'Hardware_Concurrency',
+  'Device_Memory_Gb',
+  'Audio_Sample_Rate_Hz',
+  'Audio_State',
+  'Audio_Base_Latency_Ms',
+  'Audio_Output_Latency_Ms',
+  'Headphone_Pass',
+  'Headphone_N_Correct',
+  'Headphone_N_Trials',
+  'Pitch_Attempts',
+  'Pitch_Pass',
+  'Pitch_N_Correct',
+  'Pitch_N_Trials',
+  'Pitch_Margin_Pass',
+  'Pitch_Margin_N_Correct',
+  'Timing_Attempts',
+  'Timing_Ok',
+  'Timing_Fail_Reasons',
+  'Timing_Frame_Median_Ms',
+  'Timing_Refresh_Hz_Est',
+  'Timing_Frame_P95_Ms',
+  'Timing_Overshoot_P95_Ms',
+  'Viewing_Posture_Acknowledged',
+  'Hand_Placement_Acknowledged',
+  'Visibility_Change_Events',
+  'Visibility_Hidden_Events',
+  'Visibility_Hidden_Ms_Total',
+  'Fullscreen_Change_Events',
+  'Guard_Events',
+  'Guard_Hidden_Ms_Total',
 ]);
 
 export { CALIBRATION_COLUMNS };
@@ -1100,8 +1237,8 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
     Sweeps_Completed: Number.isInteger(audibility?.sweeps_completed)
       ? audibility.sweeps_completed
       : NA,
-    Storage_Failures: Number.isInteger(uploadSummary?.storage_failures)
-      ? uploadSummary.storage_failures
+    Storage_Failures: Number.isInteger(uploadSummary?.storage_write_failures)
+      ? uploadSummary.storage_write_failures
       : NA,
     Attention_Total: Number.isInteger(attentionSummary?.attention_total)
       ? attentionSummary.attention_total
@@ -1126,7 +1263,109 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
           : 0
         : NA,
     User_Agent: sessionMeta.user_agent ?? NA,
+    ...extractSessionEnvironment(rows),
   };
+}
+
+const flagOrNA = (v) => (v === true ? 1 : v === false ? 0 : NA);
+const lastRow = (rows, phase) => rows.filter((r) => r.phase === phase).pop();
+
+/**
+ * Columns of CALIBRATION_SUMMARY that come from the session_info row, the
+ * check summaries, the visibility and display-guard events and the exit row.
+ */
+function extractSessionEnvironment(rows) {
+  const info = rows.find((r) => r.phase === 'session_info') ?? {};
+  const anchor = info.clock_anchor ?? rows.find((r) => r.phase === 'session_start')?.clock_anchor;
+  const audio = info.audio_context ?? {};
+  const decks = info.instruction_deck_sha256 ?? {};
+  const exitRow = rows.filter((r) => typeof r.exit_reason === 'string').pop();
+
+  const headphone = lastRow(rows, 'headphone_check_summary')?.value;
+  const pitchRows = rows
+    .filter((r) => r.phase === 'pitch_check_summary')
+    .map((r) => r.value)
+    .filter(Boolean);
+  const pitchUser = pitchRows.filter((v) => v.label === 'pitch_user_level');
+  const pitchUserLast = pitchUser[pitchUser.length - 1];
+  const pitchMargin = pitchRows.filter((v) => v.label === 'pitch_margin_minus12').pop();
+  const timingRows = rows.filter((r) => r.phase === 'timing_probe');
+  const timing = timingRows[timingRows.length - 1];
+  const snapshot = [...timingRows, ...rows.filter((r) => r.phase === 'display_guard_event')].find(
+    (r) => Number.isFinite(r.hardware_concurrency)
+  );
+
+  const visibility = rows.filter(
+    (r) => r.phase === 'visibility_event' && r.kind === 'visibilitychange'
+  );
+  let hiddenMs = 0;
+  let hiddenAt = null;
+  for (const e of visibility) {
+    if (e.hidden === true) hiddenAt = e.ts;
+    else if (e.hidden === false && hiddenAt !== null) {
+      hiddenMs += e.ts - hiddenAt;
+      hiddenAt = null;
+    }
+  }
+  const guard = rows.filter((r) => r.phase === 'display_guard_event');
+  const guardHidden = guard
+    .filter((r) => r.kind === 'visible' && Number.isFinite(r.hidden_ms))
+    .reduce((a, r) => a + r.hidden_ms, 0);
+
+  const out = {
+    Exit_Reason: exitRow?.exit_reason ?? NA,
+    Build_Commit: info.build_commit ?? NA,
+    Build_Time: info.build_time ?? NA,
+    Consent_Text_Sha256: info.consent_text_sha256 ?? NA,
+    Strategy_Items_Sha256: info.strategy_items_sha256 ?? NA,
+    Music_Items_Sha256: info.music_items_sha256 ?? NA,
+    Clock_Perf_Now_Ms: numOrNA(anchor?.perf_now_ms),
+    Clock_Time_Origin_Ms: numOrNA(anchor?.time_origin_ms),
+    Clock_Date_Now_Ms: numOrNA(anchor?.date_now_ms),
+    Clock_Iso: anchor?.iso ?? NA,
+    Clock_Jspsych_Start_Ms: numOrNA(anchor?.jspsych_start_ms),
+    Screen_Width_Px: numOrNA(info.screen_width_px),
+    Screen_Height_Px: numOrNA(info.screen_height_px),
+    Inner_Width_Px: numOrNA(info.inner_width_px),
+    Inner_Height_Px: numOrNA(info.inner_height_px),
+    Device_Pixel_Ratio: numOrNA(info.device_pixel_ratio),
+    Hardware_Concurrency: numOrNA(snapshot?.hardware_concurrency),
+    Device_Memory_Gb: numOrNA(snapshot?.device_memory_gb),
+    Audio_Sample_Rate_Hz: numOrNA(audio.sample_rate_hz),
+    Audio_State: audio.state ?? NA,
+    Audio_Base_Latency_Ms: numOrNA(audio.base_latency_ms),
+    Audio_Output_Latency_Ms: numOrNA(audio.output_latency_ms),
+    Headphone_Pass: flagOrNA(headphone?.headphones_pass),
+    Headphone_N_Correct: numOrNA(headphone?.n_correct),
+    Headphone_N_Trials: numOrNA(headphone?.n_trials),
+    Pitch_Attempts: pitchUser.length > 0 ? pitchUser.length : NA,
+    Pitch_Pass: flagOrNA(pitchUserLast?.passed),
+    Pitch_N_Correct: numOrNA(pitchUserLast?.n_correct),
+    Pitch_N_Trials: numOrNA(pitchUserLast?.n_trials),
+    Pitch_Margin_Pass: flagOrNA(pitchMargin?.passed),
+    Pitch_Margin_N_Correct: numOrNA(pitchMargin?.n_correct),
+    Timing_Attempts: timingRows.length > 0 ? timingRows.length : NA,
+    Timing_Ok: flagOrNA(timing?.timing_ok),
+    Timing_Fail_Reasons: Array.isArray(timing?.timing_fail_reasons)
+      ? timing.timing_fail_reasons.join(';')
+      : NA,
+    Timing_Frame_Median_Ms: numOrNA(timing?.frame_median_ms),
+    Timing_Refresh_Hz_Est: numOrNA(timing?.refresh_hz_est),
+    Timing_Frame_P95_Ms: numOrNA(timing?.frame_p95_ms),
+    Timing_Overshoot_P95_Ms: numOrNA(timing?.timeout_overshoot_p95_ms),
+    Viewing_Posture_Acknowledged: rows.some((r) => r.phase === 'viewing_distance') ? 1 : NA,
+    Hand_Placement_Acknowledged: rows.some((r) => r.phase === 'hand_placement') ? 1 : NA,
+    Visibility_Change_Events: visibility.length,
+    Visibility_Hidden_Events: visibility.filter((e) => e.hidden === true).length,
+    Visibility_Hidden_Ms_Total: Math.round(hiddenMs),
+    Fullscreen_Change_Events: rows.filter(
+      (r) => r.phase === 'visibility_event' && r.kind === 'fullscreenchange'
+    ).length,
+    Guard_Events: guard.length,
+    Guard_Hidden_Ms_Total: Math.round(guardHidden),
+  };
+  for (const d of DECK_IDS) out[`Instruction_Deck_Sha256_${d}`] = decks[d] ?? NA;
+  return out;
 }
 
 /**
@@ -1195,6 +1434,83 @@ export function extractStrategyRows(participantId, rows) {
         Response_Score: score,
       });
     }
+  }
+  return out;
+}
+
+const MUSIC_COLUMNS = Object.freeze([
+  'Participant_ID',
+  ...MUSIC_EXPERIENCE_ITEMS.flatMap((it) => {
+    const id = it.id.replace('me_q', 'Me_Q');
+    return it.options.some((o) => typeof o.score === 'number')
+      ? [`${id}_Raw`, `${id}_Score`]
+      : [`${id}_Raw`];
+  }),
+  'Items_Answered',
+  'Items_Total',
+  'Complete',
+  'Gold_MSI_MT_Composite',
+  'Gold_MSI_MT_Complete',
+  'Absolute_Pitch',
+]);
+
+export { MUSIC_COLUMNS };
+
+/**
+ * One row per participant from the music-experience questionnaire: the raw
+ * option code and the item score (1-7) of each Gold-MSI MT item, the
+ * absolute-pitch self-report, and the MT composite (sum of the seven items,
+ * NA unless all seven are answered).
+ */
+export function extractMusicRow(participantId, rows) {
+  const scored = scoreMusicExperience(rows);
+  const out = { Participant_ID: participantId };
+  for (const item of MUSIC_EXPERIENCE_ITEMS) {
+    const id = item.id.replace('me_q', 'Me_Q');
+    const raw = scored.itemResponses[item.id];
+    out[`${id}_Raw`] = raw ?? NA;
+    const score = item.options.find((o) => o.value === raw)?.score;
+    if (MUSIC_COLUMNS.includes(`${id}_Score`)) out[`${id}_Score`] = numOrNA(score);
+  }
+  out.Items_Answered = scored.answered;
+  out.Items_Total = scored.total;
+  out.Complete = scored.complete ? 1 : 0;
+  out.Gold_MSI_MT_Composite = numOrNA(scored.gold_msi_mt_composite);
+  out.Gold_MSI_MT_Complete = scored.gold_msi_mt_complete ? 1 : 0;
+  out.Absolute_Pitch = scored.absolute_pitch ?? NA;
+  return out;
+}
+
+const STRATEGY_SCORE_COLUMNS = Object.freeze([
+  'Participant_ID',
+  'Items_Answered',
+  'Items_Total',
+  'Complete',
+  'Structural_Chunking_Composite',
+  'Imagery_Maintenance_ID_Composite',
+  'Imagery_Maintenance_IT_Composite',
+  ...STRATEGY_ITEMS.map((it) => `${it.id.replace('strategy_q', 'Strategy_Q')}_Score`),
+]);
+
+export { STRATEGY_SCORE_COLUMNS };
+
+/**
+ * One row per participant with the strategy composites (each NA unless every
+ * constituent item is answered) and the 1-5 score of each item.
+ */
+export function extractStrategyScoreRow(participantId, rows) {
+  const s = scoreStrategy(rows);
+  const out = {
+    Participant_ID: participantId,
+    Items_Answered: s.answered,
+    Items_Total: s.total,
+    Complete: s.complete ? 1 : 0,
+    Structural_Chunking_Composite: numOrNA(s.structural_chunking_composite),
+    Imagery_Maintenance_ID_Composite: numOrNA(s.imagery_maintenance_id),
+    Imagery_Maintenance_IT_Composite: numOrNA(s.imagery_maintenance_it),
+  };
+  for (const it of STRATEGY_ITEMS) {
+    out[`${it.id.replace('strategy_q', 'Strategy_Q')}_Score`] = numOrNA(s.itemScores[it.id]);
   }
   return out;
 }
@@ -1276,6 +1592,7 @@ export function buildExportManifest({
   generatedAtIso,
   generatorVersion,
   fileSha256ByPath = {},
+  loadReport = null,
 }) {
   const buildIds = [...new Set(perParticipant.map((p) => p.session.build_id).filter(Boolean))];
   const schemaVersions = [
@@ -1298,6 +1615,15 @@ export function buildExportManifest({
       schema_version_heterogeneous: schemaVersions.length > 1,
       pilot_flag_heterogeneous: pilotFlags.length > 1,
     },
+    rows_read: loadReport?.rows_read ?? null,
+    duplicate_rows_dropped: loadReport?.duplicates_dropped ?? null,
+    runs: perParticipant.map((p) => ({
+      participant_id: p.participant_id,
+      prolific_pid: p.source_pid ?? p.participant_id,
+      run_id: p.run_id ?? null,
+      n_rows: p.rows.length,
+    })),
+    reloaded_participants: reloadedParticipants(perParticipant),
     source_files: inputPaths.map((p) => ({
       path: p,
       sha256: fileSha256ByPath[p] ?? null,
@@ -1306,20 +1632,36 @@ export function buildExportManifest({
   };
 }
 
+/** Participants whose rows come from more than one run, with the run ids and row counts. */
+function reloadedParticipants(perParticipant) {
+  const byPid = new Map();
+  for (const p of perParticipant) {
+    const pid = p.source_pid ?? p.participant_id;
+    if (!byPid.has(pid)) byPid.set(pid, []);
+    byPid.get(pid).push({ run_id: p.run_id ?? null, n_rows: p.rows.length });
+  }
+  return [...byPid.entries()]
+    .filter(([, runs]) => runs.length > 1)
+    .map(([prolific_pid, runs]) => ({ prolific_pid, runs }));
+}
+
 /* ---------- Dump loading & flattening ---------- */
 
 /**
  * Load + flatten a list of dump JSON paths into a per-participant rows map
  * and a per-participant session-meta map. Handles both download-fallback and
  * bucket-envelope shapes (matching pilot-summary.js).
+ *
+ * Bucket, checkpoint and tail files of one session overlap, so the rows of
+ * all files of a participant are pooled and duplicates are dropped on
+ * (run_id, seq). The remaining rows are ordered by seq within each run. A
+ * participant whose rows come from more than one run (a reload in the same
+ * browser) is split into one entry per run, named `<pid>__run_<run_id>`.
  */
 export function loadAndFlattenDumps(paths, opts = {}) {
   const fs = opts.fs ?? { readFileSync };
   const perParticipant = [];
   const errors = [];
-  /* Group all dumps that share a prolific_pid. A multi-bucket session arrives
-   * as up to 10 envelopes; we concatenate their `rows` and merge their
-   * session metadata (taking the first non-null for each field). */
   const byPid = new Map();
   const fileSha256ByPath = {};
   for (const p of paths) {
@@ -1340,11 +1682,59 @@ export function loadAndFlattenDumps(paths, opts = {}) {
     const slot = byPid.get(pid);
     slot.rows.push(...rows);
     slot.source_paths.push(p);
-    /* Merge session metadata: keep first non-null. */
     slot.session = mergeSessionMeta(slot.session, session);
   }
-  for (const slot of byPid.values()) perParticipant.push(slot);
-  return { perParticipant, errors, fileSha256ByPath };
+  const report = { rows_read: 0, duplicates_dropped: 0 };
+  for (const slot of byPid.values()) {
+    const { rows, duplicates } = dedupeRows(slot.rows);
+    report.rows_read += slot.rows.length;
+    report.duplicates_dropped += duplicates;
+    const runs = splitByRun(rows);
+    for (const [runId, runRows] of runs) {
+      perParticipant.push({
+        participant_id:
+          runs.size > 1 ? `${slot.participant_id}__run_${runId}` : slot.participant_id,
+        source_pid: slot.participant_id,
+        run_id: runId,
+        session: slot.session,
+        rows: runRows,
+        source_paths: slot.source_paths,
+      });
+    }
+  }
+  return { perParticipant, errors, fileSha256ByPath, report };
+}
+
+const NO_RUN = 'none';
+
+/** Drop rows repeated across files; rows without a seq cannot be matched and are kept. */
+function dedupeRows(rows) {
+  const seen = new Set();
+  const kept = [];
+  for (const r of rows) {
+    if (Number.isFinite(r?.seq)) {
+      const key = `${r.run_id ?? NO_RUN}:${r.seq}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    kept.push(r);
+  }
+  return { rows: kept, duplicates: rows.length - kept.length };
+}
+
+/** Rows by run, runs in order of first appearance, rows in seq order when every row has one. */
+function splitByRun(rows) {
+  const runs = new Map([[NO_RUN, []]]);
+  for (const r of rows) {
+    const id = r?.run_id ?? NO_RUN;
+    if (!runs.has(id)) runs.set(id, []);
+    runs.get(id).push(r);
+  }
+  if (runs.get(NO_RUN).length === 0 && runs.size > 1) runs.delete(NO_RUN);
+  for (const list of runs.values()) {
+    if (list.every((r) => Number.isFinite(r.seq))) list.sort((a, b) => a.seq - b.seq);
+  }
+  return runs;
 }
 
 function mergeSessionMeta(a, b) {
@@ -1482,6 +1872,20 @@ export function composeExport(perParticipant, opts = {}) {
     columns: STRATEGY_COLUMNS.length,
   });
 
+  const strategyScoreRows = perParticipant.map((p) =>
+    extractStrategyScoreRow(p.participant_id, p.rows)
+  );
+  files['STRATEGY_SCORES.csv'] = serializeRowsToCsv(strategyScoreRows, STRATEGY_SCORE_COLUMNS);
+  fileList.push({
+    path: 'STRATEGY_SCORES.csv',
+    n_rows: strategyScoreRows.length,
+    columns: STRATEGY_SCORE_COLUMNS.length,
+  });
+
+  const musicRows = perParticipant.map((p) => extractMusicRow(p.participant_id, p.rows));
+  files['MUSIC.csv'] = serializeRowsToCsv(musicRows, MUSIC_COLUMNS);
+  fileList.push({ path: 'MUSIC.csv', n_rows: musicRows.length, columns: MUSIC_COLUMNS.length });
+
   const attRows = perParticipant.flatMap((p) => extractAttentionRows(p.participant_id, p.rows));
   files['ATTENTION_CHECKS.csv'] = serializeRowsToCsv(attRows, ATTENTION_COLUMNS);
   fileList.push({
@@ -1507,6 +1911,7 @@ export function composeExport(perParticipant, opts = {}) {
     generatedAtIso,
     generatorVersion,
     fileSha256ByPath: opts.fileSha256ByPath ?? {},
+    loadReport: opts.loadReport ?? null,
   });
 
   manifest.tidy_tables = {
@@ -1518,6 +1923,23 @@ export function composeExport(perParticipant, opts = {}) {
   };
 
   return { files, manifest, fileList };
+}
+
+/**
+ * Problems that make the tables unreliable: a main trial that occurs twice
+ * for one participant, or a repeated key in a tidy table.
+ */
+export function dataProblems(manifest) {
+  const out = [];
+  const dup = manifest.tidy_tables.issues.filter((i) => i.issue === 'duplicate_main_trial_uid');
+  if (dup.length > 0) {
+    const who = [...new Set(dup.map((i) => i.participant_id))].join(', ');
+    out.push(`duplicate_main_trial_uid for ${dup.length} trial(s): ${who}`);
+  }
+  for (const [name, keys] of Object.entries(manifest.tidy_tables.duplicate_keys)) {
+    if (keys.length > 0) out.push(`${keys.length} duplicate key(s) in ${name}.csv`);
+  }
+  return out;
 }
 
 /* ---------- CLI ---------- */
@@ -1540,7 +1962,7 @@ async function main(argv) {
     console.error('csv-export: no .json files found under supplied paths');
     process.exit(2);
   }
-  const { perParticipant, errors, fileSha256ByPath } = loadAndFlattenDumps(expanded);
+  const { perParticipant, errors, fileSha256ByPath, report } = loadAndFlattenDumps(expanded);
   if (errors.length > 0) {
     for (const e of errors) console.error(`csv-export: failed to read ${e.path}: ${e.error}`);
   }
@@ -1551,6 +1973,7 @@ async function main(argv) {
   const { files, manifest } = composeExport(perParticipant, {
     inputPaths: expanded,
     fileSha256ByPath,
+    loadReport: report,
   });
   const outDir = resolve(opts.outputDir);
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
@@ -1562,6 +1985,11 @@ async function main(argv) {
   console.log(
     `csv-export: wrote ${Object.keys(files).length + 1} files to ${outDir} for ${perParticipant.length} participant(s)`
   );
+  const problems = dataProblems(manifest);
+  if (problems.length > 0) {
+    for (const msg of problems) console.error(`csv-export: ${msg}`);
+    process.exit(3);
+  }
   process.exit(0);
 }
 

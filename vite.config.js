@@ -1,5 +1,22 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+/* Commit and build time written into every session_info row. Both fall back
+ * to 'dev' when git is not available (for example a source archive). */
+function gitCommit() {
+  if (process.env.BUILD_COMMIT) return process.env.BUILD_COMMIT;
+  try {
+    return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
+      cwd: __dirname,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return 'dev';
+  }
+}
 
 export default defineConfig({
   root: '.',
@@ -7,6 +24,10 @@ export default defineConfig({
    * (a static host may serve at /<user>/<project>/ rather than /). */
   base: './',
   publicDir: 'public',
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(gitCommit() || 'dev'),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   server: {
     /* Non-default dev port avoids the stock Vite 5173 collision. Keep
      * strictPort:true so the URL stays exactly http://localhost:5273 —

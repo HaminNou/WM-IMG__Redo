@@ -40,6 +40,8 @@ const EXPECTED_FILES = Object.freeze([
   'I_T_Criterion2.csv',
   'CALIBRATION_SUMMARY.csv',
   'STRATEGY.csv',
+  'STRATEGY_SCORES.csv',
+  'MUSIC.csv',
   'ATTENTION_CHECKS.csv',
   'DEMOGRAPHICS.csv',
   'EVENTS.csv',
@@ -110,6 +112,8 @@ describe('csv-export CLI smoke tests', () => {
       (f) =>
         f.endsWith('.csv') &&
         f !== 'STRATEGY.csv' &&
+        f !== 'STRATEGY_SCORES.csv' &&
+        f !== 'MUSIC.csv' &&
         f !== 'ATTENTION_CHECKS.csv' &&
         f !== 'CALIBRATION_SUMMARY.csv' &&
         f !== 'DEMOGRAPHICS.csv' &&
@@ -248,5 +252,73 @@ describe('csv-export CLI smoke tests', () => {
      * "no participants parsed" message, not 1. */
     expect(result.status).toBe(2);
     expect(result.stderr).toMatch(/failed to read|no participants parsed/);
+  });
+
+  describe('files of one session', () => {
+    const gateRow = (seq, uid, run = 'aaaa1111') => ({
+      seq,
+      run_id: run,
+      phase: 'd_only_trial_start',
+      block_label: 'main_a',
+      trial_uid: uid,
+      trial_index_in_block: 0,
+      presentation_index: 1,
+    });
+    const env = (rows, name) => ({
+      name,
+      body: {
+        session_id: 's1',
+        prolific_pid: 'P1',
+        build_id: 'v1',
+        schema_version: '1.2.0',
+        rows,
+      },
+    });
+    function run(files, tag) {
+      const dir = join(workDir, `in-${tag}`);
+      mkdirSync(dir, { recursive: true });
+      for (const f of files) writeFileSync(join(dir, f.name), JSON.stringify(f.body), 'utf-8');
+      const out = join(workDir, `out-${tag}`);
+      const result = runCli(['--out', out, dir]);
+      return { result, out };
+    }
+
+    it('merges bucket and checkpoint files without doubling trials', () => {
+      const rows = [gateRow(1, 'main_a-001-d_only'), gateRow(2, 'main_a-002-d_only')];
+      const { result, out } = run(
+        [env(rows, 's1__aaaa1111__03_d_only.json'), env(rows, 's1__aaaa1111__ckpt_1-2.json')],
+        'union'
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(countCsvDataRows(readFileSync(join(out, 'trials.csv'), 'utf-8'))).toBe(2);
+      const manifest = JSON.parse(readFileSync(join(out, 'EXPORT_MANIFEST.json'), 'utf-8'));
+      expect(manifest.duplicate_rows_dropped).toBe(2);
+    });
+
+    it('splits a reloaded session by run id', () => {
+      const { result, out } = run(
+        [
+          env([gateRow(1, 'main_a-001-d_only', 'aaaa1111')], 'a.json'),
+          env([gateRow(1, 'main_a-001-d_only', 'bbbb2222')], 'b.json'),
+        ],
+        'runs'
+      );
+      expect(result.status, result.stderr).toBe(0);
+      const manifest = JSON.parse(readFileSync(join(out, 'EXPORT_MANIFEST.json'), 'utf-8'));
+      expect(manifest.n_participants).toBe(2);
+      expect(manifest.reloaded_participants).toHaveLength(1);
+      expect(readFileSync(join(out, 'trials.csv'), 'utf-8')).toContain('P1__run_bbbb2222');
+    });
+
+    it('exits 3 after writing the files when a main trial occurs twice in one run', () => {
+      const { result, out } = run(
+        [env([gateRow(1, 'main_a-001-d_only'), gateRow(2, 'main_a-001-d_only')], 'dup.json')],
+        'dup'
+      );
+      expect(result.status).toBe(3);
+      expect(result.stderr).toMatch(/duplicate_main_trial_uid/);
+      expect(readdirSync(out)).toContain('trials.csv');
+      expect(readdirSync(out)).toContain('EXPORT_MANIFEST.json');
+    });
   });
 });

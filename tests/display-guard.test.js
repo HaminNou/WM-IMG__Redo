@@ -112,6 +112,11 @@ describe('display guard', () => {
     const rows = await getAllTrialRows();
     const kinds = rows.filter((r) => r.phase === 'display_guard_event').map((r) => r.kind);
     expect(kinds).toEqual(expect.arrayContaining(['guard_start', 'blur']));
+    for (const r of rows.filter((x) => x.phase === 'display_guard_event')) {
+      expect(r.wall_ms).toBeGreaterThan(0);
+      expect(r).toHaveProperty('time_elapsed');
+      expect(r.ts).toBeGreaterThan(0);
+    }
   });
 });
 

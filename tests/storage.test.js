@@ -18,6 +18,7 @@ import {
   _resetStorageForTests,
   appendTrialRow,
   getAllTrialRows,
+  flushPendingWrites,
   getTrialRowsAfter,
   getUploadCursor,
   setUploadCursor,
@@ -70,9 +71,25 @@ describe('appendTrialRow + getAllTrialRows', () => {
     await appendTrialRow({ phase: 'b', value: 20 });
     const rows = await getAllTrialRows();
     expect(rows).toEqual([
-      { seq: 1, run_id: RUN_ID, phase: 'a', value: 10 },
-      { seq: 2, run_id: RUN_ID, phase: 'b', value: 20 },
+      { seq: 1, run_id: RUN_ID, wall_ms: expect.any(Number), phase: 'a', value: 10 },
+      { seq: 2, run_id: RUN_ID, wall_ms: expect.any(Number), phase: 'b', value: 20 },
     ]);
+  });
+
+  it('stamps the wall clock unless the row brings its own', async () => {
+    const before = Date.now();
+    await appendTrialRow({ phase: 'a' });
+    await appendTrialRow({ phase: 'b', wall_ms: 5 });
+    const rows = await getAllTrialRows();
+    expect(rows[0].wall_ms).toBeGreaterThanOrEqual(before);
+    expect(rows[1].wall_ms).toBe(5);
+  });
+
+  it('flushPendingWrites resolves once every started write has finished', async () => {
+    const writes = [appendTrialRow({ phase: 'a' }), appendTrialRow({ phase: 'b' })];
+    await flushPendingWrites();
+    expect((await getAllTrialRows()).length).toBe(2);
+    await Promise.all(writes);
   });
 
   it('stamps every row with the run id of this page load', async () => {

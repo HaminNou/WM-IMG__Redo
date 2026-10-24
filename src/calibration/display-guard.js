@@ -25,6 +25,7 @@
  */
 import callFunction from '@jspsych/plugin-call-function';
 import { appendTrialRow, recordWriteFailure } from '../storage.js';
+import { rowClock } from '../clock.js';
 import { readDisplaySnapshot } from './device-probe.js';
 
 const DPR_TOL = 0.01;
@@ -58,6 +59,7 @@ function log(kind, extra = {}) {
     inner_w: window.innerWidth,
     inner_h: window.innerHeight,
     is_fullscreen: !!document.fullscreenElement,
+    ...rowClock(),
     ...extra,
   };
   if (!NOT_TRIAL_FLAGS.has(kind)) pending.push(kind);

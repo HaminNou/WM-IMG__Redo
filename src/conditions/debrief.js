@@ -18,6 +18,9 @@
  *      counts down from 5 s and redirects via `window.location.href`. A
  *      "Click to continue" link is shown alongside the countdown in case the
  *      auto-redirect is blocked (e.g. some popup-blockers, embedded iframes).
+ *      Just before the redirect the rows written since the end-of-session
+ *      upload (the upload summary and the completion row) are sent in one
+ *      short extra file, limited to a few seconds.
  *
  * Why these are separate nodes: the upload step is a network operation that
  * should be retryable / observable; the redirect is a one-way trip out of the
@@ -35,17 +38,26 @@ import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import {
   uploadPendingData,
+  uploadTail,
   downloadAsJson,
   buildCompletionUrl,
   isPlaceholderCompletionUrl,
 } from '../uploader.js';
-import { getAllTrialRows, getCompletionUrl, getStorageFailureSummary } from '../storage.js';
+import {
+  appendTrialRow,
+  getAllTrialRows,
+  getCompletionUrl,
+  getStorageFailureSummary,
+} from '../storage.js';
+import { rowClock } from '../clock.js';
 import { markUploadDone } from '../session-guard.js';
 import { continueHintHtml } from '../visuals/continue-hint.js';
 
 const PROGRESS_MOUNT_ID = 'upload-progress-mount';
 const REDIRECT_DELAY_MS_DEFAULT = 5000;
 const REDIRECT_TICK_MS = 1000;
+/* Longest the redirect waits for the last upload. */
+const TAIL_WAIT_MS = 2500;
 
 /**
  * Upload-progress node.
@@ -277,11 +289,46 @@ function escapeHtml(s) {
  *
  * @param {object} [opts]
  * @param {number} [opts.redirectDelayMs]    default 5000
+ * @param {object} [opts.session]            prolific session object; needed for the last upload
  * @returns {object}                         jsPsych trial object
  */
-export function completionRedirectNode({ redirectDelayMs } = {}) {
+export function completionRedirectNode({ redirectDelayMs, session } = {}) {
   const delayMs = redirectDelayMs ?? REDIRECT_DELAY_MS_DEFAULT;
   let redirectUrl = null;
+  let trialFinished = false;
+
+  /* Send the rows written since the end-of-session upload. Never waits longer
+   * than TAIL_WAIT_MS, and a failure changes nothing for the participant. */
+  const sendTail = async () => {
+    if (!session) return;
+    let timer = null;
+    const limit = new Promise((resolve) => {
+      timer = setTimeout(resolve, TAIL_WAIT_MS);
+    });
+    try {
+      await Promise.race([uploadTail({ session }), limit]);
+    } catch (err) {
+      console.error('[debrief] last upload failed', err);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const redirect = async (url) => {
+    /* The page is about to be left, so the trial will not finish: write its
+     * row here, unless the participant already ended the trial. */
+    if (!trialFinished) {
+      await appendTrialRow({
+        phase: 'completion_redirect',
+        completion_redirect_url: url,
+        completion_was_placeholder: false,
+        ...rowClock(),
+      }).catch((err) => console.error('[debrief] completion row failed', err));
+    }
+    await sendTail();
+    markUploadDone();
+    window.location.href = url;
+  };
   return {
     type: htmlKeyboardResponse,
     stimulus: `<div id="completion-mount" style="display: grid; place-items: center; gap: 1rem; max-width: 36rem; margin: 0 auto;">Loading…</div>`,
@@ -304,8 +351,7 @@ export function completionRedirectNode({ redirectDelayMs } = {}) {
         remainingS -= 1;
         if (remainingS <= 0) {
           clearInterval(interval);
-          markUploadDone();
-          window.location.href = url;
+          void redirect(url);
           return;
         }
         const node = document.getElementById('completion-countdown');
@@ -314,8 +360,11 @@ export function completionRedirectNode({ redirectDelayMs } = {}) {
       redirectUrl = url;
     },
     on_finish: (data) => {
+      trialFinished = true;
       data.completion_redirect_url = redirectUrl;
       data.completion_was_placeholder = !redirectUrl;
+      /* The row is stored after this callback returns. */
+      setTimeout(() => void sendTail(), 0);
     },
     data: { phase: 'completion_redirect' },
   };

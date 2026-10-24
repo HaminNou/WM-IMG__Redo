@@ -41,6 +41,7 @@ import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import { getSessionPRNG } from '../prng.js';
 import { assembleBlock } from './block.js';
+import { setPracticeIteration } from './trial-meta.js';
 import { consumeDeveloperSkip } from '../hidden-nav.js';
 import { continueHintHtml } from '../visuals/continue-hint.js';
 
@@ -194,6 +195,7 @@ export function practiceBlock({
     trial_duration: 0,
     on_start: () => {
       attemptCount += 1;
+      setPracticeIteration(attemptCount);
       iterationStartRow = window.jsPsych?.data?.get().count() ?? 0;
     },
     data: () => ({

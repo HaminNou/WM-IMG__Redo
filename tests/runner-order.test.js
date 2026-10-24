@@ -17,6 +17,6 @@ describe('runner timeline', () => {
     expect(stop).toBeLessThan(at('endOfTaskIntroNode()'));
     expect(stop).toBeLessThan(at('...assembleQuestionnaireChain()'));
     expect(stop).toBeLessThan(at('uploadProgressNode('));
-    expect(stop).toBeLessThan(at('completionRedirectNode()'));
+    expect(stop).toBeLessThan(at('completionRedirectNode('));
   });
 });

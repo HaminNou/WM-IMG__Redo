@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment jsdom
+ *
  * CSV exporter tests.
  *
  * The CLI is a thin driver over a stack of pure helpers; this file exercises
@@ -10,6 +12,7 @@
  * src/conditions/{d_only,t_only,i_only,i_d,i_t}.js for the row shapes.
  */
 import { describe, it, expect } from 'vitest';
+import { MUSIC_EXPERIENCE_ITEMS } from '../src/questionnaire/music-experience.js';
 import {
   parseExportArgs,
   cellToRowCol,
@@ -35,6 +38,11 @@ import {
   extractStrategyRows,
   extractAttentionRows,
   extractDemographicsRow,
+  extractMusicRow,
+  extractStrategyScoreRow,
+  dataProblems,
+  MUSIC_COLUMNS,
+  STRATEGY_SCORE_COLUMNS,
   DEMOGRAPHICS_COLUMNS,
   buildExportManifest,
   loadAndFlattenDumps,
@@ -160,7 +168,6 @@ function iOnlyStarRow({
     response_key: rtMs === null ? null : isOn === correct ? 'arrowright' : 'arrowleft',
     response_rt_ms: rtMs,
     star_correct: correct,
-    feedback_shown_at_ms: rtMs ? rtMs + 50 : null,
   };
 }
 
@@ -800,7 +807,7 @@ describe('extractCalibrationRow', () => {
         attention_failed: 1,
         attention_excluded: false,
       },
-      { phase: 'upload_session_end', status: 'no_endpoint', storage_failures: 0 },
+      { phase: 'upload_session_end', status: 'no_endpoint', storage_write_failures: 0 },
       { phase: 'completion_redirect', completion_was_placeholder: true },
       { time_elapsed: 1_800_000 } /* 30-min session */,
     ];
@@ -1015,10 +1022,12 @@ describe('buildExportManifest', () => {
       {
         participant_id: 'P1',
         session: { build_id: 'a', schema_version: 'v1', is_pilot_run: true },
+        rows: [],
       },
       {
         participant_id: 'P2',
         session: { build_id: 'b', schema_version: 'v1', is_pilot_run: false },
+        rows: [],
       },
     ];
     const m = buildExportManifest({
@@ -1157,7 +1166,7 @@ describe('composeExport', () => {
           strategy_q04: '4',
         },
       },
-      { phase: 'upload_session_end', status: 'no_endpoint', storage_failures: 0 },
+      { phase: 'upload_session_end', status: 'no_endpoint', storage_write_failures: 0 },
       { phase: 'completion_redirect', completion_was_placeholder: true },
     ];
     const perParticipant = [
@@ -1166,8 +1175,8 @@ describe('composeExport', () => {
     const { files, manifest } = composeExport(perParticipant, {
       generatedAtIso: '2000-01-01T11:00:00Z',
     });
-    /* 5 trial types × 2 criteria + 5 auxiliary files + 3 tidy tables = 18 entries. */
-    expect(Object.keys(files)).toHaveLength(18);
+    /* 5 trial types × 2 criteria + 7 auxiliary files + 3 tidy tables = 20 entries. */
+    expect(Object.keys(files)).toHaveLength(20);
     expect(files['D_ONLY_Criterion1.csv']).toContain(
       '"Participant_ID","Block","Trial_Type","Trial"'
     );
@@ -1252,6 +1261,7 @@ describe('column lists', () => {
         "Qmark_1_RecTI_1",
         "Qmark_1_RecTY",
         "Qmark_1_OnsetMs",
+        "Qmark_1_EncPos",
         "Qmark_2_Cell",
         "Qmark_2_Type",
         "Qmark_2_Res",
@@ -1261,6 +1271,7 @@ describe('column lists', () => {
         "Qmark_2_RecTI_1",
         "Qmark_2_RecTY",
         "Qmark_2_OnsetMs",
+        "Qmark_2_EncPos",
         "Qmark_3_Cell",
         "Qmark_3_Type",
         "Qmark_3_Res",
@@ -1270,6 +1281,7 @@ describe('column lists', () => {
         "Qmark_3_RecTI_1",
         "Qmark_3_RecTY",
         "Qmark_3_OnsetMs",
+        "Qmark_3_EncPos",
         "Build_ID",
         "Schema_Version",
         "Pilot_Run",
@@ -1304,5 +1316,355 @@ describe('column lists', () => {
     expect(COLUMNS_T_ONLY).toContain('Tone_1_ToneFreqHz');
     expect(COLUMNS_T_ONLY).toContain('Qmark_1_ToneIdx');
     expect(COLUMNS_T_ONLY).toContain('Qmark_1_ToneFreqHz');
+  });
+});
+
+/* ---------- Dedupe, union and run split ---------- */
+
+function fakeFsFor(files) {
+  return { readFileSync: (p) => JSON.stringify(files[p]) };
+}
+
+const envelope = (rows, extra = {}) => ({
+  session_id: 's1',
+  prolific_pid: 'P1',
+  build_id: 'b',
+  schema_version: 'v',
+  rows,
+  ...extra,
+});
+
+describe('loadAndFlattenDumps: union, dedupe and run split', () => {
+  const r = (seq, run = 'aaaa1111', phase = 'x') => ({ seq, run_id: run, phase });
+
+  it('uses the union of bucket and checkpoint files and drops repeated (run_id, seq)', () => {
+    const files = {
+      '/d/s1__aaaa1111__02_practice.json': envelope([r(2), r(3)]),
+      '/d/s1__aaaa1111__10_meta.json': envelope([r(1), r(4)]),
+      '/d/s1__aaaa1111__ckpt_1-3.json': envelope([r(1), r(2), r(3)]),
+      '/d/s1__aaaa1111__tail_4-5.json': envelope([r(4), r(5)]),
+    };
+    const out = loadAndFlattenDumps(Object.keys(files), { fs: fakeFsFor(files) });
+    expect(out.perParticipant).toHaveLength(1);
+    expect(out.perParticipant[0].rows.map((x) => x.seq)).toEqual([1, 2, 3, 4, 5]);
+    expect(out.report).toEqual({ rows_read: 9, duplicates_dropped: 4 });
+  });
+
+  it('keeps rows that have no seq', () => {
+    const files = { '/d/a.json': envelope([{ phase: 'a' }, { phase: 'a' }]) };
+    const out = loadAndFlattenDumps(Object.keys(files), { fs: fakeFsFor(files) });
+    expect(out.perParticipant[0].rows).toHaveLength(2);
+  });
+
+  it('does not treat the same seq in two runs as a duplicate and splits the runs', () => {
+    const files = {
+      '/d/a.json': envelope([r(1, 'aaaa1111'), r(2, 'aaaa1111')]),
+      '/d/b.json': envelope([r(1, 'bbbb2222'), r(2, 'bbbb2222'), r(3, 'bbbb2222')]),
+    };
+    const out = loadAndFlattenDumps(Object.keys(files), { fs: fakeFsFor(files) });
+    expect(out.perParticipant.map((p) => p.participant_id)).toEqual([
+      'P1__run_aaaa1111',
+      'P1__run_bbbb2222',
+    ]);
+    expect(out.perParticipant.map((p) => p.source_pid)).toEqual(['P1', 'P1']);
+    expect(out.perParticipant.map((p) => p.rows.length)).toEqual([2, 3]);
+    expect(out.report.duplicates_dropped).toBe(0);
+  });
+
+  it('reports runs and dedupe counts in the manifest', () => {
+    const files = {
+      '/d/a.json': envelope([r(1, 'aaaa1111')]),
+      '/d/b.json': envelope([r(1, 'bbbb2222'), r(1, 'bbbb2222')]),
+    };
+    const { perParticipant, report } = loadAndFlattenDumps(Object.keys(files), {
+      fs: fakeFsFor(files),
+    });
+    const { manifest } = composeExport(perParticipant, { loadReport: report });
+    expect(manifest.rows_read).toBe(3);
+    expect(manifest.duplicate_rows_dropped).toBe(1);
+    expect(manifest.runs).toEqual([
+      { participant_id: 'P1__run_aaaa1111', prolific_pid: 'P1', run_id: 'aaaa1111', n_rows: 1 },
+      { participant_id: 'P1__run_bbbb2222', prolific_pid: 'P1', run_id: 'bbbb2222', n_rows: 1 },
+    ]);
+    expect(manifest.reloaded_participants).toEqual([
+      {
+        prolific_pid: 'P1',
+        runs: [
+          { run_id: 'aaaa1111', n_rows: 1 },
+          { run_id: 'bbbb2222', n_rows: 1 },
+        ],
+      },
+    ]);
+  });
+});
+
+describe('dataProblems', () => {
+  it('is empty for a clean manifest', () => {
+    expect(
+      dataProblems({ tidy_tables: { issues: [], duplicate_keys: { trials: [], stars: [] } } })
+    ).toEqual([]);
+  });
+
+  it('names duplicate main trials and repeated keys', () => {
+    const msgs = dataProblems({
+      tidy_tables: {
+        issues: [{ participant_id: 'P1', issue: 'duplicate_main_trial_uid' }],
+        duplicate_keys: { trials: ['P1|3'], stars: [] },
+      },
+    });
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0]).toMatch(/duplicate_main_trial_uid.*P1/);
+    expect(msgs[1]).toMatch(/trials\.csv/);
+  });
+});
+
+/* ---------- Calibration summary: environment, checks, exit ---------- */
+
+describe('extractCalibrationRow: environment and checks', () => {
+  const rows = [
+    {
+      phase: 'session_info',
+      build_commit: 'abc123',
+      build_time: '2000-01-01T00:00:00Z',
+      consent_text_sha256: 'c'.repeat(64),
+      instruction_deck_sha256: {
+        overview: 'o',
+        d_only: 'd',
+        t_only: 't',
+        i_only: 'i',
+        i_d: 'id',
+        i_t: 'it',
+      },
+      strategy_items_sha256: 's',
+      music_items_sha256: 'm',
+      clock_anchor: {
+        perf_now_ms: 10,
+        time_origin_ms: 1000,
+        date_now_ms: 1010,
+        iso: '2000-01-01T00:00:00.010Z',
+        jspsych_start_ms: 1005,
+      },
+      audio_context: {
+        sample_rate_hz: 48000,
+        state: 'running',
+        base_latency_ms: 5,
+        output_latency_ms: 20,
+      },
+      screen_width_px: 1920,
+      screen_height_px: 1080,
+      inner_width_px: 1900,
+      inner_height_px: 960,
+      device_pixel_ratio: 2,
+    },
+    {
+      phase: 'headphone_check_summary',
+      value: { n_trials: 6, n_correct: 6, headphones_pass: true },
+    },
+    {
+      phase: 'pitch_check_summary',
+      value: { label: 'pitch_user_level', n_trials: 8, n_correct: 5, passed: false },
+    },
+    {
+      phase: 'pitch_check_summary',
+      value: { label: 'pitch_user_level', n_trials: 8, n_correct: 8, passed: true },
+    },
+    {
+      phase: 'pitch_check_summary',
+      value: { label: 'pitch_margin_minus12', n_trials: 8, n_correct: 6, passed: false },
+    },
+    {
+      phase: 'timing_probe',
+      timing_ok: true,
+      timing_fail_reasons: [],
+      frame_median_ms: 16.7,
+      refresh_hz_est: 60,
+      frame_p95_ms: 18,
+      timeout_overshoot_p95_ms: 3,
+      hardware_concurrency: 8,
+      device_memory_gb: 8,
+    },
+    { phase: 'viewing_distance' },
+    { phase: 'hand_placement' },
+    { phase: 'visibility_event', kind: 'visibilitychange', hidden: true, ts: 1000 },
+    { phase: 'visibility_event', kind: 'visibilitychange', hidden: false, ts: 3500 },
+    { phase: 'visibility_event', kind: 'fullscreenchange', in_fullscreen: false, ts: 4000 },
+    { phase: 'display_guard_event', kind: 'hidden' },
+    { phase: 'display_guard_event', kind: 'visible', hidden_ms: 2500 },
+  ];
+
+  it('reads build, hashes, clock, screen, audio and check results', () => {
+    const row = extractCalibrationRow('P1', sessionMeta(), rows);
+    expect(row.Build_Commit).toBe('abc123');
+    expect(row.Consent_Text_Sha256).toBe('c'.repeat(64));
+    expect(row.Instruction_Deck_Sha256_i_d).toBe('id');
+    expect(row.Clock_Time_Origin_Ms).toBe(1000);
+    expect(row.Clock_Iso).toBe('2000-01-01T00:00:00.010Z');
+    expect(row.Screen_Width_Px).toBe(1920);
+    expect(row.Device_Pixel_Ratio).toBe(2);
+    expect(row.Audio_Sample_Rate_Hz).toBe(48000);
+    expect(row.Audio_Output_Latency_Ms).toBe(20);
+    expect(row.Headphone_Pass).toBe(1);
+    expect(row.Pitch_Attempts).toBe(2);
+    expect(row.Pitch_Pass).toBe(1);
+    expect(row.Pitch_N_Correct).toBe(8);
+    expect(row.Pitch_Margin_Pass).toBe(0);
+    expect(row.Timing_Ok).toBe(1);
+    expect(row.Timing_Fail_Reasons).toBe('');
+    expect(row.Timing_Refresh_Hz_Est).toBe(60);
+    expect(row.Hardware_Concurrency).toBe(8);
+    expect(row.Viewing_Posture_Acknowledged).toBe(1);
+    expect(row.Hand_Placement_Acknowledged).toBe(1);
+    expect(row.Visibility_Change_Events).toBe(2);
+    expect(row.Visibility_Hidden_Events).toBe(1);
+    expect(row.Visibility_Hidden_Ms_Total).toBe(2500);
+    expect(row.Fullscreen_Change_Events).toBe(1);
+    expect(row.Guard_Events).toBe(2);
+    expect(row.Guard_Hidden_Ms_Total).toBe(2500);
+    expect(row.Exit_Reason).toBe('NA');
+  });
+
+  it('falls back to the session_start clock anchor and writes NA when nothing was recorded', () => {
+    const row = extractCalibrationRow('P1', sessionMeta(), [
+      { phase: 'session_start', clock_anchor: { perf_now_ms: 5, time_origin_ms: 99 } },
+    ]);
+    expect(row.Clock_Time_Origin_Ms).toBe(99);
+    expect(row.Build_Commit).toBe('NA');
+    expect(row.Pitch_Pass).toBe('NA');
+    expect(row.Timing_Ok).toBe('NA');
+    expect(row.Hardware_Concurrency).toBe('NA');
+  });
+
+  it('gives a screened-out session a row with its exit reason', () => {
+    const rows = [
+      { phase: 'consent', consented: true },
+      { phase: 'audio_check_fail', exit_reason: 'audio_check_failed', response: 0 },
+    ];
+    const { files } = composeExport([
+      { participant_id: 'P9', session: sessionMeta(), rows, source_paths: [] },
+    ]);
+    const lines = files['CALIBRATION_SUMMARY.csv'].split('\n').filter(Boolean);
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('"audio_check_failed"');
+    expect(lines[0]).toContain('"Exit_Reason"');
+  });
+});
+
+/* ---------- Questionnaire exports ---------- */
+
+describe('MUSIC.csv and STRATEGY_SCORES.csv rows', () => {
+  const musicRows = (codes) => [
+    {
+      phase: 'music_experience',
+      music_experience_responses: Object.fromEntries(Object.entries(codes).map(([k, v]) => [k, v])),
+    },
+  ];
+
+  it('MUSIC row has item codes, scores, composite and absolute pitch', () => {
+    const codes = {};
+    for (let i = 1; i <= 7; i++) codes[`me_q0${i}`] = null;
+    const row0 = extractMusicRow('P1', musicRows(codes));
+    expect(row0.Gold_MSI_MT_Composite).toBe('NA');
+    expect(row0.Gold_MSI_MT_Complete).toBe(0);
+    expect(row0.Items_Answered).toBe(0);
+    expect(row0.Me_Q01_Raw).toBe('NA');
+    expect(MUSIC_COLUMNS).toContain('Gold_MSI_MT_Composite');
+    expect(MUSIC_COLUMNS).toContain('Me_Q08_Raw');
+    expect(MUSIC_COLUMNS).not.toContain('Me_Q08_Score');
+  });
+
+  it('MUSIC row sums the seven MT scores when all are answered', () => {
+    const codes = Object.fromEntries(
+      MUSIC_EXPERIENCE_ITEMS.map((it) => [it.id, it.options[0].value])
+    );
+    const row = extractMusicRow('P1', musicRows(codes));
+    expect(row.Me_Q01_Raw).toBe('0');
+    expect(row.Me_Q01_Score).toBe(1);
+    expect(row.Absolute_Pitch).toBe(codes.me_q08);
+    expect(row.Complete).toBe(1);
+    expect(row.Gold_MSI_MT_Composite).toBe(7);
+    expect(row.Gold_MSI_MT_Complete).toBe(1);
+  });
+
+  it('STRATEGY_SCORES row computes composites only when complete', () => {
+    const rows = [
+      {
+        phase: 'strategy_memory_only',
+        strategy_responses: { strategy_q01: '5', strategy_q02: '4', strategy_q03: '3' },
+      },
+    ];
+    const row = extractStrategyScoreRow('P1', rows);
+    expect(row.Structural_Chunking_Composite).toBe(12);
+    expect(row.Imagery_Maintenance_ID_Composite).toBe('NA');
+    expect(row.Items_Answered).toBe(3);
+    expect(row.Complete).toBe(0);
+    expect(row.Strategy_Q01_Score).toBe(5);
+    expect(STRATEGY_SCORE_COLUMNS[0]).toBe('Participant_ID');
+  });
+});
+
+/* ---------- EVENTS and wide columns for the new fields ---------- */
+
+describe('EVENTS.csv and wide files: new fields', () => {
+  const gate = { phase: 'd_only_trial_start', block_label: 'main_a', trial_index_in_block: 0 };
+  const enc = {
+    ...dOnlyEncodingRow(),
+    encoding_onset_ts_ms: 1000,
+    slot_onsets_ts_ms: [2500, null, 4000, null, 5500, null],
+    slot_positions_mm: [{ slot: 0, kind: 'dot', cell: 6, x_mm: -10, y_mm: -10 }],
+    slot_tone_events: [{ slot: 0, late_ms: 12.5, tone_error: true }],
+  };
+  const probe = {
+    ...dOnlyProbeRow({ pos: 1, type: 'T_on', cell: 6, isTarget: true, correct: true, rt: 800 }),
+    probe_onset_ts_ms: 9000,
+    probe_x_mm: -10,
+    probe_y_mm: -10,
+    early_keypresses: 1,
+    late_keypresses: 0,
+    extra_keypresses: 2,
+    encoding_position: 0,
+    guard_flags: 'resize',
+    tone_error: false,
+  };
+
+  function exportOf(rows) {
+    return composeExport([{ participant_id: 'P1', session: sessionMeta(), rows, source_paths: [] }])
+      .files;
+  }
+
+  it('adds mm positions, tone lateness and keypress counts to EVENTS.csv', () => {
+    const files = exportOf([gate, enc, probe]);
+    const [header, ...lines] = files['EVENTS.csv'].split('\n').filter(Boolean);
+    const split = (line) => line.match(/"(?:[^"]|"")*"|[^,]+/g);
+    const cols = split(header).map((c) => c.replace(/"/g, ''));
+    const field = (line, name) => split(line)[cols.indexOf(name)];
+    expect(field(lines[0], 'X_Mm')).toBe('-10');
+    expect(field(lines[0], 'Y_Mm')).toBe('-10');
+    expect(field(lines[0], 'Tone_Late_Ms')).toBe('12.5');
+    expect(field(lines[0], 'Tone_Error')).toBe('1');
+    const probeLine = lines.find((l) => field(l, 'Phase') === '"recognition"');
+    expect(field(probeLine, 'Early_Keypresses')).toBe('1');
+    expect(field(probeLine, 'Extra_Keypresses')).toBe('2');
+    expect(field(probeLine, 'Guard_Flags')).toBe('"resize"');
+    expect(field(probeLine, 'Tone_Error')).toBe('0');
+  });
+
+  it('D_ONLY and T_ONLY wide files carry the probe encoding position', () => {
+    expect(COLUMNS_D_ONLY).toContain('Qmark_3_EncPos');
+    expect(COLUMNS_T_ONLY).toContain('Qmark_3_EncPos');
+    const row = buildWideRowDOnly(
+      {
+        participant_id: 'P1',
+        block_label: 'main_a',
+        trial_type: 'd_only',
+        trial_index_in_block: 0,
+        encoding: enc,
+        probes: [probe],
+        stars: [],
+      },
+      1,
+      sessionMeta()
+    );
+    expect(row.Qmark_1_EncPos).toBe(0);
+    expect(row.Qmark_2_EncPos).toBe('NA');
   });
 });

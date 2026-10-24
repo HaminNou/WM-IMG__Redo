@@ -188,6 +188,145 @@ describe('damaged and repeated data', () => {
   });
 });
 
+describe('recorded timing, keypress and guard fields', () => {
+  const [p] = participants(1);
+  const trialRows = (uid) => p.rows.filter((r) => r.trial_uid === uid);
+
+  it('exports window timestamps and encoding counters', () => {
+    const rows = [
+      {
+        phase: 'i_t_trial_start',
+        block_label: 'main_a',
+        trial_uid: 'u',
+        seq: 1,
+        trial_start_gate_onset_ts_ms: 100,
+        gate_passed_at_ms: 700,
+      },
+      { phase: 'i_t_arrow_cue', arrow_cue_onset_ts_ms: 800, seq: 2 },
+      { phase: 'i_t_imagination', imagination_onset_ts_ms: 2800, seq: 3 },
+      {
+        phase: 'i_t_encoding',
+        encoding_onset_ts_ms: 6300,
+        rotation_start_ts_ms: 6320,
+        planned_total_ms: 16500,
+        n_star_rows_expected: 3,
+        keys_outside_window: 2,
+        key_log: [['R', 10]],
+        key_log_overflow: true,
+        key_log_t0_ms: 6301,
+        slot_tone_events: [
+          { slot: 0, late: true, tone_error: false },
+          { slot: 2, late: false, tone_error: true },
+        ],
+        seq: 4,
+      },
+      { phase: 'i_t_retention', retention_onset_ts_ms: 22800, seq: 5 },
+    ];
+    const t = composeTidyTables([{ participant_id: 'P', session: {}, rows }]).trials[0];
+    expect(t).toMatchObject({
+      gate_onset_ms: -6200,
+      gate_passed_at_ms: 700,
+      arrow_cue_onset_ms: -5500,
+      imagination_onset_ms: -3500,
+      rotation_start_ms: 20,
+      retention_onset_ms: 16500,
+      planned_total_ms: 16500,
+      n_star_rows_expected: 3,
+      keys_outside_window: 2,
+      n_key_log: 1,
+      key_log_overflow: true,
+      key_log_t0_offset_ms: 1,
+      n_tones_late: 1,
+      n_tone_errors: 1,
+      trial_guard_excluded: false,
+    });
+  });
+
+  it('picks up the <condition>_iti row and the pattern phase onset', () => {
+    const gate = { phase: 'i_d_trial_start', block_label: 'main_a', trial_uid: 'u', seq: 1 };
+    const enc = { phase: 'i_d_encoding', encoding_onset_ts_ms: 1000, seq: 3, trial_spec: null };
+    const rows = [
+      gate,
+      { phase: 'pattern_phase', pattern_onset_ts_ms: 400, seq: 2 },
+      enc,
+      { phase: 'i_d_iti', iti_onset_ts_ms: 9000, seq: 4 },
+    ];
+    const t = composeTidyTables([{ participant_id: 'P', session: {}, rows }]).trials[0];
+    expect(t.iti_onset_ms).toBe(8000);
+    expect(t.pattern_onset_ms).toBe(-600);
+  });
+
+  it('flags guard events on any row of the trial for trial, star and probe rows', () => {
+    const tidy0 = composeTidyTables([p]);
+    const target = tidy0.trials.find((x) => x.condition === 'i_d' && !x.is_practice);
+    const rows = p.rows.map((r) =>
+      r.trial_uid === target.trial_uid && r.phase === 'i_d_encoding'
+        ? { ...r, guard_flags: 'resize,hidden', guard_n: 2 }
+        : r
+    );
+    expect(trialRows(target.trial_uid).some((r) => r.phase === 'i_d_encoding')).toBe(true);
+    const tidy = composeTidyTables([{ ...p, rows }]);
+    const t = tidy.trials.find((x) => x.trial_uid === target.trial_uid);
+    expect(t.trial_guard_excluded).toBe(true);
+    expect(t.guard_flags).toBe('resize,hidden');
+    expect(t.guard_n).toBe(2);
+    const mine = [
+      ...tidy.stars.filter((x) => x.trial_uid === target.trial_uid),
+      ...tidy.probes.filter((x) => x.trial_uid === target.trial_uid),
+    ];
+    expect(mine.length).toBeGreaterThan(0);
+    expect(mine.every((x) => x.trial_guard_excluded === true)).toBe(true);
+    const other = tidy.trials.filter((x) => x.trial_uid !== target.trial_uid);
+    expect(other.every((x) => x.trial_guard_excluded === false)).toBe(true);
+  });
+
+  it('carries keypress counts, onset lag and audio fields from the rows', () => {
+    const star = p.rows.find((r) => r.phase === 'i_d_star');
+    const probe = p.rows.find((r) => r.phase === 'i_t_probe');
+    const rows = p.rows.map((r) =>
+      r === star
+        ? {
+            ...r,
+            early_keypresses: 1,
+            late_keypresses: 2,
+            extra_keypresses: 3,
+            star_onset_lag_ms: 4.5,
+            displayed: true,
+            truncated: false,
+            window_closed_ts_ms: 123456,
+            user_gain: 0.5,
+          }
+        : r === probe
+          ? {
+              ...r,
+              audio_context: { sample_rate_hz: 48000, state: 'running', base_latency_ms: 5 },
+              tone_error: false,
+              audio_output_latency_ms: 25,
+            }
+          : r
+    );
+    const tidy = composeTidyTables([{ ...p, rows }]);
+    const s = tidy.stars.find(
+      (x) => x.trial_uid === star.trial_uid && x.slot - 1 === star.slot_index_in_seq
+    );
+    expect(s.early_keypresses).toBe(1);
+    expect(s.late_keypresses).toBe(2);
+    expect(s.extra_keypresses).toBe(3);
+    expect(s.star_onset_lag_ms).toBe(4.5);
+    expect(s.displayed).toBe(true);
+    expect(s.user_gain).toBe(0.5);
+    expect(Number.isInteger(s.window_closed_ms)).toBe(true);
+    const pr = tidy.probes.find(
+      (x) => x.trial_uid === probe.trial_uid && x.probe_position - 1 === probe.probe_position
+    );
+    expect(pr.audio_sample_rate_hz).toBe(48000);
+    expect(pr.audio_state).toBe('running');
+    expect(pr.audio_base_latency_ms).toBe(5);
+    expect(pr.audio_output_latency_ms).toBe(25);
+    expect(pr.tone_error).toBe(false);
+  });
+});
+
 describe('schema file', () => {
   it('schemas/tidy-tables.schema.json matches the column definitions', async () => {
     const { readFileSync } = await import('node:fs');

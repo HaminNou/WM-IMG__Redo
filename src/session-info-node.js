@@ -5,6 +5,9 @@
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
 import { buildSessionInfo } from './session-info.js';
+import { clockAnchor } from './clock.js';
+import { getContentHashes } from './content-hashes.js';
+import { audioContextInfo } from './audio/context.js';
 
 export function sessionInfoNode(session) {
   return {
@@ -23,6 +26,9 @@ export function sessionInfoNode(session) {
         inner_width_px: window.innerWidth,
         inner_height_px: window.innerHeight,
         device_pixel_ratio: window.devicePixelRatio,
+        clock_anchor: clockAnchor(),
+        audio_context: audioContextInfo(),
+        content_hashes: getContentHashes(),
       });
     },
   };

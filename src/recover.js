@@ -142,6 +142,7 @@ async function runUpload(session) {
   try {
     const result = await uploadPendingData({
       session,
+      allRuns: true,
       onProgress: ({ bucketIndex, totalBuckets, bucketLabel, status }) => {
         const done = bucketIndex + 1;
         const pct = Math.round((done / totalBuckets) * 100);

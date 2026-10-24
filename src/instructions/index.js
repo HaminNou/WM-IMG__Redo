@@ -51,7 +51,14 @@ import { screenOutExit } from '../screen-out.js';
 import { dOnlyInstructionNode, tOnlyInstructionNode } from './memory.js';
 import { iOnlyInstructionNode } from './imagery.js';
 import { iDInstructionNode, iTInstructionNode } from './dual.js';
-import { dOnlyDemoNode, tOnlyDemoNode, iOnlyDemoNode, iDDemoNode, iTDemoNode } from './demos.js';
+import {
+  dOnlyDemoNode,
+  tOnlyDemoNode,
+  iOnlyDemoNode,
+  iDDemoNode,
+  iTDemoNode,
+  enumerateDemoNarrationStrings,
+} from './demos.js';
 import {
   ATTENTION_CHECK_ITEMS,
   typedAttentionCheckNode,
@@ -62,6 +69,7 @@ import {
   computePracticeAccuracy,
   formatPracticeFeedbackHtml,
 } from '../scheduler/practice.js';
+import { setPracticeIteration } from '../scheduler/trial-meta.js';
 import { getSessionPRNG } from '../prng.js';
 import {
   consumeDeveloperSkip,
@@ -70,6 +78,27 @@ import {
   trackHiddenNavNode,
   trackInstructionNode,
 } from '../hidden-nav.js';
+
+/**
+ * The text of every instruction deck as shown to participants (the markup of
+ * each page, in order), keyed by deck. Used to identify the wording a session
+ * saw.
+ *
+ * @returns {Record<string, string>}
+ */
+export function instructionDeckTexts() {
+  const pages = (node) => node.pages.join('\n');
+  return {
+    overview: instructionsOverview().stimulus,
+    practice_readiness: practiceReadinessNode().stimulus,
+    d_only: pages(dOnlyInstructionNode()),
+    t_only: pages(tOnlyInstructionNode()),
+    i_only: pages(iOnlyInstructionNode()),
+    i_d: pages(iDInstructionNode()),
+    i_t: pages(iTInstructionNode()),
+    demo_narration: enumerateDemoNarrationStrings().join('\n'),
+  };
+}
 
 export function instructionsOverview() {
   const perType = config.blocks.practice_trials_per_type;
@@ -187,6 +216,7 @@ export function assembleInstructionsAndPractice({
     trial_duration: 0,
     on_start: () => {
       attemptCount += 1;
+      setPracticeIteration(attemptCount);
       iterationStartRow = window.jsPsych?.data?.get().count() ?? 0;
     },
     data: () => ({

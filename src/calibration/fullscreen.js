@@ -20,6 +20,7 @@
 import fullscreenPlugin from '@jspsych/plugin-fullscreen';
 import callFunction from '@jspsych/plugin-call-function';
 import { appendTrialRow, recordWriteFailure } from '../storage.js';
+import { rowClock } from '../clock.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
 import { requireFullscreenFromNow } from './display-guard.js';
 
@@ -31,7 +32,7 @@ function persistEvent(event) {
   /* Fire-and-forget — same pattern as runner.js on_data_update. If the
    * write fails (transient quota error, locked DB), the in-memory copy
    * survives and the failure is counted on the upload-summary row. */
-  appendTrialRow({ phase: 'visibility_event', ...event }).catch((err) => {
+  appendTrialRow({ phase: 'visibility_event', ...rowClock(), ...event }).catch((err) => {
     console.error('[visibility] storage append failed', err);
     recordWriteFailure(err);
   });

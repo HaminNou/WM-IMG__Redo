@@ -65,3 +65,26 @@ export async function ensureRunning() {
     await audioCtx.resume();
   }
 }
+
+const round1 = (x) => Math.round(x * 10) / 10;
+
+/**
+ * State of the audio context as reported by the browser. Base latency is the
+ * context's own processing delay, output latency the delay to the audio
+ * device; they are kept apart. `null` if the context cannot be created.
+ *
+ * @returns {{sample_rate_hz: number, state: string, base_latency_ms: number|null, output_latency_ms: number|null}|null}
+ */
+export function audioContextInfo() {
+  try {
+    const ac = getAudioContext();
+    return {
+      sample_rate_hz: ac.sampleRate,
+      state: ac.state,
+      base_latency_ms: Number.isFinite(ac.baseLatency) ? round1(ac.baseLatency * 1000) : null,
+      output_latency_ms: Number.isFinite(ac.outputLatency) ? round1(ac.outputLatency * 1000) : null,
+    };
+  } catch {
+    return null;
+  }
+}

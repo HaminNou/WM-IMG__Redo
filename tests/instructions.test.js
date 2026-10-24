@@ -16,7 +16,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { dOnlyInstructionNode, tOnlyInstructionNode } from '../src/instructions/memory.js';
 import { iOnlyInstructionNode } from '../src/instructions/imagery.js';
 import { iDInstructionNode, iTInstructionNode } from '../src/instructions/dual.js';
-import { assembleInstructionsAndPractice } from '../src/instructions/index.js';
+import {
+  assembleInstructionsAndPractice,
+  instructionDeckTexts,
+} from '../src/instructions/index.js';
+import { getPracticeIteration, setPracticeIteration } from '../src/scheduler/trial-meta.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
 import { setSessionPRNG } from '../src/prng.js';
 
@@ -228,5 +232,29 @@ describe('assembleInstructionsAndPractice', () => {
         : inner[inner.length - 1].data;
     expect(firstData.phase).toBe('practice_iteration_start');
     expect(lastData.phase).toBe('practice_feedback');
+  });
+});
+
+describe('instruction deck texts and practice pass', () => {
+  it('instructionDeckTexts returns the page markup of every deck', () => {
+    const decks = instructionDeckTexts();
+    expect(Object.keys(decks)).toEqual(
+      expect.arrayContaining(['overview', 'd_only', 't_only', 'i_only', 'i_d', 'i_t'])
+    );
+    expect(decks.d_only).toBe(dOnlyInstructionNode().pages.join('\n'));
+    expect(decks.i_t).toBe(iTInstructionNode().pages.join('\n'));
+    for (const text of Object.values(decks)) expect(text.length).toBeGreaterThan(20);
+  });
+
+  it('the marker of each practice pass sets the pass number', () => {
+    setPracticeIteration(null);
+    const chain = assembleInstructionsAndPractice();
+    const loop = chain.find((n) => typeof n.loop_function === 'function');
+    const marker = loop.timeline.find((n) => typeof n.data === 'function' && n.on_start);
+    marker.on_start();
+    expect(getPracticeIteration()).toBe(1);
+    marker.on_start();
+    expect(getPracticeIteration()).toBe(2);
+    setPracticeIteration(null);
   });
 });

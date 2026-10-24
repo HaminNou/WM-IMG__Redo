@@ -71,7 +71,6 @@
         "rest",
         "rest_resume_gate",
         "pattern_phase",
-        "iti",
         "d_only_trial_start",
         "d_only_encoding",
         "d_only_retention",
@@ -85,7 +84,11 @@
         "i_only_trial_start",
         "i_only_encoding",
         "i_only_star",
+        "d_only_iti",
+        "t_only_iti",
         "i_only_iti",
+        "i_d_iti",
+        "i_t_iti",
         "i_d_arrow_cue",
         "i_d_imagination",
         "i_d_trial_start",
@@ -123,9 +126,9 @@
       "description": "jsPsych built-in: zero-based index of the row across the entire session."
     },
     "time_elapsed": {
-      "type": "integer",
+      "type": ["integer", "null"],
       "minimum": 0,
-      "description": "jsPsych built-in: ms since experiment start when this trial completed."
+      "description": "ms since the experiment started. jsPsych sets it on trial rows; rows written outside a trial (star rows, events) get the value at the time of writing, or null before the timeline started."
     },
     "internal_node_id": {
       "type": "string",
@@ -226,10 +229,6 @@
     "star_correct": {
       "type": "boolean",
       "description": "Whether the participant's star response (on/off judgement) was correct. Imagery-star rows."
-    },
-    "feedback_shown_at_ms": {
-      "type": ["number", "null"],
-      "description": "performance.now() at the moment feedback was rendered. Null if no feedback (e.g., main blocks suppress feedback per design §11.1)."
     },
     "slot_index_in_seq": {
       "type": "integer",
@@ -378,7 +377,7 @@
       "items": {
         "type": ["integer", "null"]
       },
-      "description": "Per-slot performance.now() timestamps (rounded ms) captured at the moment each of the 6 encoding-sequence slots began. Index aligns with `slot_index_in_seq` (0..5). Slots with no event in this trial remain null. Stamped on every `*_encoding` row. For T-only / I+T M-slots the visible event is the tone, but the timestamp still marks the slot's local start (when `playToneByCell` was scheduled)."
+      "description": "Per-slot performance.now() timestamps (rounded ms) captured at the moment each of the 6 encoding-sequence slots began. Index aligns with `slot_index_in_seq` (0..5). Slots with no event in this trial remain null. Stamped on every `*_encoding` row. For T-only / I+T M-slots the visible event is the tone, but the timestamp still marks the slot's local start (the planned time at which the tone was handed to the audio clock; the measured scheduling is in `slot_tone_events`)."
     },
     "slot_audio_context_times_ms": {
       "type": "array",
@@ -405,7 +404,7 @@
     },
     "iti_onset_ts_ms": {
       "type": "integer",
-      "description": "performance.now() timestamp (rounded ms) at which the post-trial inter-trial-interval frame mounted. Stamped on `iti` and `i_only_iti` rows. The ITI is fixed at 800 ms by default (the `itiNode` `ms` parameter), so `iti_onset_ts_ms + 800` ≈ next trial's preamble onset."
+      "description": "performance.now() timestamp (rounded ms) at which the post-trial inter-trial-interval frame mounted. Stamped on every `<condition>_iti` row. The ITI is fixed at 800 ms by default (the `itiNode` `ms` parameter), so `iti_onset_ts_ms + 800` is about the next trial's preamble onset."
     },
     "rest_started_ts_ms": {
       "type": "integer",
@@ -643,6 +642,704 @@
         }
       },
       "description": "All 25 cells: row, column, upright-grid position (mm from fixation), distance from fixation and on / off / centre label."
+    },
+    "run_id": {
+      "type": "string",
+      "description": "Id of the page load that wrote the row (8 characters). A reload or a second visit from the same browser gets a new id; uploads send the rows of one run, and the exporter separates runs."
+    },
+    "wall_ms": {
+      "type": "integer",
+      "description": "Date.now() when the row was written (trial rows: when the trial finished). Pairs with `clock_anchor` to place `performance.now()` stamps in calendar time."
+    },
+    "clock_anchor": {
+      "type": "object",
+      "description": "One reading of every clock at the same moment, written on `session_start` and `session_info`: `perf_now_ms` (performance.now()), `time_origin_ms` (performance.timeOrigin), `date_now_ms` (Date.now()), `iso`, `jspsych_start_ms` (start of the jsPsych timeline, null before it)."
+    },
+    "prior_rows": {
+      "type": "integer",
+      "description": "`session_start`: rows left in this browser by earlier runs."
+    },
+    "prior_run_ids": {
+      "type": "array",
+      "description": "`session_start`: run ids of those rows.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "is_reload": {
+      "type": "boolean",
+      "description": "`session_start`: true if the page load was a reload."
+    },
+    "started_at_iso": {
+      "type": "string",
+      "description": "ISO time at which the session object was created (page load)."
+    },
+    "plugin_version": {
+      "type": "string",
+      "description": "jsPsych built-in: version of the plugin that ran the trial."
+    },
+    "value": {
+      "description": "Return value of a call-function node (calibration, checks, summaries): an object whose fields depend on the phase."
+    },
+    "user_gain": {
+      "type": "number",
+      "description": "Participant's playback gain (0-1) in force when the trial finished."
+    },
+    "hidden_nav_step": {
+      "type": "string",
+      "description": "Step id the row belongs to in the development navigation."
+    },
+    "stimulus": {
+      "type": "string",
+      "description": "jsPsych built-in: markup shown on the trial, kept on instruction and form rows."
+    },
+    "consent_acknowledged": {
+      "type": "boolean",
+      "description": "`consent`: the consent button was pressed."
+    },
+    "consent_version": {
+      "type": "string",
+      "description": "`consent`: label of the consent form shown."
+    },
+    "display_colour_locked": {
+      "type": "boolean",
+      "description": "True if the display-colour lock was applied."
+    },
+    "cal_pass": {
+      "type": "integer",
+      "description": "`screen_calibration`: which of the two settings of the attempt this was (1 or 2)."
+    },
+    "cal_attempt": {
+      "type": "integer",
+      "description": "`screen_calibration`: attempt number."
+    },
+    "cal_start_kind": {
+      "type": "string",
+      "description": "`screen_calibration`: whether the slider started low or high."
+    },
+    "cal_start_px": {
+      "type": "number",
+      "description": "`screen_calibration`: starting width of the card rectangle, px."
+    },
+    "cal_moved": {
+      "type": "boolean",
+      "description": "`screen_calibration`: the slider was moved."
+    },
+    "cal_n_input": {
+      "type": "integer",
+      "description": "`screen_calibration`: number of slider inputs."
+    },
+    "cal_n_distinct_values": {
+      "type": "integer",
+      "description": "`screen_calibration`: number of distinct slider values."
+    },
+    "cal_min_px": {
+      "type": "number",
+      "description": "`screen_calibration`: smallest width set, px."
+    },
+    "cal_max_px": {
+      "type": "number",
+      "description": "`screen_calibration`: largest width set, px."
+    },
+    "cal_t_first_input_ms": {
+      "type": ["number", "null"],
+      "description": "`screen_calibration`: time of the first slider input, ms from the start of the pass."
+    },
+    "cal_t_last_input_ms": {
+      "type": ["number", "null"],
+      "description": "`screen_calibration`: time of the last slider input, ms from the start of the pass."
+    },
+    "cal_dwell_ms": {
+      "type": "number",
+      "description": "`screen_calibration`: time spent on the pass, ms."
+    },
+    "cal_input_kinds": {
+      "type": ["array", "string"],
+      "description": "`screen_calibration`: kinds of input used."
+    },
+    "cal_trace": {
+      "type": "array",
+      "description": "`screen_calibration`: slider trace as [time ms, width px] pairs."
+    },
+    "px_per_mm_in_bounds": {
+      "type": "boolean",
+      "description": "True if the calibrated px per mm lies in the plausible range."
+    },
+    "px_per_mm_min": {
+      "type": "number",
+      "description": "Lower limit of the plausible px per mm."
+    },
+    "px_per_mm_max": {
+      "type": "number",
+      "description": "Upper limit of the plausible px per mm."
+    },
+    "snap_iso": {
+      "type": "string",
+      "description": "Display snapshot: ISO time of the reading."
+    },
+    "dpr": {
+      "type": "number",
+      "description": "Display snapshot: devicePixelRatio."
+    },
+    "screen_w": {
+      "type": "integer",
+      "description": "Display snapshot: screen width, CSS px."
+    },
+    "screen_h": {
+      "type": "integer",
+      "description": "Display snapshot: screen height, CSS px."
+    },
+    "avail_w": {
+      "type": "integer",
+      "description": "Display snapshot: available screen width, CSS px."
+    },
+    "avail_h": {
+      "type": "integer",
+      "description": "Display snapshot: available screen height, CSS px."
+    },
+    "color_depth": {
+      "type": "integer",
+      "description": "Display snapshot: screen colour depth, bits."
+    },
+    "inner_w": {
+      "type": "integer",
+      "description": "Display snapshot: window inner width, CSS px."
+    },
+    "inner_h": {
+      "type": "integer",
+      "description": "Display snapshot: window inner height, CSS px."
+    },
+    "outer_w": {
+      "type": "integer",
+      "description": "Display snapshot: window outer width, CSS px."
+    },
+    "outer_h": {
+      "type": "integer",
+      "description": "Display snapshot: window outer height, CSS px."
+    },
+    "zoom_proxy_outer_inner": {
+      "type": "number",
+      "description": "Display snapshot: outer width divided by inner width (a zoom proxy)."
+    },
+    "visual_viewport_scale": {
+      "type": ["number", "null"],
+      "description": "Display snapshot: visualViewport scale."
+    },
+    "is_fullscreen": {
+      "type": "boolean",
+      "description": "Display snapshot: the page is fullscreen."
+    },
+    "orientation": {
+      "type": ["string", "null"],
+      "description": "Display snapshot: screen orientation type."
+    },
+    "platform": {
+      "type": ["string", "null"],
+      "description": "Display snapshot: platform reported by the browser."
+    },
+    "ua_mobile": {
+      "type": ["boolean", "null"],
+      "description": "Display snapshot: the browser reports a mobile device."
+    },
+    "user_agent": {
+      "type": "string",
+      "description": "User-agent string."
+    },
+    "hardware_concurrency": {
+      "type": ["integer", "null"],
+      "description": "Display snapshot: logical processors."
+    },
+    "device_memory_gb": {
+      "type": ["number", "null"],
+      "description": "Display snapshot: device memory reported by the browser, GB."
+    },
+    "forced_colors": {
+      "type": ["boolean", "null"],
+      "description": "Display snapshot: forced-colours mode."
+    },
+    "prefers_dark": {
+      "type": ["boolean", "null"],
+      "description": "Display snapshot: dark colour scheme preferred."
+    },
+    "prefers_reduced_motion": {
+      "type": ["boolean", "null"],
+      "description": "Display snapshot: reduced motion preferred."
+    },
+    "display_gamut_p3": {
+      "type": ["boolean", "null"],
+      "description": "Display snapshot: display supports the P3 gamut."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Event rows (`visibility_event`, `display_guard_event`): kind of event."
+    },
+    "ts": {
+      "type": "number",
+      "description": "Event rows and `unload_attempt` / `back_pressed`: performance.now() when the event happened."
+    },
+    "iso": {
+      "type": "string",
+      "description": "Event rows: ISO time of the event."
+    },
+    "base_dpr": {
+      "type": "number",
+      "description": "`display_guard_event`: devicePixelRatio the guard compares against."
+    },
+    "hidden": {
+      "type": "boolean",
+      "description": "`visibility_event` (visibilitychange): the page is hidden."
+    },
+    "in_fullscreen": {
+      "type": "boolean",
+      "description": "`visibility_event` (fullscreenchange): the page is in fullscreen."
+    },
+    "guard_flags": {
+      "type": "string",
+      "description": "Display-guard events (comma-separated kinds) that happened since the previous trial finished; the trial is affected. Absent when there were none."
+    },
+    "guard_n": {
+      "type": "integer",
+      "description": "Number of display-guard events behind `guard_flags`."
+    },
+    "success": {
+      "type": "boolean",
+      "description": "`enter_fullscreen`: fullscreen was entered."
+    },
+    "n_slider_inputs": {
+      "type": "integer",
+      "description": "`tone_audibility_and_comfort`: slider inputs."
+    },
+    "slider_min_pct": {
+      "type": "integer",
+      "description": "`tone_audibility_and_comfort`: lowest slider position, percent."
+    },
+    "slider_max_pct": {
+      "type": "integer",
+      "description": "`tone_audibility_and_comfort`: highest slider position, percent."
+    },
+    "t_first_slider_input_ms": {
+      "type": ["integer", "null"],
+      "description": "`tone_audibility_and_comfort`: time of the first slider input, ms from the start of the trial."
+    },
+    "applied_peak_dbfs": {
+      "type": "number",
+      "description": "`tone_audibility_and_comfort`: peak level of an uncompensated tone at the final slider position, dBFS."
+    },
+    "audio_context": {
+      "type": ["object", "null"],
+      "description": "State of the audio context when the row was written: `sample_rate_hz`, `state`, `base_latency_ms` (processing delay of the context) and `output_latency_ms` (delay to the audio device), each as reported by the browser."
+    },
+    "check": {
+      "type": "string",
+      "description": "Audio check rows: which check (`headphone` or `pitch`)."
+    },
+    "trial_i": {
+      "type": "integer",
+      "description": "Audio check rows: trial number within the check."
+    },
+    "order": {
+      "type": "array",
+      "description": "`headphone_check_trial`: order in which the three sounds were played."
+    },
+    "correct_pos": {
+      "type": "integer",
+      "description": "`headphone_check_trial`: position of the correct sound."
+    },
+    "chosen": {
+      "type": "integer",
+      "description": "Audio check rows: option chosen."
+    },
+    "correct": {
+      "type": "boolean",
+      "description": "Audio check rows: the choice was correct."
+    },
+    "playback_ok": {
+      "type": "boolean",
+      "description": "Audio check rows: playback completed before the response."
+    },
+    "rt_after_playback_ms": {
+      "type": ["number", "null"],
+      "description": "Audio check rows: response time after the end of playback, ms."
+    },
+    "level_db_rel_user": {
+      "type": "number",
+      "description": "`pitch_check_trial`: level of the trial relative to the participant's setting, dB."
+    },
+    "first_idx": {
+      "type": "integer",
+      "description": "`pitch_check_trial`: bank index of the first tone."
+    },
+    "second_idx": {
+      "type": "integer",
+      "description": "`pitch_check_trial`: bank index of the second tone."
+    },
+    "first_hz": {
+      "type": "number",
+      "description": "`pitch_check_trial`: frequency of the first tone, Hz."
+    },
+    "second_hz": {
+      "type": "number",
+      "description": "`pitch_check_trial`: frequency of the second tone, Hz."
+    },
+    "correct_resp": {
+      "type": "integer",
+      "description": "`pitch_check_trial`: the correct answer (1 = second tone higher, 0 = lower)."
+    },
+    "frame_n": {
+      "type": "integer",
+      "description": "`timing_probe`: frames measured."
+    },
+    "frame_median_ms": {
+      "type": "number",
+      "description": "`timing_probe`: median frame interval, ms."
+    },
+    "frame_mean_ms": {
+      "type": "number",
+      "description": "`timing_probe`: mean frame interval, ms."
+    },
+    "frame_sd_ms": {
+      "type": "number",
+      "description": "`timing_probe`: standard deviation of the frame interval, ms."
+    },
+    "frame_p95_ms": {
+      "type": "number",
+      "description": "`timing_probe`: 95th percentile of the frame interval, ms."
+    },
+    "frame_max_ms": {
+      "type": "number",
+      "description": "`timing_probe`: longest frame interval, ms."
+    },
+    "frame_dropped_frac": {
+      "type": "number",
+      "description": "`timing_probe`: share of frames that took more than 1.5 median intervals."
+    },
+    "refresh_hz_est": {
+      "type": "number",
+      "description": "`timing_probe`: estimated refresh rate, Hz."
+    },
+    "clock_resolution_ms": {
+      "type": "number",
+      "description": "`timing_probe`: smallest step of performance.now(), ms."
+    },
+    "timeout_overshoot_median_ms": {
+      "type": "number",
+      "description": "`timing_probe`: median lateness of a 0 ms timer, ms."
+    },
+    "timeout_overshoot_p95_ms": {
+      "type": "number",
+      "description": "`timing_probe`: 95th percentile of timer lateness, ms."
+    },
+    "timeout_overshoot_max_ms": {
+      "type": "number",
+      "description": "`timing_probe`: largest timer lateness, ms."
+    },
+    "page_hidden_during_probe": {
+      "type": "boolean",
+      "description": "`timing_probe`: the page was hidden during the probe."
+    },
+    "cross_origin_isolated": {
+      "type": ["boolean", "null"],
+      "description": "`timing_probe`: page is cross-origin isolated."
+    },
+    "battery_api": {
+      "type": "boolean",
+      "description": "`timing_probe`: the battery API is available."
+    },
+    "battery_charging": {
+      "type": ["boolean", "null"],
+      "description": "`timing_probe`: battery is charging."
+    },
+    "battery_level": {
+      "type": ["number", "null"],
+      "description": "`timing_probe`: battery level, 0-1."
+    },
+    "timing_ok": {
+      "type": "boolean",
+      "description": "`timing_probe`: the probe passed."
+    },
+    "timing_fail_reasons": {
+      "type": "array",
+      "description": "`timing_probe`: reasons for failing."
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "`timing_probe`: thresholds applied."
+    },
+    "probe_attempt": {
+      "type": "integer",
+      "description": "`timing_probe`: attempt number."
+    },
+    "practice_iteration": {
+      "type": ["integer", "null"],
+      "description": "Pass through the practice block (1 or 2). On `practice_iteration_start`, `practice_feedback` and every practice trial row, so a repeated pass can be told apart."
+    },
+    "iteration_accuracy": {
+      "type": ["number", "null"],
+      "description": "`practice_feedback`: accuracy of the pass."
+    },
+    "iteration_correct": {
+      "type": ["integer", "null"],
+      "description": "`practice_feedback`: correct responses in the pass."
+    },
+    "iteration_total": {
+      "type": ["integer", "null"],
+      "description": "`practice_feedback`: responses in the pass."
+    },
+    "iteration_passed": {
+      "type": ["boolean", "null"],
+      "description": "`practice_feedback`: the pass met the criterion."
+    },
+    "final_practice_accuracy": {
+      "type": ["number", "null"],
+      "description": "`practice_disqualification`: accuracy of the last pass."
+    },
+    "final_practice_correct": {
+      "type": ["integer", "null"],
+      "description": "`practice_disqualification`: correct responses in the last pass."
+    },
+    "final_practice_total": {
+      "type": ["integer", "null"],
+      "description": "`practice_disqualification`: responses in the last pass."
+    },
+    "practice_attempts": {
+      "type": ["integer", "null"],
+      "description": "`practice_disqualification`: passes made."
+    },
+    "view_history": {
+      "type": "array",
+      "description": "jsPsych built-in (instruction pages): page index and viewing time of each page view."
+    },
+    "demo_advanced_via_space": {
+      "type": "boolean",
+      "description": "Demo rows: the demo was ended with Space."
+    },
+    "gate_show_arrow": {
+      "type": "boolean",
+      "description": "Trial-start gate: the trial is an imagery trial (the arrow follows the gate)."
+    },
+    "gate_rotation_deg": {
+      "type": ["number", "null"],
+      "description": "Trial-start gate: rotation shown by the arrow, null if none."
+    },
+    "gate_trial_type": {
+      "type": ["string", "null"],
+      "description": "Trial-start gate: condition label shown to the participant."
+    },
+    "gate_passed_at_ms": {
+      "type": "integer",
+      "description": "Trial-start gate: ms from gate onset to the moment both arrow keys were down."
+    },
+    "gate_post_delay_ms": {
+      "type": "integer",
+      "description": "Trial-start gate: delay between the key press and the end of the gate, ms."
+    },
+    "main_trial_number_overall": {
+      "type": "integer",
+      "description": "Trial-start gate: number of the trial over the main task, shown to the participant."
+    },
+    "main_trial_total": {
+      "type": "integer",
+      "description": "Trial-start gate: number of main-task trials."
+    },
+    "main_trial_type": {
+      "type": "string",
+      "description": "Trial-start gate: condition of the trial."
+    },
+    "planned_total_ms": {
+      "type": "integer",
+      "description": "Encoding row: planned length of the encoding node, ms."
+    },
+    "key_log": {
+      "type": "array",
+      "description": "Encoding row: every arrow key press as [R or L, ms after `key_log_t0_ms`], at most 80 entries (see `key_log_overflow`)."
+    },
+    "key_log_t0_ms": {
+      "type": ["integer", "null"],
+      "description": "Encoding row: performance.now() at the start of the encoding schedule, the origin of `key_log`."
+    },
+    "key_log_overflow": {
+      "type": "boolean",
+      "description": "Encoding row: more key presses than `key_log` holds."
+    },
+    "memory_items": {
+      "type": "array",
+      "description": "Encoding row: the memory items as shown, with slot, cell, encoding position, pattern label and, for tones, bank index and frequency."
+    },
+    "dummies": {
+      "type": "array",
+      "description": "Encoding row: placeholder cells by slot."
+    },
+    "stars": {
+      "type": "array",
+      "description": "Encoding row: star cells by slot."
+    },
+    "n_star_rows": {
+      "type": "integer",
+      "description": "Encoding row: star rows written."
+    },
+    "n_star_rows_expected": {
+      "type": "integer",
+      "description": "Encoding row: star rows expected."
+    },
+    "keys_outside_window": {
+      "type": "integer",
+      "description": "Encoding row: arrow key presses while no star window was open."
+    },
+    "slot_positions_mm": {
+      "type": "array",
+      "description": "Encoding row: for each slot, what it showed (`kind`: dot, dummy, star or tone), the cell and its position `x_mm`, `y_mm` in the frame it was drawn in (origin at fixation, y down). A tone has no visual position; its entry holds the upright position of its paired cell."
+    },
+    "slot_tone_events": {
+      "type": "array",
+      "description": "Encoding row: one entry per tone: slot, cell, tone_index, `planned_ts_ms`, `perf_at_schedule_ms` and `ac_time_at_schedule_ms` (both clocks when the tone was scheduled), `when_ms` (scheduled start on the audio clock), `scheduled_onset_perf_ms` (time on the performance.now() scale at which the device is expected to emit the tone, from the context's output timestamp, so it includes the output delay; null if the browser gives no clock pairing), `late` and `late_ms` (scheduling came after the planned onset, and by how much), `error` (message if playing failed, else null)."
+    },
+    "tone_error": {
+      "type": "boolean",
+      "description": "True if a tone of the trial could not be played (encoding row: any tone; probe row: the probe tone). Details in `slot_tone_events[].error` or `tone_error_message`."
+    },
+    "tone_error_message": {
+      "type": "string",
+      "description": "Probe row: message of the error when the probe tone could not be played."
+    },
+    "rotation_start_ts_ms": {
+      "type": ["integer", "null"],
+      "description": "Encoding row: performance.now() at the frame in which the rotation animation was started; null if the trial has no rotation."
+    },
+    "audio_output_latency_ms": {
+      "type": "number",
+      "description": "Sum of the audio context's output latency and base latency, ms (encoding rows of all conditions; probe rows of tone conditions). The two parts are in `audio_context`."
+    },
+    "audio_perf_at_onset_ms": {
+      "type": "integer",
+      "description": "Tone probe row: performance.now() when the probe tone was handed to the audio context."
+    },
+    "early_keypresses": {
+      "type": "integer",
+      "description": "Probe and star rows: arrow key presses before the stimulus onset."
+    },
+    "late_keypresses": {
+      "type": "integer",
+      "description": "Probe and star rows: arrow key presses after the response window closed."
+    },
+    "extra_keypresses": {
+      "type": "integer",
+      "description": "Probe and star rows: arrow key presses after the first valid response."
+    },
+    "duration_ms": {
+      "type": "integer",
+      "description": "Planned duration of a pattern phase, arrow cue or imagination period, ms."
+    },
+    "imagination_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the imagination period began."
+    },
+    "pattern_onset_ts_ms": {
+      "type": "integer",
+      "description": "performance.now() timestamp (rounded ms) at which the pattern reminder was shown. Stamped on `pattern_phase` rows."
+    },
+    "frame_rotation_deg": {
+      "type": "number",
+      "description": "Rotation of the grid while the node was on screen (0 = upright). On retention, probe, ITI, arrow-cue and imagination rows; `rotation_deg` on the arrow-cue and imagination rows is the angle to imagine, and the frame is upright there."
+    },
+    "star_onset_lag_ms": {
+      "type": ["number", "null"],
+      "description": "Star row: star onset minus its planned onset, ms."
+    },
+    "window_closed_ts_ms": {
+      "type": "integer",
+      "description": "Star row: performance.now() when the response window closed."
+    },
+    "displayed": {
+      "type": "boolean",
+      "description": "Star row: the star was shown."
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "Star row: the node ended before the window finished, or the star was never shown."
+    },
+    "is_preview": {
+      "type": "boolean",
+      "description": "`session_info`: the URL carried no Prolific parameters."
+    },
+    "is_pilot_run": {
+      "type": "boolean",
+      "description": "`session_info`: pilot flag."
+    },
+    "pilot_label": {
+      "type": ["string", "null"],
+      "description": "`session_info`: pilot label."
+    },
+    "both_arrows_pressed": {
+      "type": "boolean",
+      "description": "`rest_resume_gate`: both arrow keys were pressed."
+    },
+    "resume_latency_ms": {
+      "type": "number",
+      "description": "`rest_resume_gate`: time to press both keys, ms."
+    },
+    "status": {
+      "type": "string",
+      "description": "`upload_session_end`: result of the end-of-session upload (uploaded, partial, no_endpoint, nothing_to_upload, timed_out, unknown)."
+    },
+    "uploadedBuckets": {
+      "type": "integer",
+      "description": "`upload_session_end`: files uploaded."
+    },
+    "totalBuckets": {
+      "type": "integer",
+      "description": "`upload_session_end`: files planned."
+    },
+    "uploadedRows": {
+      "type": "integer",
+      "description": "`upload_session_end`: rows uploaded."
+    },
+    "downloadFallback": {
+      "type": "boolean",
+      "description": "`upload_session_end`: the data were also offered as a download."
+    },
+    "last_error": {
+      "type": ["string", "null"],
+      "description": "`upload_session_end`: last upload error."
+    },
+    "storage_write_failures": {
+      "type": "integer",
+      "description": "`upload_session_end`: rows that could not be written to browser storage."
+    },
+    "storage_last_error": {
+      "type": ["string", "null"],
+      "description": "`upload_session_end`: message of the last storage failure."
+    },
+    "storage_last_failure_at": {
+      "type": ["string", "null"],
+      "description": "`upload_session_end`: ISO time of the last storage failure."
+    },
+    "build_commit": {
+      "type": "string",
+      "description": "`session_info`: commit the build was made from ('dev' when unbuilt or git was not available)."
+    },
+    "build_time": {
+      "type": "string",
+      "description": "`session_info`: time the build was made ('dev' when unbuilt)."
+    },
+    "consent_text_sha256": {
+      "type": ["string", "null"],
+      "description": "`session_info`: SHA-256 of the consent form markup shown."
+    },
+    "instruction_deck_sha256": {
+      "type": ["object", "null"],
+      "description": "`session_info`: SHA-256 of the text of each instruction deck (overview, practice_readiness, d_only, t_only, i_only, i_d, i_t) and of the demo narration."
+    },
+    "strategy_items_sha256": {
+      "type": ["string", "null"],
+      "description": "`session_info`: SHA-256 of the strategy questionnaire scale, sections and items."
+    },
+    "music_items_sha256": {
+      "type": ["string", "null"],
+      "description": "`session_info`: SHA-256 of the music-experience items."
+    },
+    "tone_params": {
+      "type": "object",
+      "description": "`session_info`: the tone bank as played: `peak_amplitude` (before gain), `duration_ms`, `cosine_ramp_ms` and `bank`, one entry per tone with index, frequency, gain compensation in dB, pattern label and paired cell."
     }
   },
   "$defs": {

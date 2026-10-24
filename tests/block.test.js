@@ -135,6 +135,22 @@ describe('assembleBlock: 5-trial mini-block (one of each type)', () => {
     expect(pp.data.trial_index_in_block).toBe(0);
     expect(pp.trial_duration).toBe(config.pattern.pattern_phase_duration_ms);
   });
+
+  it('pattern-phase node carries the pool index of its trial, like every other row of the trial', () => {
+    const out = assembleBlock({
+      blockLabel: 'main_a',
+      countsByType: { d_only: 12, t_only: 12, i_only: 12, i_d: 12, i_t: 12 },
+    });
+    const phases = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
+    expect(phases.length).toBeGreaterThan(0);
+    for (const pp of phases) {
+      const gate = out.nodes.find(
+        (n) => n.data.trial_uid === pp.data.trial_uid && /_trial_start$/.test(n.data.phase)
+      );
+      expect(pp.data.trial_index_in_block).toBe(gate.data.trial_index_in_block);
+      expect(pp.data.trial_index_in_block).toBe(pp.data.pool_index);
+    }
+  });
 });
 
 describe('assembleBlock: pattern-phase guard for memory-only types', () => {
@@ -173,7 +189,7 @@ describe('assembleBlock: pattern-phase guard for memory-only types', () => {
     });
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
     expect(ppNodes).toHaveLength(2);
-    expect(ppNodes.map((n) => n.data.trial_index_in_block)).toEqual([0, 4]);
+    expect(ppNodes.map((n) => n.data.block_position)).toEqual([0, 4]);
   });
 
   it('every pattern-phase node is followed by an imagery-bearing trial', () => {
@@ -186,7 +202,7 @@ describe('assembleBlock: pattern-phase guard for memory-only types', () => {
     });
     const ppSlots = out.nodes
       .filter((n) => n?.data?.phase === 'pattern_phase')
-      .map((n) => n.data.trial_index_in_block);
+      .map((n) => n.data.block_position);
     for (const slot of ppSlots) {
       expect(IMAGERY_BEARING_TYPES.has(out.schedule[slot])).toBe(true);
     }
@@ -220,7 +236,7 @@ describe('assembleBlock: pattern-phase guard for memory-only types', () => {
       const ppSlots = new Set(
         out.nodes
           .filter((n) => n?.data?.phase === 'pattern_phase')
-          .map((n) => n.data.trial_index_in_block)
+          .map((n) => n.data.block_position)
       );
       for (let i = 0; i < out.schedule.length; i++) {
         if (out.schedule[i] === memType) {
@@ -256,7 +272,7 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     });
     const expected = expectedPatternSlots(out.schedule, 8);
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
-    expect(ppNodes.map((n) => n.data.trial_index_in_block)).toEqual(expected);
+    expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
   });
 
   it('a 12-trial block at freq=8 emits pattern phases at the imagery-bearing subset of {0, 8}', () => {
@@ -267,7 +283,7 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     });
     const expected = expectedPatternSlots(out.schedule, 8);
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
-    expect(ppNodes.map((n) => n.data.trial_index_in_block)).toEqual(expected);
+    expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
   });
 
   it('honours a custom patternPhaseFrequency, still gated on imagery-bearing slots', () => {
@@ -280,7 +296,7 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     });
     const expected = expectedPatternSlots(out.schedule, 4);
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
-    expect(ppNodes.map((n) => n.data.trial_index_in_block)).toEqual(expected);
+    expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
   });
 });
 

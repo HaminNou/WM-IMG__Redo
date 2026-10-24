@@ -88,6 +88,7 @@ export async function initStorage({ backend = 'auto' } = {}) {
 /** Reset the module-level backend handle. Used by tests. */
 export function _resetStorageForTests() {
   activeBackend = null;
+  pendingWrites.clear();
   writeFailures = 0;
   lastWriteFailureMessage = null;
   lastWriteFailureAtIso = null;
@@ -128,8 +129,25 @@ function require_active() {
  * appends to the same IndexedDB store; the id lets analysis separate runs. */
 const RUN_ID = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 8);
 
+/** Id of this page load. Uploads send only the rows of the current run. */
+export function getRunId() {
+  return RUN_ID;
+}
+
+/* Writes that have been started and not yet finished. */
+const pendingWrites = new Set();
+
 export async function appendTrialRow(row) {
-  return require_active().appendTrialRow({ run_id: RUN_ID, ...row });
+  const write = require_active().appendTrialRow({ run_id: RUN_ID, wall_ms: Date.now(), ...row });
+  pendingWrites.add(write);
+  const settled = () => pendingWrites.delete(write);
+  write.then(settled, settled);
+  return write;
+}
+
+/** Resolves when every row written so far has reached the backend (or failed). */
+export async function flushPendingWrites() {
+  await Promise.allSettled(Array.from(pendingWrites));
 }
 
 export async function getAllTrialRows() {

@@ -9,6 +9,12 @@ import { initJsPsych } from 'jspsych';
 
 vi.mock('../src/audio/context.js', () => ({
   getAudioContext: () => ({ currentTime: performance.now() / 1000, state: 'running' }),
+  audioContextInfo: () => ({
+    sample_rate_hz: 48000,
+    state: 'running',
+    base_latency_ms: 10,
+    output_latency_ms: 20,
+  }),
   ensureRunning: async () => {},
   unlockAudio: async () => {},
 }));
@@ -29,6 +35,7 @@ import { iDTrial } from '../src/conditions/i_d.js';
 import { iTTrial } from '../src/conditions/i_t.js';
 import { _resetStorageForTests, initStorage } from '../src/storage.js';
 import { screenPositionMm } from '../src/grid.js';
+import { playToneByCell } from '../src/audio/tones.js';
 import * as frameModule from '../src/visuals/frame.js';
 
 const CONDITIONS = {
@@ -98,6 +105,7 @@ async function runTrial(cond, params, policy = {}) {
     probeKey = 'ArrowRight',
     lateStarSkewMs = null,
     abortEncodingAtMs = null,
+    spamKeys = false,
   } = policy;
   const added = [];
   const removed = [];
@@ -163,6 +171,9 @@ async function runTrial(cond, params, policy = {}) {
       press('ArrowRight');
       release('ArrowLeft');
       release('ArrowRight');
+    }
+    if (spamKeys && (jsPsych.getCurrentTrial?.()?.data?.phase ?? '').endsWith('_encoding')) {
+      press('ArrowLeft');
     }
     const star = document.querySelector('polygon.star');
     if (star) {
@@ -380,5 +391,170 @@ describe('rotation fields on the rows', () => {
     const enc = rows.find((r) => phaseOf(r) === 't_only_encoding');
     expect(enc.trial_spec.rotation_deg).toBeNull();
     expect(enc.trial_spec.display_rotation_deg).toBeNull();
+  }, 60000);
+});
+
+describe.each(Object.keys(CONDITIONS))(
+  '%s: fields that place each event in time and space',
+  (cond) => {
+    const imagery = ['i_only', 'i_d', 'i_t'].includes(cond);
+    const hasTones = ['t_only', 'i_t'].includes(cond);
+    let run;
+    let params;
+
+    beforeEach(async () => {
+      params = pickTrial(cond, 'S');
+      run = await runTrial(cond, params);
+    }, 60000);
+
+    it('stamps the wall clock and elapsed time on star rows and drops the old feedback field', () => {
+      for (const r of starRows(run.rows)) {
+        expect(r.wall_ms).toBeGreaterThan(0);
+        expect(r).toHaveProperty('time_elapsed');
+        expect(r).not.toHaveProperty('feedback_shown_at_ms');
+      }
+    });
+
+    it('records the key log origin, no overflow, and the audio context on the encoding row', () => {
+      const enc = run.rows.find((r) => phaseOf(r).endsWith('_encoding'));
+      expect(Number.isFinite(enc.key_log_t0_ms)).toBe(true);
+      expect(enc.key_log_t0_ms).toBeGreaterThanOrEqual(enc.encoding_onset_ts_ms);
+      expect(enc.key_log_overflow).toBe(false);
+      expect(enc.audio_context).toEqual({
+        sample_rate_hz: 48000,
+        state: 'running',
+        base_latency_ms: 10,
+        output_latency_ms: 20,
+      });
+      expect(enc.tone_error).toBe(false);
+    });
+
+    it('stamps the start of the rotation on imagery trials only', () => {
+      const enc = run.rows.find((r) => phaseOf(r).endsWith('_encoding'));
+      if (imagery) {
+        expect(enc.rotation_start_ts_ms).toBeGreaterThanOrEqual(enc.encoding_onset_ts_ms);
+        expect(enc.rotation_start_ts_ms - enc.encoding_onset_ts_ms).toBeLessThan(100);
+      } else {
+        expect(enc.rotation_start_ts_ms).toBeNull();
+      }
+    });
+
+    it('lists the position of what every slot showed, in the frame it was drawn in', () => {
+      const enc = run.rows.find((r) => phaseOf(r).endsWith('_encoding'));
+      expect(enc.slot_positions_mm).toHaveLength(6);
+      const rotation = imagery ? params.rotation_deg : (params.display_rotation_deg ?? 0);
+      const kindOf = { M: cond.endsWith('_t') || cond === 't_only' ? 'tone' : 'dot' };
+      enc.slot_positions_mm.forEach((slot, i) => {
+        expect(slot.slot).toBe(i);
+        expect(Number.isInteger(slot.cell)).toBe(true);
+        const expected = screenPositionMm(slot.cell, slot.kind === 'tone' ? 0 : rotation);
+        expect(slot.x_mm).toBeCloseTo(expected.x_mm, 2);
+        expect(slot.y_mm).toBeCloseTo(expected.y_mm, 2);
+        if (params.sequence[i] === 'S') {
+          expect(slot.kind).toBe(imagery ? 'star' : 'dummy');
+        } else if (cond === 'i_only') {
+          expect(slot.kind).toBe('dummy');
+        } else {
+          expect(slot.kind).toBe(kindOf.M);
+        }
+      });
+    });
+
+    it('records when each tone was scheduled against its planned onset', () => {
+      const enc = run.rows.find((r) => phaseOf(r).endsWith('_encoding'));
+      if (!hasTones) {
+        expect(enc.slot_tone_events).toEqual([]);
+        return;
+      }
+      expect(enc.slot_tone_events).toHaveLength(params.memory_items.length);
+      for (const e of enc.slot_tone_events) {
+        expect(e.planned_ts_ms).toBe(enc.slot_onsets_ts_ms[e.slot]);
+        expect(e.perf_at_schedule_ms).toBeLessThanOrEqual(e.planned_ts_ms);
+        expect(e.late).toBe(false);
+        expect(e.late_ms).toBe(0);
+        expect(e.when_ms).toBe(enc.slot_audio_context_times_ms[e.slot]);
+        expect(Number.isFinite(e.ac_time_at_schedule_ms)).toBe(true);
+        expect(e.error).toBeNull();
+      }
+    });
+
+    it('stamps frame rotation on retention, ITI, arrow-cue and imagination rows', () => {
+      const iti = run.rows.filter((r) => phaseOf(r) === `${cond}_iti`);
+      expect(iti).toHaveLength(1);
+      expect(iti[0].frame_rotation_deg).toBe(0);
+      expect(Number.isFinite(iti[0].iti_onset_ts_ms)).toBe(true);
+      for (const r of run.rows.filter((x) => phaseOf(x).endsWith('_retention'))) {
+        const expected =
+          cond === 'd_only'
+            ? params.display_rotation_deg
+            : cond === 'i_d'
+              ? params.rotation_deg
+              : 0;
+        expect(r.frame_rotation_deg).toBe(expected);
+      }
+      for (const r of run.rows.filter((x) => /_(arrow_cue|imagination)$/.test(phaseOf(x)))) {
+        expect(r.frame_rotation_deg).toBe(0);
+        expect(r.rotation_deg).toBe(params.rotation_deg);
+      }
+    });
+  }
+);
+
+describe.each(['d_only', 't_only'])('%s: encoding position of each probe', (cond) => {
+  it('is on the probe rows and on the memory items of the encoding row', async () => {
+    const params = pickTrial(cond, 'M');
+    const { rows } = await runTrial(cond, params);
+    const probes = probeRows(rows);
+    expect(probes.map((r) => r.encoding_position)).toEqual(
+      params.probes.map((p) => p.encoding_position)
+    );
+    const enc = rows.find((r) => phaseOf(r).endsWith('_encoding'));
+    expect(enc.memory_items.map((m) => m.encoding_position)).toEqual(
+      params.memory_items.map((m) => m.encoding_position)
+    );
+  }, 60000);
+});
+
+describe('key log', () => {
+  it('flags an overflow and keeps the first 80 entries', async () => {
+    const params = pickTrial('i_only', 'S');
+    const { rows } = await runTrial('i_only', params, { spamKeys: true });
+    const enc = rows.find((r) => phaseOf(r).endsWith('_encoding'));
+    expect(enc.key_log).toHaveLength(80);
+    expect(enc.key_log_overflow).toBe(true);
+  }, 60000);
+});
+
+describe.each(['t_only', 'i_t'])('%s: a tone that cannot be played', (cond) => {
+  it('is recorded on the encoding row and the probe rows, and the trial goes on', async () => {
+    playToneByCell.mockImplementation(() => Promise.reject(new Error('context closed')));
+    try {
+      const params = pickTrial(cond, 'M');
+      const { rows } = await runTrial(cond, params);
+      const enc = rows.find((r) => phaseOf(r).endsWith('_encoding'));
+      expect(enc.tone_error).toBe(true);
+      expect(enc.slot_tone_events.every((e) => e.error === 'context closed')).toBe(true);
+      const probes = probeRows(rows);
+      expect(probes).toHaveLength(3);
+      for (const r of probes) {
+        expect(r.tone_error).toBe(true);
+        expect(r.tone_error_message).toBe('context closed');
+        expect(r.responded).toBe(true);
+      }
+    } finally {
+      playToneByCell.mockImplementation(() => Promise.resolve());
+    }
+  }, 60000);
+
+  it('probe rows of a working tone carry the audio state and no error', async () => {
+    const params = pickTrial(cond, 'M');
+    const { rows } = await runTrial(cond, params);
+    for (const r of probeRows(rows)) {
+      expect(r.tone_error).toBe(false);
+      expect(r).not.toHaveProperty('tone_error_message');
+      expect(r.audio_context.sample_rate_hz).toBe(48000);
+      expect(Number.isFinite(r.audio_perf_at_onset_ms)).toBe(true);
+      expect(r.audio_output_latency_ms).toBe(0);
+    }
   }, 60000);
 });

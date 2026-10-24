@@ -117,6 +117,7 @@ export function segmentTrials(rows) {
         stars: [],
         probes: [],
         patternPhase: false,
+        patternRow: null,
         restBefore: restSeen,
         rows: [r],
       };
@@ -131,6 +132,7 @@ export function segmentTrials(rows) {
     if (!cur) continue;
     if (ph === 'pattern_phase') {
       cur.patternPhase = true;
+      cur.patternRow = r;
       continue;
     }
     const m = PHASE_RE.exec(ph);
@@ -199,6 +201,26 @@ export const TRIALS_COLUMNS = [
   'n_probes_missing_row',
   'encoding_onset_ts_ms',
   'plan_source',
+  'trial_guard_excluded',
+  'guard_flags',
+  'guard_n',
+  'user_gain',
+  'gate_passed_at_ms',
+  'gate_onset_ms',
+  'pattern_onset_ms',
+  'arrow_cue_onset_ms',
+  'imagination_onset_ms',
+  'rotation_start_ms',
+  'retention_onset_ms',
+  'iti_onset_ms',
+  'planned_total_ms',
+  'n_star_rows_expected',
+  'keys_outside_window',
+  'n_key_log',
+  'key_log_overflow',
+  'key_log_t0_offset_ms',
+  'n_tones_late',
+  'n_tone_errors',
   ...SESSION_COLS,
 ];
 
@@ -240,6 +262,17 @@ export const STARS_COLUMNS = [
   'star_onset_ms',
   'trial_star_excluded',
   'position_matches_runtime',
+  'early_keypresses',
+  'late_keypresses',
+  'extra_keypresses',
+  'star_onset_lag_ms',
+  'window_closed_ms',
+  'displayed',
+  'truncated',
+  'guard_flags',
+  'guard_n',
+  'user_gain',
+  'trial_guard_excluded',
   'px_per_mm',
   'build_id',
 ];
@@ -302,6 +335,19 @@ export const PROBES_COLUMNS = [
   'probe_onset_ms',
   'trial_star_excluded',
   'position_matches_runtime',
+  'early_keypresses',
+  'late_keypresses',
+  'extra_keypresses',
+  'guard_flags',
+  'guard_n',
+  'user_gain',
+  'audio_output_latency_ms',
+  'audio_context_time_at_onset_ms',
+  'audio_sample_rate_hz',
+  'audio_state',
+  'audio_base_latency_ms',
+  'tone_error',
+  'trial_guard_excluded',
   'px_per_mm',
   'build_id',
 ];
@@ -415,6 +461,43 @@ export const COLUMN_DOCS = {
   said_yes: 'True if the participant answered yes.',
   probe_correct: 'Correct probe response.',
   probe_onset_ms: 'Probe onset relative to encoding onset, ms.',
+  trial_guard_excluded:
+    'True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion.',
+  guard_flags:
+    'Display-guard events recorded since the previous trial, comma separated. Empty if none.',
+  guard_n: 'Number of display-guard events behind guard_flags.',
+  user_gain: 'Playback gain set by the participant at the volume check, 0-1.',
+  gate_passed_at_ms: 'Time from gate onset to both arrow keys being down, ms.',
+  gate_onset_ms: 'Trial-start gate onset relative to encoding onset, ms (negative).',
+  pattern_onset_ms: 'Pattern reminder onset relative to encoding onset, ms. Empty if none.',
+  arrow_cue_onset_ms:
+    'Rotation arrow cue onset relative to encoding onset, ms. Imagery conditions.',
+  imagination_onset_ms:
+    'Imagination period onset relative to encoding onset, ms. Imagery conditions.',
+  rotation_start_ms: 'Start of the rotation animation relative to encoding onset, ms.',
+  retention_onset_ms: 'Retention interval onset relative to encoding onset, ms.',
+  iti_onset_ms: 'Inter-trial interval onset relative to encoding onset, ms.',
+  planned_total_ms: 'Planned length of the encoding node, ms.',
+  n_star_rows_expected: 'Star rows the encoding node expected to write.',
+  keys_outside_window: 'Arrow-key presses during encoding with no star window open.',
+  n_key_log: 'Entries in the encoding key log.',
+  key_log_overflow: 'True if the key log reached its size limit and later presses were not logged.',
+  key_log_t0_offset_ms: 'Time base of the key log relative to encoding onset, ms.',
+  n_tones_late: 'Tones scheduled after their planned onset.',
+  n_tone_errors: 'Tones whose playback raised an error.',
+  early_keypresses: 'Valid keys pressed before the window opened.',
+  late_keypresses: 'Valid keys pressed after the window closed.',
+  extra_keypresses: 'Valid keys pressed after the first response in the window.',
+  star_onset_lag_ms: 'Star onset minus its planned onset, ms.',
+  window_closed_ms: 'Time the star window closed relative to encoding onset, ms.',
+  displayed: 'True if the star was drawn.',
+  truncated: 'True if the window was cut short when the node ended.',
+  audio_output_latency_ms: 'Reported audio output latency plus base latency, ms.',
+  audio_context_time_at_onset_ms: 'AudioContext currentTime at probe onset, ms.',
+  audio_sample_rate_hz: 'AudioContext sample rate, Hz.',
+  audio_state: 'AudioContext state at probe onset.',
+  audio_base_latency_ms: 'AudioContext base latency, ms.',
+  tone_error: 'True if the probe tone raised an error on playback.',
 };
 
 /* ---------------- builders ---------------- */
@@ -530,7 +613,16 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     if (w.patternPhase) sinceReminder = 0;
     else if (sinceReminder !== null) sinceReminder += 1;
 
+    const windowRows = w.patternRow ? [...w.rows, w.patternRow] : w.rows;
+    const flagged = windowRows.filter((r) => typeof r.guard_flags === 'string' && r.guard_flags);
+    const guardFlags = [...new Set(flagged.flatMap((r) => r.guard_flags.split(',')))].join(',');
+    const guardN = windowRows.reduce((a, r) => a + (Number.isFinite(r.guard_n) ? r.guard_n : 0), 0);
+    const rowOf = (suffix) => w.rows.find((r) => r.phase.endsWith(`_${suffix}`)) ?? null;
+    const enc = w.encoding;
+    const toneEvents = Array.isArray(enc?.slot_tone_events) ? enc.slot_tone_events : [];
+
     const base = {
+      trial_guard_excluded: flagged.length > 0,
       participant_id: participantId,
       trial_seq_session: seqNo,
       trial_uid: uid,
@@ -579,6 +671,16 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         response_key: keyOf(row),
         excluded_anticipatory: row ? responded === true && rt !== null && rt < RT_FLOOR_MS : null,
         star_onset_ms: rel(row?.star_onset_ts_ms, t0),
+        early_keypresses: row?.early_keypresses ?? null,
+        late_keypresses: row?.late_keypresses ?? null,
+        extra_keypresses: row?.extra_keypresses ?? null,
+        star_onset_lag_ms: row?.star_onset_lag_ms ?? null,
+        window_closed_ms: rel(row?.window_closed_ts_ms, t0),
+        displayed: row?.displayed ?? null,
+        truncated: row?.truncated ?? null,
+        guard_flags: row?.guard_flags ?? null,
+        guard_n: row?.guard_n ?? null,
+        user_gain: row?.user_gain ?? null,
         position_matches_runtime:
           row && Number.isFinite(row.star_x_mm)
             ? Math.abs(row.star_x_mm - pos.x_mm) < 0.01 && Math.abs(row.star_y_mm - pos.y_mm) < 0.01
@@ -663,6 +765,18 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         excluded_anticipatory: row ? responded === true && rt !== null && rt < RT_FLOOR_MS : null,
         probe_onset_ms: rel(row?.probe_onset_ts_ms, t0),
         trial_star_excluded: trialStarExcluded,
+        early_keypresses: row?.early_keypresses ?? null,
+        late_keypresses: row?.late_keypresses ?? null,
+        extra_keypresses: row?.extra_keypresses ?? null,
+        guard_flags: row?.guard_flags ?? null,
+        guard_n: row?.guard_n ?? null,
+        user_gain: row?.user_gain ?? null,
+        audio_output_latency_ms: row?.audio_output_latency_ms ?? null,
+        audio_context_time_at_onset_ms: row?.audio_context_time_at_onset_ms ?? null,
+        audio_sample_rate_hz: row?.audio_context?.sample_rate_hz ?? null,
+        audio_state: row?.audio_context?.state ?? null,
+        audio_base_latency_ms: row?.audio_context?.base_latency_ms ?? null,
+        tone_error: row?.tone_error ?? null,
         position_matches_runtime:
           row && Number.isFinite(row.probe_x_mm) && pos.x_mm !== null
             ? Math.abs(row.probe_x_mm - pos.x_mm) < 0.01 &&
@@ -737,6 +851,25 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       n_probes_missing_row: cnt(probeRecords, (p) => !p.row_recorded),
       encoding_onset_ts_ms: Number.isFinite(t0) ? t0 : null,
       plan_source: plan.from_spec ? 'trial_spec' : null,
+      guard_flags: guardFlags || null,
+      guard_n: guardN,
+      user_gain: windowRows.find((r) => Number.isFinite(r.user_gain))?.user_gain ?? null,
+      gate_passed_at_ms: Number.isFinite(gate.gate_passed_at_ms) ? gate.gate_passed_at_ms : null,
+      gate_onset_ms: rel(gate.trial_start_gate_onset_ts_ms, t0),
+      pattern_onset_ms: rel(w.patternRow?.pattern_onset_ts_ms, t0),
+      arrow_cue_onset_ms: rel(rowOf('arrow_cue')?.arrow_cue_onset_ts_ms, t0),
+      imagination_onset_ms: rel(rowOf('imagination')?.imagination_onset_ts_ms, t0),
+      rotation_start_ms: rel(enc?.rotation_start_ts_ms, t0),
+      retention_onset_ms: rel(rowOf('retention')?.retention_onset_ts_ms, t0),
+      iti_onset_ms: rel(rowOf('iti')?.iti_onset_ts_ms, t0),
+      planned_total_ms: enc?.planned_total_ms ?? null,
+      n_star_rows_expected: enc?.n_star_rows_expected ?? null,
+      keys_outside_window: enc?.keys_outside_window ?? null,
+      n_key_log: Array.isArray(enc?.key_log) ? enc.key_log.length : null,
+      key_log_overflow: enc?.key_log_overflow ?? null,
+      key_log_t0_offset_ms: rel(enc?.key_log_t0_ms, t0),
+      n_tones_late: enc ? toneEvents.filter((e) => e.late === true).length : null,
+      n_tone_errors: enc ? toneEvents.filter((e) => e.tone_error === true).length : null,
       ...session,
     });
     if (plannedStars.length === 0 && w.stars.length > 0) {
@@ -827,6 +960,27 @@ const INTEGER_COLUMNS = new Set([
   'rt_ms',
   'star_onset_ms',
   'probe_onset_ms',
+  'guard_n',
+  'gate_passed_at_ms',
+  'gate_onset_ms',
+  'pattern_onset_ms',
+  'arrow_cue_onset_ms',
+  'imagination_onset_ms',
+  'rotation_start_ms',
+  'retention_onset_ms',
+  'iti_onset_ms',
+  'planned_total_ms',
+  'n_star_rows_expected',
+  'keys_outside_window',
+  'n_key_log',
+  'key_log_t0_offset_ms',
+  'n_tones_late',
+  'n_tone_errors',
+  'early_keypresses',
+  'late_keypresses',
+  'extra_keypresses',
+  'window_closed_ms',
+  'audio_sample_rate_hz',
 ]);
 const NUMBER_COLUMNS = new Set([
   'px_per_mm',
@@ -846,6 +1000,11 @@ const NUMBER_COLUMNS = new Set([
   'min_enc_dist_mm',
   'own_enc_dist_mm',
   'tone_freq_hz',
+  'user_gain',
+  'star_onset_lag_ms',
+  'audio_output_latency_ms',
+  'audio_context_time_at_onset_ms',
+  'audio_base_latency_ms',
 ]);
 const BOOLEAN_COLUMNS = new Set([
   'is_practice',
@@ -863,6 +1022,11 @@ const BOOLEAN_COLUMNS = new Set([
   'is_target',
   'said_yes',
   'probe_correct',
+  'trial_guard_excluded',
+  'key_log_overflow',
+  'displayed',
+  'truncated',
+  'tone_error',
 ]);
 
 function columnSchema(name) {

@@ -327,3 +327,18 @@ describe('practiceBlock loop_function', () => {
     expect(p.timelineNode.loop_function()).toBe(true);
   });
 });
+
+describe('practice pass', () => {
+  it('the marker node of each pass sets the pass number that practice rows carry', async () => {
+    const { setPracticeIteration, getPracticeIteration } =
+      await import('../src/scheduler/trial-meta.js');
+    setPracticeIteration(null);
+    const { timelineNode } = practiceBlock({ trialsPerType: 1 });
+    const marker = timelineNode.timeline[0];
+    marker.on_start();
+    expect(getPracticeIteration()).toBe(1);
+    marker.on_start();
+    expect(getPracticeIteration()).toBe(2);
+    setPracticeIteration(null);
+  });
+});

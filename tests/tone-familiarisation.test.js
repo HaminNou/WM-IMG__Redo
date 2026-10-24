@@ -46,11 +46,18 @@ vi.mock('../src/audio/context.js', () => ({
       return elapsedMs / 1000;
     },
   }),
+  audioContextInfo: () => ({
+    sample_rate_hz: 44100,
+    state: 'running',
+    base_latency_ms: 5,
+    output_latency_ms: 15,
+  }),
 }));
 
 vi.mock('../src/audio/dsp.js', () => ({
   setUserPlaybackGain,
   stopAllScheduledAudio: vi.fn(),
+  DEFAULT_PEAK: 0.25,
 }));
 
 vi.mock('../src/hidden-nav.js', () => ({
@@ -334,5 +341,11 @@ describe('tone audibility + comfort Yes button and slider record', () => {
     expect(data.user_playback_pct).toBe(40);
     expect(data.t_first_slider_input_ms).not.toBeNull();
     expect(data.applied_peak_dbfs).toBeCloseTo(20 * Math.log10(0.25 * 0.4), 8);
+    expect(data.audio_context).toEqual({
+      sample_rate_hz: 44100,
+      state: 'running',
+      base_latency_ms: 5,
+      output_latency_ms: 15,
+    });
   });
 });

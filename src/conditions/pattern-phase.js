@@ -27,6 +27,7 @@ import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { createGridFrame } from '../visuals/frame.js';
 import { buildPatternOverlay, showPattern } from '../visuals/pattern.js';
 import { config } from '../config.js';
+import { stampTrialData } from './shared.js';
 
 const MOUNT_ID = 'pattern-phase-mount';
 
@@ -35,7 +36,7 @@ const MOUNT_ID = 'pattern-phase-mount';
  *
  * @param {object} opts
  * @param {string} opts.block_label             arbitrary tag for data records (e.g. 'practice', 'main_a')
- * @param {number} opts.trial_index_in_block    the index of the next trial that follows this phase
+ * @param {number} opts.trial_index_in_block    pool index of the trial this phase belongs to (the same value every row of that trial carries)
  * @param {'white'|'gray'|null} [opts.background_shade]
  *                                              Shade of the upcoming trial. The page-flip is already
  *                                              applied by the trial-start gate's `finishGate` step
@@ -65,6 +66,7 @@ export function patternPhaseNode({ block_label, trial_index_in_block, background
       mount.appendChild(frame.wrapper);
       buildPatternOverlay(frame);
       showPattern(frame);
+      stampTrialData('pattern_onset_ts_ms', performance.now());
     },
     data: {
       phase: 'pattern_phase',

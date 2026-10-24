@@ -375,7 +375,6 @@ function buildStarRow(trialType, params, star, blockLabel, response, timing) {
     response_key: response.responded ? (said_on ? 'arrowright' : 'arrowleft') : null,
     response_rt_ms: response.rt_ms,
     star_correct: response.correct === true,
-    feedback_shown_at_ms: response.responded ? response.rt_ms + 600 : 1000,
     star_onset_ts_ms: starOnset,
   };
   if (trialType === 'i_only' || trialType === 'i_d' || trialType === 'i_t') {
@@ -535,7 +534,7 @@ function emitSessionStubRows(seqRef, sessionMeta) {
 function emitSessionEndRows(seqRef, sessionMeta) {
   return [
     stamp(
-      { phase: 'upload_session_end', status: 'uploaded', storage_failures: 0 },
+      { phase: 'upload_session_end', status: 'uploaded', storage_write_failures: 0 },
       seqRef,
       sessionMeta
     ),

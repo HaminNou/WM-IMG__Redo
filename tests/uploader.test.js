@@ -41,6 +41,7 @@ import {
   postWithRetry,
   uploadPendingData,
   uploadCheckpoint,
+  uploadTail,
   _resetCheckpointForTests,
 } from '../src/uploader.js';
 import { config } from '../src/config.js';
@@ -51,6 +52,7 @@ import {
   getUploadCursor,
   setUploadCursor,
   getAllTrialRows,
+  getRunId,
 } from '../src/storage.js';
 
 function fakeSession(overrides = {}) {
@@ -345,21 +347,38 @@ describe('buildBucketEnvelope', () => {
 });
 
 describe('dataPipeFilenameForBucket', () => {
-  it('produces `<session_id>__<bucket_label>.json`', () => {
-    expect(dataPipeFilenameForBucket({ session_id: 'sess-123', bucket_label: '03_d_only' })).toBe(
-      'sess-123__03_d_only.json'
-    );
+  it('produces `<session_id>__<run_id>__<bucket_label>.json`', () => {
+    expect(
+      dataPipeFilenameForBucket({
+        session_id: 'sess-123',
+        run_id: 'ab12cd34',
+        bucket_label: '03_d_only',
+      })
+    ).toBe('sess-123__ab12cd34__03_d_only.json');
   });
 
   it('is deterministic across calls with the same inputs', () => {
-    const a = dataPipeFilenameForBucket({ session_id: 'sess-9', bucket_label: '10_meta' });
-    const b = dataPipeFilenameForBucket({ session_id: 'sess-9', bucket_label: '10_meta' });
-    expect(a).toBe(b);
+    const args = { session_id: 'sess-9', run_id: 'r1', bucket_label: '10_meta' };
+    expect(dataPipeFilenameForBucket(args)).toBe(dataPipeFilenameForBucket(args));
   });
 
-  it('throws on missing session_id or bucket_label', () => {
-    expect(() => dataPipeFilenameForBucket({ bucket_label: '01_x' })).toThrow(/session_id/);
-    expect(() => dataPipeFilenameForBucket({ session_id: 'sess' })).toThrow(/bucket_label/);
+  it('differs between page loads of the same session', () => {
+    const base = { session_id: 'sess-9', bucket_label: '01_consent_demographics' };
+    expect(dataPipeFilenameForBucket({ ...base, run_id: 'r1' })).not.toBe(
+      dataPipeFilenameForBucket({ ...base, run_id: 'r2' })
+    );
+  });
+
+  it('throws on missing session_id, run_id or bucket_label', () => {
+    expect(() => dataPipeFilenameForBucket({ run_id: 'r', bucket_label: '01_x' })).toThrow(
+      /session_id/
+    );
+    expect(() => dataPipeFilenameForBucket({ session_id: 'sess', bucket_label: '01_x' })).toThrow(
+      /run_id/
+    );
+    expect(() => dataPipeFilenameForBucket({ session_id: 'sess', run_id: 'r' })).toThrow(
+      /bucket_label/
+    );
   });
 });
 
@@ -443,6 +462,7 @@ describe('buildDataPipeEnvelope', () => {
   function fakeBucketEnvelope(overrides = {}) {
     return {
       session_id: 'sess-123',
+      run_id: 'ab12cd34',
       bucket_id: 'd_only',
       bucket_label: '03_d_only',
       bucket_index: 2,
@@ -464,12 +484,12 @@ describe('buildDataPipeEnvelope', () => {
     expect(env.experimentID).toBe('exp-abc');
   });
 
-  it('builds a deterministic filename from session_id and bucket_label', () => {
+  it('builds a deterministic filename from session_id, run_id and bucket_label', () => {
     const env = buildDataPipeEnvelope({
       bucketEnvelope: fakeBucketEnvelope({ bucket_label: '07_i_d_dual_dot_star' }),
       experimentId: 'exp-abc',
     });
-    expect(env.filename).toBe('sess-123__07_i_d_dual_dot_star.json');
+    expect(env.filename).toBe('sess-123__ab12cd34__07_i_d_dual_dot_star.json');
   });
 
   it('packs the full bucket envelope into the data string', () => {
@@ -1070,7 +1090,9 @@ describe('uploadPendingData', () => {
         expect(c.url).toBe('https://pipe.jspsych.org/api/data/');
         expect(c.body.experimentID).toBe('exp-abc');
         expect(typeof c.body.filename).toBe('string');
-        expect(c.body.filename).toMatch(/^sess-123__\d{2}_[a-z_]+\.json$/);
+        expect(c.body.filename).toMatch(
+          new RegExp(`^sess-123__${getRunId()}__\\d{2}_[a-z_]+\\.json$`)
+        );
         expect(typeof c.body.data).toBe('string');
         /* Inner bucket envelope round-trips through the data string. */
         const inner = JSON.parse(c.body.data);
@@ -1205,7 +1227,7 @@ describe('uploadCheckpoint', () => {
       });
       expect(first).toEqual({ status: 'ok', rows: 2 });
       expect(calls[0].experimentID).toBe('exp-abc');
-      expect(calls[0].filename).toBe('sess-123__ckpt_1-2.json');
+      expect(calls[0].filename).toBe(`sess-123__${getRunId()}__ckpt_1-2.json`);
       expect(JSON.parse(calls[0].data).n_rows).toBe(2);
 
       expect((await uploadCheckpoint({ ...ID, session: fakeSession(), fetchImpl })).status).toBe(
@@ -1220,7 +1242,7 @@ describe('uploadCheckpoint', () => {
         sleepImpl: instantSleep,
       });
       expect(second.rows).toBe(1);
-      expect(calls[1].filename).toBe('sess-123__ckpt_3-3.json');
+      expect(calls[1].filename).toBe(`sess-123__${getRunId()}__ckpt_3-3.json`);
     });
   });
 
@@ -1364,5 +1386,221 @@ describe('uploadCheckpoint – cancellation', () => {
       fetchImpl: ok,
     });
     expect(next).toEqual({ status: 'ok', rows: 1 });
+  });
+});
+
+describe('rows of earlier runs', () => {
+  const instantSleep = () => Promise.resolve();
+  const okFetch = () => {
+    const bodies = [];
+    const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
+      bodies.push(JSON.parse(opts.body));
+      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+    });
+    return { fetchImpl, bodies };
+  };
+  const ID = { datapipeExperimentId: 'exp-abc' };
+  const sentRows = (bodies) => bodies.flatMap((b) => JSON.parse(b.data).rows);
+
+  async function seedTwoRuns() {
+    await appendTrialRow({ run_id: 'old-run', phase: 'consent' });
+    await appendTrialRow({ run_id: 'old-run', phase: 'd_only_trial_start', block_label: 'main_a' });
+    await appendTrialRow({ phase: 'consent' });
+    await appendTrialRow({ phase: 'rest' });
+  }
+
+  it('end-of-session upload sends only the current run, under the current run id', async () => {
+    _resetCheckpointForTests();
+    await seedTwoRuns();
+    const { fetchImpl, bodies } = okFetch();
+    const result = await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(result.status).toBe('uploaded');
+    expect(sentRows(bodies).map((r) => r.run_id)).toEqual([getRunId(), getRunId()]);
+    for (const b of bodies) {
+      expect(b.filename).toContain(`__${getRunId()}__`);
+      expect(JSON.parse(b.data).run_id).toBe(getRunId());
+    }
+  });
+
+  it('the recovery page can send the rows of every run', async () => {
+    _resetCheckpointForTests();
+    await seedTwoRuns();
+    const { fetchImpl, bodies } = okFetch();
+    await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      allRuns: true,
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(sentRows(bodies)).toHaveLength(4);
+  });
+
+  it('checkpoints send only the current run', async () => {
+    _resetCheckpointForTests();
+    await seedTwoRuns();
+    const { fetchImpl, bodies } = okFetch();
+    const result = await uploadCheckpoint({
+      ...ID,
+      session: fakeSession(),
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(result).toEqual({ status: 'ok', rows: 2 });
+    expect(sentRows(bodies).every((r) => r.run_id === getRunId())).toBe(true);
+  });
+
+  it('a file name reused by a reloaded page is a different file, so FILE_EXISTS cannot hide its rows', async () => {
+    _resetCheckpointForTests();
+    await appendTrialRow({ phase: 'consent' });
+    const names = [];
+    const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
+      names.push(JSON.parse(opts.body).filename);
+      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+    });
+    await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    const earlierRun = dataPipeFilenameForBucket({
+      session_id: 'sess-123',
+      run_id: 'other-run',
+      bucket_label: '01_consent_demographics',
+    });
+    expect(names).toHaveLength(1);
+    expect(names[0]).not.toBe(earlierRun);
+  });
+});
+
+describe('uploadCheckpoint – size limit', () => {
+  const ID = { datapipeExperimentId: 'exp-abc' };
+
+  it('splits a checkpoint that is larger than one request into several files', async () => {
+    _resetCheckpointForTests();
+    const filler = 'x'.repeat(100_000);
+    for (let i = 0; i < 25; i++) await appendTrialRow({ phase: 'rest', filler });
+    const bodies = [];
+    const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
+      bodies.push(JSON.parse(opts.body));
+      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+    });
+    const result = await uploadCheckpoint({ ...ID, session: fakeSession(), fetchImpl });
+    expect(result).toEqual({ status: 'ok', rows: 25 });
+    expect(bodies.length).toBeGreaterThan(1);
+    const sent = bodies.flatMap((b) => JSON.parse(b.data).rows.map((r) => r.seq));
+    expect(sent).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+    for (const b of bodies) expect(b.data.length).toBeLessThan(1_000_000);
+    expect(new Set(bodies.map((b) => b.filename)).size).toBe(bodies.length);
+  });
+
+  it('keeps the parts that arrived when a later part fails', async () => {
+    _resetCheckpointForTests();
+    const filler = 'x'.repeat(100_000);
+    for (let i = 0; i < 25; i++) await appendTrialRow({ phase: 'rest', filler });
+    let calls = 0;
+    const flaky = vi.fn().mockImplementation(() => {
+      calls += 1;
+      if (calls === 1) {
+        return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      }
+      return Promise.reject(new Error('offline'));
+    });
+    const failed = await uploadCheckpoint({
+      ...ID,
+      session: fakeSession(),
+      fetchImpl: flaky,
+      sleepImpl: () => Promise.resolve(),
+    });
+    expect(failed.status).toBe('failed');
+    const bodies = [];
+    const ok = vi.fn().mockImplementation((_u, opts) => {
+      bodies.push(JSON.parse(opts.body));
+      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+    });
+    await uploadCheckpoint({ ...ID, session: fakeSession(), fetchImpl: ok });
+    const firstSeq = JSON.parse(bodies[0].data).seq_min;
+    expect(firstSeq).toBeGreaterThan(1);
+  });
+});
+
+describe('uploadTail', () => {
+  const ID = { datapipeExperimentId: 'exp-abc' };
+  const okFetch = () => {
+    const bodies = [];
+    const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
+      bodies.push(JSON.parse(opts.body));
+      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+    });
+    return { fetchImpl, bodies };
+  };
+  const finalUpload = (fetchImpl) =>
+    uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      fetchImpl,
+      sleepImpl: () => Promise.resolve(),
+    });
+
+  it('does nothing before the end-of-session upload has finished', async () => {
+    _resetCheckpointForTests();
+    await appendTrialRow({ phase: 'consent' });
+    const { fetchImpl } = okFetch();
+    expect((await uploadTail({ session: fakeSession(), ...ID, fetchImpl })).status).toBe('skipped');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('sends the rows written after the final upload as one uniquely named file', async () => {
+    _resetCheckpointForTests();
+    await appendTrialRow({ phase: 'consent' });
+    const first = okFetch();
+    await finalUpload(first.fetchImpl);
+    await appendTrialRow({ phase: 'upload_session_end', status: 'uploaded' });
+    appendTrialRow({ phase: 'completion_redirect' });
+    const { fetchImpl, bodies } = okFetch();
+    const result = await uploadTail({ session: fakeSession(), ...ID, fetchImpl });
+    expect(result).toEqual({ status: 'ok', rows: 2 });
+    expect(bodies[0].filename).toBe(`sess-123__${getRunId()}__tail_2-3.json`);
+    const rows = JSON.parse(bodies[0].data).rows;
+    expect(rows.map((r) => r.phase)).toEqual(['upload_session_end', 'completion_redirect']);
+    /* Sent once. */
+    expect((await uploadTail({ session: fakeSession(), ...ID, fetchImpl })).status).toBe('nothing');
+  });
+
+  it('makes one attempt within the time limit and reports a failure without throwing', async () => {
+    _resetCheckpointForTests();
+    await appendTrialRow({ phase: 'consent' });
+    await finalUpload(okFetch().fetchImpl);
+    await appendTrialRow({ phase: 'upload_session_end' });
+    const hanging = vi.fn().mockImplementation(
+      (_u, opts) =>
+        new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        })
+    );
+    const started = Date.now();
+    const result = await uploadTail({
+      session: fakeSession(),
+      ...ID,
+      timeoutMs: 50,
+      fetchImpl: hanging,
+    });
+    expect(result.status).toBe('failed');
+    expect(hanging).toHaveBeenCalledTimes(1);
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });

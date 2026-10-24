@@ -22,21 +22,24 @@
  *   - Visual onsets are applied inside a requestAnimationFrame callback and the
  *     callback's frame time is the recorded onset and the RT origin.
  *   - Tones are scheduled on the audio clock for the planned time, so they do
- *     not depend on timer jitter. `audio_output_latency_ms` is stored so the
- *     acoustic onset can be reconstructed.
+ *     not depend on timer jitter. For each tone the row keeps the audio clock
+ *     and `performance.now()` at the moment of scheduling, the scheduled start
+ *     on both clocks and whether scheduling came after the planned onset
+ *     (`slot_tone_events`). `audio_output_latency_ms` and `audio_context` are
+ *     stored so the acoustic onset can be reconstructed.
  *   - Response time is taken from the key event's own timestamp, not from the
  *     time the handler ran. A key counts only if it lies in [onset, onset +
  *     3000 ms).
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
-import { encodingRecord, starRenderFields } from './trial-record.js';
+import { encodingRecord, starRenderFields, slotPositionsMm } from './trial-record.js';
 import { createGridFrame, clearStimuli, setFixation, setRotation } from '../visuals/frame.js';
 import { addDot, removeElement } from '../visuals/dot.js';
 import { addStar, recolourStar } from '../visuals/star.js';
 import { addOpenSquare } from '../visuals/dummy.js';
-import { playToneByCell } from '../audio/tones.js';
-import { getAudioContext } from '../audio/context.js';
+import { playToneByCell, toneForCell } from '../audio/tones.js';
+import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { stopAllScheduledAudio } from '../audio/dsp.js';
 import {
   stampTrialData,
@@ -88,6 +91,23 @@ function round1(x) {
 }
 
 /**
+ * The time on the `performance.now()` scale at which the audio device is
+ * expected to emit the sound that is scheduled for `when` (seconds on the
+ * audio clock), from the context's output timestamp. That timestamp is the
+ * position of the device output, so the estimate includes the output delay.
+ * `null` if the browser gives no usable pairing.
+ */
+function scheduledOnsetPerfMs(ac, when) {
+  try {
+    const pair = ac.getOutputTimestamp?.();
+    if (!pair || !(pair.performanceTime > 0)) return null;
+    return round1(pair.performanceTime + (when - pair.contextTime) * 1000);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * @param {object} cfg
  * @param {object} cfg.params            trial parameters from the scheduler
  * @param {string} cfg.mount_id
@@ -115,8 +135,14 @@ export function createEncodingNode(cfg) {
   const plan = planEncoding({ sequence, pre_ms: PRE_ENCODING_PAD_MS });
   const slot_onsets_ts_ms = new Array(sequence.length).fill(null);
   const slot_audio_context_times_ms = new Array(sequence.length).fill(null);
+  const slot_tone_events = [];
   const key_log = [];
-  const summary = { n_star_rows: 0, keys_outside_window: 0 };
+  const summary = {
+    n_star_rows: 0,
+    keys_outside_window: 0,
+    key_log_overflow: false,
+    rotation_start_ts_ms: null,
+  };
   let run = null;
 
   const nodeData = {
@@ -126,8 +152,14 @@ export function createEncodingNode(cfg) {
     sequence: sequence.join(''),
     planned_total_ms: plan.total_ms,
     trial_spec: encodingRecord(params),
+    slot_positions_mm: slotPositionsMm(params, {
+      rotationDeg: rotate ? params.rotation_deg : frame_rotation_deg,
+      m_kind,
+      s_kind,
+    }),
     slot_onsets_ts_ms,
     slot_audio_context_times_ms,
+    slot_tone_events,
     key_log,
     ...data,
   };
@@ -140,9 +172,12 @@ export function createEncodingNode(cfg) {
     on_load: () => {
       slot_onsets_ts_ms.fill(null);
       slot_audio_context_times_ms.fill(null);
+      slot_tone_events.length = 0;
       key_log.length = 0;
       summary.n_star_rows = 0;
       summary.keys_outside_window = 0;
+      summary.key_log_overflow = false;
+      summary.rotation_start_ts_ms = null;
 
       const mount = document.getElementById(mount_id);
       const frame = createGridFrame({
@@ -163,6 +198,7 @@ export function createEncodingNode(cfg) {
         star_phase,
         slot_onsets_ts_ms,
         slot_audio_context_times_ms,
+        slot_tone_events,
         key_log,
         summary,
         block_label: window.jsPsych?.getCurrentTrial?.()?.data?.block_label ?? null,
@@ -173,11 +209,17 @@ export function createEncodingNode(cfg) {
       /* Copies, so a replayed node (practice re-loop) cannot overwrite them. */
       trialData.slot_onsets_ts_ms = slot_onsets_ts_ms.slice();
       trialData.slot_audio_context_times_ms = slot_audio_context_times_ms.slice();
+      trialData.slot_tone_events = slot_tone_events.slice();
+      trialData.tone_error = slot_tone_events.some((e) => e.error !== null);
       trialData.key_log = key_log.slice();
+      trialData.key_log_t0_ms = run ? Math.round(run.t0) : null;
+      trialData.key_log_overflow = summary.key_log_overflow;
+      trialData.rotation_start_ts_ms = summary.rotation_start_ts_ms;
       trialData.n_star_rows = summary.n_star_rows;
       trialData.n_star_rows_expected = star_phase ? params.stars.length : 0;
       trialData.keys_outside_window = summary.keys_outside_window;
       trialData.audio_output_latency_ms = run ? run.audioLatencyMs : null;
+      trialData.audio_context = audioContextInfo();
       run = null;
     },
     data: nodeData,
@@ -237,6 +279,7 @@ function startRun(ctx) {
     e.stopPropagation();
     const t = eventTime(e);
     if (key_log.length < KEY_LOG_MAX) key_log.push([k === KEY_ON ? 'R' : 'L', Math.round(t - t0)]);
+    else summary.key_log_overflow = true;
     if (openWindow) openWindow.onKey(k, t);
     else summary.keys_outside_window += 1;
   };
@@ -330,7 +373,6 @@ function startRun(ctx) {
       response_key: w.response_key,
       response_rt_ms: w.response_rt_ms,
       star_correct: w.correct === true,
-      feedback_shown_at_ms: w.response_rt_ms,
       star_onset_ts_ms: w.onset === null ? null : Math.round(w.onset),
       star_onset_lag_ms: w.onsetLagMs,
       window_closed_ts_ms: Math.round(performance.now()),
@@ -351,7 +393,10 @@ function startRun(ctx) {
   /* ---- Pre-encoding rotation ---- */
   if (rotate) {
     frame.rotor.style.transition = `transform ${ROTATION_ANIMATION_MS}ms ease-in-out`;
-    nextFrame(() => setRotation(frame, params.rotation_deg));
+    nextFrame((ts) => {
+      setRotation(frame, params.rotation_deg);
+      summary.rotation_start_ts_ms = Math.round(ts);
+    });
     at(ROTATION_ANIMATION_MS + 50, () => {
       frame.rotor.style.transition = '';
     });
@@ -364,12 +409,39 @@ function startRun(ctx) {
       const dummy = byDummy.get(ev.slot);
       if (m_kind === 'tone' && item) {
         at(ev.start_ms - AUDIO_LEAD_MS, () => {
-          const ac = getAudioContext();
-          const lead = Math.max(0, t0 + ev.start_ms - performance.now()) / 1000;
-          const when = ac.currentTime + lead;
-          ctx.slot_audio_context_times_ms[ev.slot] = Math.round(when * 1000);
-          ctx.slot_onsets_ts_ms[ev.slot] = Math.round(t0 + ev.start_ms);
-          void playToneByCell(item.cell, { when });
+          const planned = t0 + ev.start_ms;
+          ctx.slot_onsets_ts_ms[ev.slot] = Math.round(planned);
+          const event = {
+            slot: ev.slot,
+            cell: item.cell,
+            tone_index: toneForCell(item.cell).index,
+            planned_ts_ms: Math.round(planned),
+            perf_at_schedule_ms: null,
+            ac_time_at_schedule_ms: null,
+            when_ms: null,
+            scheduled_onset_perf_ms: null,
+            late_ms: null,
+            late: null,
+            error: null,
+          };
+          ctx.slot_tone_events.push(event);
+          try {
+            const ac = getAudioContext();
+            const perfNow = performance.now();
+            const when = ac.currentTime + Math.max(0, planned - perfNow) / 1000;
+            event.perf_at_schedule_ms = round1(perfNow);
+            event.ac_time_at_schedule_ms = round1(ac.currentTime * 1000);
+            event.when_ms = Math.round(when * 1000);
+            event.scheduled_onset_perf_ms = scheduledOnsetPerfMs(ac, when);
+            event.late_ms = round1(Math.max(0, perfNow - planned));
+            event.late = perfNow > planned;
+            ctx.slot_audio_context_times_ms[ev.slot] = Math.round(when * 1000);
+            Promise.resolve(playToneByCell(item.cell, { when })).catch((err) => {
+              event.error = String(err?.message ?? err);
+            });
+          } catch (err) {
+            event.error = String(err?.message ?? err);
+          }
         });
       } else {
         const cell = (item ?? dummy)?.cell;
@@ -451,5 +523,5 @@ function startRun(ctx) {
     if (reason !== 'complete') stopAllScheduledAudio();
   }
 
-  return { abort, audioLatencyMs };
+  return { abort, audioLatencyMs, t0 };
 }

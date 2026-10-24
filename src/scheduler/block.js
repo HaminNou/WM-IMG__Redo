@@ -233,7 +233,7 @@ export function assembleBlock({
         0,
         patternPhaseNode({
           block_label: blockLabel,
-          trial_index_in_block: i,
+          trial_index_in_block: params.trial_index_in_block,
           background_shade: params.background_shade,
         })
       );

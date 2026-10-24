@@ -48,9 +48,10 @@ import { getToneBank } from './audio/tones.js';
  * actually speaks. */
 import { mainAIntroNode, mainBIntroNode, endOfTaskIntroNode } from './runner-intros.js';
 import { sessionInfoNode } from './session-info-node.js';
-import { getUserPlaybackGain } from './audio/dsp.js';
-import { consumeGuardFlags, stopDisplayGuardNode } from './calibration/display-guard.js';
+import { stopDisplayGuardNode } from './calibration/display-guard.js';
 import { startSessionGuard, markUploadDone } from './session-guard.js';
+import { computeContentHashes } from './content-hashes.js';
+import { stampFinishedTrial } from './trial-finish.js';
 
 const session = initSession();
 
@@ -102,12 +103,7 @@ const jsPsych = initJsPsych({
       recordWriteFailure(err);
     });
   },
-  on_trial_finish: (data) => {
-    /* Display-guard events since the previous trial, and the playback gain in
-     * force, so analysis can drop or adjust affected trials. */
-    Object.assign(data, consumeGuardFlags());
-    data.user_gain = getUserPlaybackGain();
-  },
+  on_trial_finish: stampFinishedTrial,
   on_finish: () => {
     markUploadDone();
     /* Stamp session-level metadata onto every row for the analyst. Upload
@@ -170,7 +166,7 @@ const timeline = [
   endOfTaskIntroNode(),
   ...assembleQuestionnaireChain(),
   uploadProgressNode({ session }),
-  completionRedirectNode(),
+  completionRedirectNode({ session }),
 ];
 
 /* If IDB open fails fatally we'd otherwise sit on a blank screen forever —
@@ -179,6 +175,10 @@ const timeline = [
  * (browser blocking storage entirely, etc.). Surface a fatal error UI rather
  * than starting a session whose data we can't persist. */
 storageReadyPromise
+  .then(() =>
+    /* The hashes are only needed for the data record; the task runs without them. */
+    computeContentHashes().catch((err) => console.error('[runner] content hashes failed', err))
+  )
   .then(() => startSessionGuard(session))
   .then(() => jsPsych.run(timeline))
   .catch((err) => {

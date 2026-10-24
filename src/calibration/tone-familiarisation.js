@@ -38,8 +38,8 @@
  */
 import htmlButtonResponse from '@jspsych/plugin-html-button-response';
 import { getToneBank, playToneByIndex } from '../audio/tones.js';
-import { getAudioContext } from '../audio/context.js';
-import { setUserPlaybackGain, stopAllScheduledAudio } from '../audio/dsp.js';
+import { getAudioContext, audioContextInfo } from '../audio/context.js';
+import { setUserPlaybackGain, stopAllScheduledAudio, DEFAULT_PEAK } from '../audio/dsp.js';
 import { config } from '../config.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
 import { screenOutExit } from '../screen-out.js';
@@ -386,7 +386,8 @@ export function toneAudibilityAndComfortTrial() {
       data.slider_min_pct = minPct;
       data.slider_max_pct = maxPct;
       data.t_first_slider_input_ms = tFirstInput === null ? null : Math.round(tFirstInput);
-      data.applied_peak_dbfs = 20 * Math.log10(0.25 * (lastSliderPct / 100) || 1e-6);
+      data.applied_peak_dbfs = 20 * Math.log10(DEFAULT_PEAK * (lastSliderPct / 100) || 1e-6);
+      data.audio_context = audioContextInfo();
     },
     data: { phase: 'tone_audibility_and_comfort' },
   };

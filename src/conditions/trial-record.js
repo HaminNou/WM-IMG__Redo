@@ -70,3 +70,41 @@ export function starRenderFields(star, rotationDeg) {
     star_radius_mm: r3(cellGeometry(star.cell).radius_mm),
   };
 }
+
+/**
+ * Screen position of what each slot of the encoding sequence shows, in the
+ * frame the stimulus is drawn in (`rotationDeg`). A dummy is an invisible
+ * placeholder; a tone has no visual position, so its entry holds the
+ * upright-grid position of the cell it is paired with.
+ *
+ * @param {object} params     trial parameters from the scheduler
+ * @param {object} opts
+ * @param {number} opts.rotationDeg   rotation of the grid while the slots run
+ * @param {'dot'|'tone'|'dummy'} opts.m_kind   what an M-slot shows
+ * @param {'star'|'dummy'} opts.s_kind         what an S-slot shows
+ * @returns {{slot: number, kind: string, cell: number|null, x_mm: number|null, y_mm: number|null}[]}
+ */
+export function slotPositionsMm(params, { rotationDeg, m_kind, s_kind }) {
+  const bySlot = (list) => new Map((list ?? []).map((e) => [e.slot_index_in_seq, e]));
+  const memory = bySlot(params.memory_items);
+  const stars = bySlot(params.stars);
+  const dummies = bySlot(params.dummies);
+  return params.sequence.map((slotKind, slot) => {
+    let kind = 'dummy';
+    let entry = dummies.get(slot) ?? memory.get(slot) ?? stars.get(slot);
+    let rotation = rotationDeg;
+    if (slotKind === 'M' && memory.has(slot)) {
+      entry = memory.get(slot);
+      kind = m_kind === 'dot' || m_kind === 'tone' ? m_kind : 'dummy';
+      if (kind === 'tone') rotation = 0;
+    } else if (slotKind === 'S' && stars.has(slot) && s_kind === 'star') {
+      entry = stars.get(slot);
+      kind = 'star';
+    }
+    if (!entry || !Number.isInteger(entry.cell)) {
+      return { slot, kind, cell: null, x_mm: null, y_mm: null };
+    }
+    const pos = screenPositionMm(entry.cell, rotation);
+    return { slot, kind, cell: entry.cell, x_mm: r3(pos.x_mm), y_mm: r3(pos.y_mm) };
+  });
+}
