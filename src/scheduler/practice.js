@@ -257,8 +257,8 @@ function formatFeedbackHtml({ acc, passed, willRetry, criterion }) {
   const head = passed
     ? `<h2 style="color:#0a7c4d;">Practice complete</h2>`
     : willRetry
-      ? `<h2 style="color:#b3261e;">Practice — let's try again</h2>`
-      : `<h2 style="color:#b3261e;">Practice — below criterion</h2>`;
+      ? `<h2 style="color:#b3261e;">Practice – let's try again</h2>`
+      : `<h2 style="color:#b3261e;">Practice – below criterion</h2>`;
   const body = passed
     ? `<p>You got <strong>${acc.correct} / ${acc.total}</strong> correct
        (${pct}%), above the ${critPct}% criterion.</p>

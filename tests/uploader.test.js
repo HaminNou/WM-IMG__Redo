@@ -737,7 +737,7 @@ describe('uploadPendingData', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(10);
   });
 
-  it('skips empty buckets — partial session POSTs fewer than 10', async () => {
+  it('skips empty buckets – partial session POSTs fewer than 10', async () => {
     /* Only consent + one main_a trial type → 2 non-empty buckets. */
     await appendTrialRow({ phase: 'consent' });
     await appendTrialRow({ block_label: 'main_a', phase: 'd_only_encode' });
@@ -807,7 +807,7 @@ describe('uploadPendingData', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it('returns partial when a later bucket permanently fails — earlier buckets count', async () => {
+  it('returns partial when a later bucket permanently fails – earlier buckets count', async () => {
     await seedAllTenBuckets();
     /* First 7 bucket-POSTs succeed; the 8th (music_questionnaire) fails
      * permanently after retries. With retryMax=5 (default), one bucket can
@@ -839,7 +839,7 @@ describe('uploadPendingData', () => {
     expect(result.lastError).toMatch(/gave up/);
   });
 
-  it('does NOT advance the cursor on a partial — re-run re-POSTs everything', async () => {
+  it('does NOT advance the cursor on a partial – re-run re-POSTs everything', async () => {
     await seedAllTenBuckets();
     let phase2 = false;
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
@@ -978,7 +978,7 @@ describe('uploadPendingData', () => {
     expect(result.uploadedRows).toBe(5);
   });
 
-  describe("uploadPendingData — provider: 'datapipe'", () => {
+  describe("uploadPendingData – provider: 'datapipe'", () => {
     /* DataPipe path: each bucket envelope is wrapped in
      * `{experimentID, filename, data}` before POST. The wire format change
      * is invisible to storage / cursor logic — those still see the same
@@ -1225,7 +1225,7 @@ describe('uploadCheckpoint', () => {
   });
 });
 
-describe('postWithRetry — time limits and cancellation', () => {
+describe('postWithRetry – time limits and cancellation', () => {
   const instantSleep = () => Promise.resolve();
   /* A fetch that never answers, but rejects when it is aborted. */
   const hangingFetch = () =>
@@ -1313,7 +1313,7 @@ describe('postWithRetry — time limits and cancellation', () => {
   });
 });
 
-describe('uploadCheckpoint — cancellation', () => {
+describe('uploadCheckpoint – cancellation', () => {
   it('leaves the cursor alone when cancelled, so the rows go in the next checkpoint', async () => {
     _resetCheckpointForTests();
     await appendTrialRow({ phase: 'consent' });

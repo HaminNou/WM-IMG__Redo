@@ -99,7 +99,7 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
   Object.freeze({
     id: 'me_q04',
     gold_msi: 'MT04',
-    text: 'I have had ___ years of formal training on a musical instrument (including voice) during my lifetime — count school music classes <strong>and</strong> private lessons / conservatory together.',
+    text: 'I have had ___ years of formal training on a musical instrument (including voice) during my lifetime – count school music classes <strong>and</strong> private lessons / conservatory together.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
       Object.freeze({ value: '0.5', label: '0.5', score: 2 }),
@@ -136,13 +136,13 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
      * items keep the composite low). */
     text: 'I would consider myself a musician.',
     options: Object.freeze([
-      Object.freeze({ value: '1', label: '1 — Completely disagree', score: 1 }),
+      Object.freeze({ value: '1', label: '1 – Completely disagree', score: 1 }),
       Object.freeze({ value: '2', label: '2', score: 2 }),
       Object.freeze({ value: '3', label: '3', score: 3 }),
-      Object.freeze({ value: '4', label: '4 — Neither agree nor disagree', score: 4 }),
+      Object.freeze({ value: '4', label: '4 – Neither agree nor disagree', score: 4 }),
       Object.freeze({ value: '5', label: '5', score: 5 }),
       Object.freeze({ value: '6', label: '6', score: 6 }),
-      Object.freeze({ value: '7', label: '7 — Completely agree', score: 7 }),
+      Object.freeze({ value: '7', label: '7 – Completely agree', score: 7 }),
     ]),
   }),
   Object.freeze({
@@ -170,7 +170,7 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
     options: Object.freeze([
       Object.freeze({ value: 'no', label: 'No', score: null }),
       Object.freeze({ value: 'unsure', label: 'I am not sure / sometimes', score: null }),
-      Object.freeze({ value: 'yes', label: 'Yes — reliably', score: null }),
+      Object.freeze({ value: 'yes', label: 'Yes – reliably', score: null }),
     ]),
   }),
 ]);
@@ -205,14 +205,14 @@ function musicExperienceIntro() {
     type: surveyHtmlForm,
     preamble: `
       <div style="max-width: 40rem; margin: 0 auto; text-align: left;">
-        <h2 style="text-align: center;">Music background — 8 quick questions</h2>
+        <h2 style="text-align: center;">Music background – 8 quick questions</h2>
         <p>Some of the trials in this experiment involved listening to
         short tones. Different people listen to tones in different ways
         depending on their music background. The next page asks eight
         short questions about music training and instrument practice.</p>
         <p>Please answer based on <strong>what you have actually done</strong>
         (years, hours, instruments) rather than how you compare to professional
-        musicians — there are no right or wrong answers, and the scale is
+        musicians – there are no right or wrong answers, and the scale is
         designed for everyone from people who have never played an instrument
         to people who play professionally.</p>
       </div>
@@ -239,7 +239,7 @@ function musicExperienceFormNode() {
         </td>
         <td style="padding: 0.75rem 0; vertical-align: top;">
           <select name="${item.id}" required>
-            <option value="">—</option>
+            <option value="">–</option>
             ${optionsHtml}
           </select>
         </td>
@@ -252,7 +252,7 @@ function musicExperienceFormNode() {
       <h2>Music background</h2>
       <p style="max-width: 40rem; margin: 0.5rem auto; text-align: left;">
         Please answer each of the eight questions below based on what you
-        have actually done — count years, hours, and instruments as
+        have actually done – count years, hours, and instruments as
         accurately as you can. There are no right or wrong answers.
       </p>
     `,

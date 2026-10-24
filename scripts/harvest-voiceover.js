@@ -46,7 +46,10 @@ const ROOT = dirname(__dirname);
 const VOICEOVER_DIR = join(ROOT, 'public', 'voiceover');
 const STRINGS_FILE = join(VOICEOVER_DIR, 'strings.json');
 
+/* Audio is keyed on the text with en dashes written as em dashes, so the
+ * dash style shown on screen does not change which recording is played. */
 function sha256Hex(text) {
+  text = text.replace(/\u2013/g, '\u2014');
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 

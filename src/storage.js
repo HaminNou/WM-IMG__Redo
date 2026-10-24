@@ -77,7 +77,7 @@ export async function initStorage({ backend = 'auto' } = {}) {
   } else {
     if (backend === 'auto') {
       console.warn(
-        '[storage] IndexedDB unavailable — falling back to in-memory storage. Data will not survive a refresh.'
+        '[storage] IndexedDB unavailable – falling back to in-memory storage. Data will not survive a refresh.'
       );
     }
     activeBackend = MemoryBackend();

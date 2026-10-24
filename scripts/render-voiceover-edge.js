@@ -52,7 +52,10 @@ const TTS_FORMAT_TAG = 'mp3-24khz-96kbps-mono';
  * `-20%`, named enum like `slow`, or a decimal multiplier like `0.85`). */
 const TTS_RATE = process.env.VOICEOVER_RATE || '-15%';
 
+/* Audio is keyed on the text with en dashes written as em dashes, so the
+ * dash style shown on screen does not change which recording is played. */
 function sha256Hex(text) {
+  text = text.replace(/\u2013/g, '\u2014');
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 

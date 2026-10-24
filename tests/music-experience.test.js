@@ -149,7 +149,7 @@ describe('music-experience: form-node markup + on_finish', () => {
     const [, formNode] = musicExperienceTimeline();
     /* `<option value="">—</option>` — the em-dash sentinel pattern. The form
      * has `required` on each select so the participant must choose. */
-    expect(formNode.html).toContain('<option value="">—</option>');
+    expect(formNode.html).toContain('<option value="">–</option>');
     expect(formNode.html).toContain('required');
   });
 

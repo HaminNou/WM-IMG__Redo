@@ -70,7 +70,7 @@ export const MAX_SWEEPS = 10;
  * gain scalar passed to `setUserPlaybackGain` (so 50 % → 0.5). */
 const SLIDER_DEFAULT_PCT = 50;
 
-const ACCENT_COLOUR = '#60a5fa'; /* tailwind blue-400 — matches existing chrome */
+const ACCENT_COLOUR = '#60a5fa'; /* tailwind blue-400 – matches existing chrome */
 
 function waitUntilAudioTime(ctx, targetTimeSec) {
   return new Promise((resolve) => {
@@ -181,7 +181,7 @@ export function toneAudibilityAndComfortTrial() {
         </p>
         <p class="tac-instructions">
           When the level feels right, click
-          <strong>I'm comfortable — continue</strong>.
+          <strong>I'm comfortable – continue</strong>.
         </p>
       </div>
       <div class="tac-bank" id="tac-bank" aria-label="24 tones">
@@ -204,7 +204,7 @@ export function toneAudibilityAndComfortTrial() {
         </div>
       </div>
     `,
-    choices: ["I'm comfortable — continue"],
+    choices: ["I'm comfortable – continue"],
     /* The button opens after one complete sweep of all tones has played. */
     button_html: (label) =>
       `<button class="jspsych-btn" id="tac-yes-btn" disabled aria-disabled="true" style="opacity: 0.55">${label}</button>`,

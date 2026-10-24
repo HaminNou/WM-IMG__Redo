@@ -82,7 +82,7 @@ export function consentBodyHtml(paymentPolicyText = config.prolific.payment_poli
         <li>Set your audio volume so that a brief reference tone is comfortably audible. Headphones are strongly recommended.</li>
         <li>Silence or turn off any other devices that could distract you during the session, and complete the session in a quiet environment, free of interruptions, in order to minimize anything that could potentially affect your focus and attention on the task.</li>
         <li>Remember and compare visual information (dots on a grid; mental images of simple geometric patterns) and auditory information (short pure tones) that may consist of any of the following: brief sounds, pure tones, simple shapes, geometric patterns, or grid markers, and indicate your memory of the recently presented items by pressing a key.</li>
-        <li>Complete a brief demographics questionnaire (it does not ask about your health or for your date of birth). At the end of the session, you will complete a short strategy questionnaire (19 statements rated on a 5-point agreement scale) asking how you approached each part of the task &mdash; there are no right or wrong answers; we are interested in capturing your approach.</li>
+        <li>Complete a brief demographics questionnaire (it does not ask about your health or for your date of birth). At the end of the session, you will complete a short strategy questionnaire (19 statements rated on a 5-point agreement scale) asking how you approached each part of the task &ndash; there are no right or wrong answers; we are interested in capturing your approach.</li>
         <li>Complete three brief typed instruction checks during the session. If you miss more than one, your data may be excluded from the analyses under the pre-registered exclusion rules.</li>
       </ul>
 
@@ -112,7 +112,7 @@ export function consentBodyHtml(paymentPolicyText = config.prolific.payment_poli
       </ul>
 
       <h3>STATEMENT OF CONSENT:</h3>
-      <p>By clicking &ldquo;I consent &mdash; begin&rdquo; below, you acknowledge your intent to participate in this online research study; that you have been provided with the opportunity and the means to ask questions and obtain information prior to participating; and that you are aware of your right to decline participation by closing this browser tab and selecting &ldquo;Stop without completing&rdquo; on Prolific at any time without penalty.</p>
+      <p>By clicking &ldquo;I consent &ndash; begin&rdquo; below, you acknowledge your intent to participate in this online research study; that you have been provided with the opportunity and the means to ask questions and obtain information prior to participating; and that you are aware of your right to decline participation by closing this browser tab and selecting &ldquo;Stop without completing&rdquo; on Prolific at any time without penalty.</p>
     </div>
     <p style="margin-top: 1rem; text-align:center; font-size: 0.9rem; color: rgba(0,0,0,0.6);">
       Please scroll to read the entire consent form before continuing.

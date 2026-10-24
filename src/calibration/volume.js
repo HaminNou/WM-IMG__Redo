@@ -32,7 +32,7 @@ export function speakerVolumeInstructionTrial() {
         <p style="max-width: 38rem; margin: 0 auto 1rem;">
           On the next page, you will hear a sequence of tones. You will use
           an on-screen slider to fine-tune the loudness to a comfortable
-          level — so leaving your system volume near the middle gives that
+          level – so leaving your system volume near the middle gives that
           slider room to move in either direction.
         </p>
         <p style="max-width: 38rem; margin: 0 auto;">

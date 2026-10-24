@@ -76,7 +76,7 @@ describe('parsePreflightArgs', () => {
   });
 });
 
-describe('evaluatePreflight — locked-id checks', () => {
+describe('evaluatePreflight – locked-id checks', () => {
   it('passes when build_id and schema_version match the pre-reg lock', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
@@ -122,7 +122,7 @@ describe('evaluatePreflight — locked-id checks', () => {
   });
 });
 
-describe('evaluatePreflight — deployment readiness severity gates', () => {
+describe('evaluatePreflight – deployment readiness severity gates', () => {
   it('NO_UPLOADER_ENDPOINT is a warning in permissive mode (pilot-acceptable)', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
@@ -301,7 +301,7 @@ describe('formatIssues', () => {
   });
 });
 
-describe('evaluatePreflight — previously used identifiers', () => {
+describe('evaluatePreflight – previously used identifiers', () => {
   const codes = (issues) => issues.map((i) => i.code);
   const previouslyUsedIds = ['USEDCODE1', 'USEDPIPE1'];
 
@@ -376,7 +376,7 @@ describe('evaluatePreflight — previously used identifiers', () => {
   });
 });
 
-describe('evaluatePreflight — placeholders in participant-facing text', () => {
+describe('evaluatePreflight – placeholders in participant-facing text', () => {
   const text = [
     { source: 'consent form', text: '<p>Payment: [PAYMENT_POLICY] and [PAY_AMOUNT].</p>' },
   ];

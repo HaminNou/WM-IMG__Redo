@@ -58,16 +58,16 @@ const NAV_OPTS = Object.freeze({
 
 export function dOnlyInstructionNode() {
   const setSize = config.memory.set_size;
-  const title = 'Task 1 — Remember the dots';
+  const title = 'Task 1 – Remember the dots';
   const pages = [
     slideStimulusPage({
       title,
       body: `
         <p>You will see <strong>${setSize} dots</strong> appear one at a
         time at different locations inside the circle. Each dot is brief
-        — remember <strong>which locations</strong> the dots appear in.</p>
+        – remember <strong>which locations</strong> the dots appear in.</p>
       `,
-      narration: `You will see ${setSize} dots appear one at a time at different locations inside the circle. Each dot is brief — remember which locations the dots appear in.`,
+      narration: `You will see ${setSize} dots appear one at a time at different locations inside the circle. Each dot is brief – remember which locations the dots appear in.`,
       exemplar: ['dot'],
     }),
     slideStimulusPage({
@@ -112,7 +112,7 @@ export function dOnlyInstructionNode() {
 
 export function tOnlyInstructionNode() {
   const setSize = config.memory.set_size;
-  const title = 'Task 2 — Remember the tones';
+  const title = 'Task 2 – Remember the tones';
   const pages = [
     slideStimulusPage({
       title,

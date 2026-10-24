@@ -168,7 +168,7 @@ describe.each([['d_only'], ['t_only']])('memory-block: %s', (trialType) => {
     expect(block.some((trial) => new Set(trial.probes.map((p) => p.type)).size < 3)).toBe(true);
   });
 
-  it('on-pattern counts vary across trials — block-level (not trial-level) on/off balance', () => {
+  it('on-pattern counts vary across trials – block-level (not trial-level) on/off balance', () => {
     const block = generateMemoryBlock({ trialType, blockSize: 24 });
     const onCounts = new Set(
       block.map((trial) => trial.memory_items.filter((m) => m.pattern_label === 'on').length)

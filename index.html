@@ -8,7 +8,7 @@
          that apply automatic dark-mode adjustments (Chrome's Auto Dark Theme
          on Android/Chromebook, Edge's "Force dark mode for web contents",
          user agents honouring `prefers-color-scheme: dark`) repaint our
-         #D3D3D3 surface and #FFFFFF trial pages darker than designed —
+         #D3D3D3 surface and #FFFFFF trial pages darker than designed –
          which destroys the contrast between the inked-black rotation
          arrow and the trial background and undermines stimulus-fidelity
          calibration we did offline. `<meta name="color-scheme">` + the
@@ -25,7 +25,7 @@
       :root {
         /* Set by the screen-calibration step; 1 mm = ~3.7795 px at 96 dpi until calibrated. */
         --mm: 3.7795px;
-        /* See `<meta name="color-scheme">` in the head — pair declaration so
+        /* See `<meta name="color-scheme">` in the head – pair declaration so
          * the lock applies even to browsers that ignore the meta tag. The
          * `only` keyword (vs bare `light`) is what prevents Chrome's Auto
          * Dark Theme from forcing dark mode anyway. */
@@ -63,7 +63,7 @@
        *
        * Every UI surface (calibration, instructions, demos, rest,
        * questionnaire, upload, completion) keeps the default theme and only
-       * the page during trial bodies flips —
+       * the page during trial bodies flips –
        * the trial-start gate's `on_finish` sets `html[data-trial-bg]` via
        * `src/visuals/page-background.js`, and the next gate's `on_load`
        * (and the ITI's `on_finish` as defence-in-depth) clears it.
@@ -74,7 +74,7 @@
        * with its own background-color, not `body`'s).
        *
        * Stimulus / bull's-eye / fixation / pattern colour overrides are NOT
-       * driven by these CSS rules — those primitives are SVG with imperative
+       * driven by these CSS rules – those primitives are SVG with imperative
        * `fill`/`stroke` attributes and the colour choice is plumbed through
        * the trial's `background_shade` parameter into `createGridFrame` so
        * the geometry and colour come from a single source of truth.
@@ -96,7 +96,7 @@
        * inherits the dark-theme white-ish text by default. Switch it to dim
        * black when the page flips to white/gray so the badge stays legible
        * without competing with the stimulus. Specificity matches the inline
-       * style on the container (single class) — using `html[data-trial-bg]`
+       * style on the container (single class) – using `html[data-trial-bg]`
        * as ancestor wins on cascade order. */
       html[data-trial-bg='white'] .overall-trial-counter,
       html[data-trial-bg='gray'] .overall-trial-counter {
@@ -116,7 +116,7 @@
        * Theme, Edge force-dark, prefers-color-scheme overrides). The
        * `html.display-colour-locked` class is a SECONDARY override the
        * participant can opt into from the screen-calibration page if their
-       * display still looks darkened despite the lock — kiosk user
+       * display still looks darkened despite the lock – kiosk user
        * stylesheets, embedded Prolific-mobile webviews, OS-level colour
        * filters (Windows Night Light, macOS True Tone), and accessibility
        * profiles can still recolour our surface in edge cases.
@@ -128,7 +128,7 @@
        * Mode's automatic palette substitution so the bull's-eye / arrow /
        * pattern colours we paint by hand stay as authored.
        *
-       * Per-trial flips still work — the trial-bg attribute selectors below
+       * Per-trial flips still work – the trial-bg attribute selectors below
        * keep their per-shade rules but become `!important` once the lock is
        * engaged. The participant's choice is also stamped into the
        * `screen_calibration` row so the analyst can stratify by whether the
@@ -155,22 +155,22 @@
         max-width: 720px;
       }
       /* Demo slides need the full viewport so (a) the longest task title
-       * ("Demonstration of Task 5 — Tones and pattern together") stays on
+       * ("Demonstration of Task 5 – Tones and pattern together") stays on
        * one line and (b) the title/circle/hint can spread across the page
        * height. `:has()` is supported in all evergreen browsers (Chrome 105+,
-       * Firefox 121+, Safari 15.4+) — well within Prolific's desktop matrix. */
+       * Firefox 121+, Safari 15.4+) – well within Prolific's desktop matrix. */
       .jspsych-content:has(.demo-frame) {
         max-width: none;
         width: 100%;
       }
 
       /* ─────────────────────────────────────────────────────────────────────
-       * Button + form-input theming — Light card-style controls
+       * Button + form-input theming – Light card-style controls
        * on the dark experimental background so action surfaces read clearly
        * across calibration / instructions / probe-feedback contexts.
        * Hover state uses Mizzou maroon (#772139).
        *
-       * Surface colour is `#d8d4cc` — a warm dim off-white, ~85 % luminance.
+       * Surface colour is `#d8d4cc` – a warm dim off-white, ~85 % luminance.
        * The dimmer surface (rather than pure white) keeps the action legible
        * without demanding the participant's attention. Hover lifts to `#ebe7df`
        * (~92 % L) so the visual feedback on cursor entry is preserved.
@@ -247,11 +247,11 @@
       }
 
       /* Keyboard focus ring. Default browser outlines (blue on Chrome, dotted
-       * on Firefox) blend into the dark theme on Windows / Firefox &mdash; survey
+       * on Firefox) blend into the dark theme on Windows / Firefox &ndash; survey
        * radios and selects in particular were near-invisible when tabbed to. The Mizzou
        * maroon ring matches the existing hover state and gives keyboard-only
        * users (a non-trivial fraction on Prolific desktop) a visible cursor.
-       * `:focus-visible` (not `:focus`) — mouse-clicked elements don't get
+       * `:focus-visible` (not `:focus`) – mouse-clicked elements don't get
        * the ring, so the visual is reserved for true keyboard navigation. */
       .jspsych-btn:focus-visible,
       .jspsych-display-element button:focus-visible,
@@ -282,7 +282,7 @@
        * (~175 WPM ≈ 343 ms per word) but long enough that the appearance
        * reads as a smooth fade rather than a hard switch.
        *
-       * `prefers-reduced-motion` collapses the transition to 0 ms — words still
+       * `prefers-reduced-motion` collapses the transition to 0 ms – words still
        * reveal one at a time (the visual pacing is the point), but without
        * animation, for participants who have set the OS-level preference.
        *
@@ -305,7 +305,7 @@
         }
       }
 
-      /* Voiceover toggle pill — top-right of the viewport, persistent across
+      /* Voiceover toggle pill – top-right of the viewport, persistent across
        * instruction slides. Mirrors the trial-counter overlay convention
        * (top-left, `position: fixed`, low z-index) but on the opposite side
        * so the two never collide. Hidden by default; the engine mounts it
@@ -338,7 +338,7 @@
         line-height: 1;
       }
 
-      /* Dim scrollbars — default WebKit scrollbars are bright white on the
+      /* Dim scrollbars – default WebKit scrollbars are bright white on the
        * light gray shell; dim them so they don't compete with stimulus
        * content during long instruction screens or surveys. Translucent black
        * thumb on transparent track; darkens slightly on hover. */

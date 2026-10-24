@@ -37,7 +37,7 @@ function makeSession(overrides = {}) {
   };
 }
 
-describe('readPilotMode — URL source', () => {
+describe('readPilotMode – URL source', () => {
   it('returns is_pilot_run=true on ?pilot=1', () => {
     const out = readPilotMode({ search: '?pilot=1', env: {} });
     expect(out.is_pilot_run).toBe(true);
@@ -95,7 +95,7 @@ describe('readPilotMode — URL source', () => {
   });
 });
 
-describe('readPilotMode — env source', () => {
+describe('readPilotMode – env source', () => {
   it('returns is_pilot_run=true on VITE_PILOT_RUN=1', () => {
     const out = readPilotMode({ search: '', env: { VITE_PILOT_RUN: '1' } });
     expect(out.is_pilot_run).toBe(true);
@@ -118,7 +118,7 @@ describe('readPilotMode — env source', () => {
   });
 });
 
-describe('readPilotMode — precedence + frozenness', () => {
+describe('readPilotMode – precedence + frozenness', () => {
   it('URL beats env when both flip pilot mode', () => {
     const out = readPilotMode({
       search: '?pilot=1&pilot_label=from-url',

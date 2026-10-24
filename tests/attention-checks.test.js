@@ -44,7 +44,7 @@ describe('ATTENTION_CHECK_ITEMS', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('is frozen — items cannot be mutated post-load', () => {
+  it('is frozen – items cannot be mutated post-load', () => {
     expect(Object.isFrozen(ATTENTION_CHECK_ITEMS)).toBe(true);
     expect(Object.isFrozen(ATTENTION_CHECK_ITEMS[0])).toBe(true);
   });
@@ -62,7 +62,7 @@ describe('normaliseAttentionAnswer', () => {
     expect(normaliseAttentionAnswer(42)).toBe('');
   });
 
-  it('does NOT strip punctuation — sloppy answers fail', () => {
+  it('does NOT strip punctuation – sloppy answers fail', () => {
     /* Per the design intent in attention-checks.js: punctuation indicates
      * low-effort responding and should fail. */
     expect(normaliseAttentionAnswer('paper.')).toBe('paper.');

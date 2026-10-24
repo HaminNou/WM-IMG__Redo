@@ -67,7 +67,7 @@ export function uploadProgressNode({ session, endpoint, label, maxWaitMs } = {})
     stimulus: `
       <div style="display: grid; place-items: center; gap: 1.25rem; max-width: 36rem; margin: 0 auto;">
         <h2 style="margin: 0;">Saving your data</h2>
-        <p style="margin: 0; opacity: 0.85;">Please don't close this tab — this usually takes only a few seconds.</p>
+        <p style="margin: 0; opacity: 0.85;">Please don't close this tab – this usually takes only a few seconds.</p>
         <div id="${PROGRESS_MOUNT_ID}" style="font-size: 1.1rem;">Starting…</div>
       </div>
     `,
@@ -323,7 +323,7 @@ export function completionRedirectNode({ redirectDelayMs } = {}) {
 
 function renderTestBuildNotice(url) {
   return `
-    <h2 style="margin: 0;">You're done — thank you!</h2>
+    <h2 style="margin: 0;">You're done – thank you!</h2>
     <p style="margin: 0;">This is a development build. The Prolific completion URL hasn't been
     locked yet, so we're not redirecting automatically.</p>
     <div style="opacity: 0.7; font-size: 0.9em; margin-top: 0.5rem;">

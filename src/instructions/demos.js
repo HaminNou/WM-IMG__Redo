@@ -409,7 +409,7 @@ function demoFrameTemplate(taskNumber, title) {
     </style>
     <div class="demo-frame" style="${SLIDE_STYLE_DEMO}">
       <div style="${SLIDE_TITLE_ROW_STYLE}">
-        <h2 style="${SLIDE_TITLE_H2_STYLE}">Demonstration of Task ${taskNumber} — ${title}</h2>
+        <h2 style="${SLIDE_TITLE_H2_STYLE}">Demonstration of Task ${taskNumber} – ${title}</h2>
       </div>
 
       <div class="demo-spacer-above-circle" style="
@@ -810,7 +810,7 @@ async function runRotationTeachingPrelude(frame, ctl, angleDeg) {
   const ARROW_VISUAL_TAIL_MS = 600;
   const ROTATED_PATTERN_VISUAL_TAIL_MS = 1500;
 
-  ctl.setCaption('Step 1 of 3 — Here is the pattern. Picture it in your mind.');
+  ctl.setCaption('Step 1 of 3 – Here is the pattern. Picture it in your mind.');
   buildPatternOverlay(frame);
   showPattern(frame);
   if (!(await ctl.awaitNarration())) return false;
@@ -818,7 +818,7 @@ async function runRotationTeachingPrelude(frame, ctl, angleDeg) {
 
   if (
     !(await ctl.advanceCaption(
-      `Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by ${angleDeg > 0 ? '+' : ''}${angleDeg}°).`
+      `Step 2 of 3 – An arrow tells you which way to turn the pattern in your mind (here, by ${angleDeg > 0 ? '+' : ''}${angleDeg}°).`
     ))
   ) {
     return false;
@@ -836,7 +836,7 @@ async function runRotationTeachingPrelude(frame, ctl, angleDeg) {
 
   if (
     !(await ctl.advanceCaption(
-      'Step 3 of 3 — This is how your rotated mental image should look. Hold this picture in your mind.'
+      'Step 3 of 3 – This is how your rotated mental image should look. Hold this picture in your mind.'
     ))
   ) {
     removeStandaloneArrow(arrow);
@@ -1092,9 +1092,9 @@ function pressOutcomeCaption({ pressedLabel, correctLabel, isCorrect, stimulusNa
   const correctSpan = `<span style="color: ${FEEDBACK_COLOR_CORRECT}; font-weight: 600;">correct</span>`;
   const incorrectSpan = `<span style="color: ${FEEDBACK_COLOR_WRONG}; font-weight: 600;">incorrect</span>`;
   if (isCorrect) {
-    return `We chose <strong>${pressedLabel}</strong> — that was the ${correctSpan} answer, so the ${stimulusName} turns green.`;
+    return `We chose <strong>${pressedLabel}</strong> – that was the ${correctSpan} answer, so the ${stimulusName} turns green.`;
   }
-  return `We chose <strong>${pressedLabel}</strong> — that was ${incorrectSpan}; the ${correctSpan} answer was <strong>${correctLabel}</strong>, so the ${stimulusName} turns red.`;
+  return `We chose <strong>${pressedLabel}</strong> – that was ${incorrectSpan}; the ${correctSpan} answer was <strong>${correctLabel}</strong>, so the ${stimulusName} turns red.`;
 }
 
 /* ─── Mini-trial schedules ──────────────────────────────────────────── */
@@ -2128,27 +2128,27 @@ export function enumerateDemoNarrationStrings() {
   const out = new Set();
 
   /* Per-task one-shot prelude / setup captions. */
-  out.add('Step 1 of 3 — Here is the pattern. Picture it in your mind.');
+  out.add('Step 1 of 3 – Here is the pattern. Picture it in your mind.');
   for (const angle of DEMO_ROTATION_ANGLE_POOL) {
     const sign = angle > 0 ? '+' : '';
     out.add(
-      `Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by ${sign}${angle}°).`
+      `Step 2 of 3 – An arrow tells you which way to turn the pattern in your mind (here, by ${sign}${angle}°).`
     );
   }
   out.add(
-    'Step 3 of 3 — This is how your rotated mental image should look. Hold this picture in your mind.'
+    'Step 3 of 3 – This is how your rotated mental image should look. Hold this picture in your mind.'
   );
 
   /* D-only mini-trial. */
   out.add('Memorize the locations of the dots that will appear inside the circle one at a time.');
   out.add('Watch as dots appear one at a time. Try to remember the location of each dot.');
-  out.add('Dot 1 — remember its location.');
-  out.add('Last dot — remember its location.');
+  out.add('Dot 1 – remember its location.');
+  out.add('Last dot – remember its location.');
   for (let i = 0; i < 3; i++) {
     out.add(
-      `Dot ${i + 1} — keep tracking each location.`
+      `Dot ${i + 1} – keep tracking each location.`
     ); /* i=1 used at runtime; cover all 3 defensively */
-    out.add(`Dot ${i + 1} — remember its location.`);
+    out.add(`Dot ${i + 1} – remember its location.`);
   }
   out.add('Hold the dots in mind for a moment.');
   for (let p = 0; p < 3; p++) {
@@ -2158,11 +2158,11 @@ export function enumerateDemoNarrationStrings() {
   /* T-only mini-trial. */
   out.add('Memorize each of the tones that will play one at a time.');
   out.add('Listen as tones play one at a time.');
-  out.add('Tone 1 — listen and try to remember it.');
-  out.add('Last tone — keep remembering each one.');
+  out.add('Tone 1 – listen and try to remember it.');
+  out.add('Last tone – keep remembering each one.');
   for (let i = 0; i < 3; i++) {
-    out.add(`Tone ${i + 1} — keep listening for each tone.`);
-    out.add(`Tone ${i + 1} — listen and remember it.`);
+    out.add(`Tone ${i + 1} – keep listening for each tone.`);
+    out.add(`Tone ${i + 1} – listen and remember it.`);
   }
   out.add('Hold the tones in mind for a moment.');
   for (let p = 0; p < 3; p++) {
@@ -2177,8 +2177,8 @@ export function enumerateDemoNarrationStrings() {
     'Now keep picturing the turned pattern. 3 stars will appear inside the circle. For each star, decide whether it falls on-pattern or not on-pattern.'
   );
   for (let i = 0; i < 3; i++) {
-    out.add(`Star ${i + 1} of 3 — judge it against your turned pattern.`);
-    out.add(`Star ${i + 1} — judge it against your turned pattern.`);
+    out.add(`Star ${i + 1} of 3 – judge it against your turned pattern.`);
+    out.add(`Star ${i + 1} – judge it against your turned pattern.`);
   }
 
   /* I+D mini-trial. */
@@ -2240,11 +2240,11 @@ export function enumerateDemoNarrationStrings() {
   for (const { stim, labels } of cases) {
     for (const pressed of labels) {
       /* Correct branch. */
-      out.add(`We chose ${pressed} — that was the correct answer, so the ${stim} turns green.`);
+      out.add(`We chose ${pressed} – that was the correct answer, so the ${stim} turns green.`);
       /* Incorrect branch — paired with the other label as the correct one. */
       const correct = labels.find((l) => l !== pressed);
       out.add(
-        `We chose ${pressed} — that was incorrect; the correct answer was ${correct}, so the ${stim} turns red.`
+        `We chose ${pressed} – that was incorrect; the correct answer was ${correct}, so the ${stim} turns red.`
       );
     }
   }

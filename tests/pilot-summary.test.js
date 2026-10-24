@@ -173,7 +173,7 @@ describe('summariseProbeMatrix', () => {
     });
   });
 
-  it('does not require probe_type — rows with falsy probe_type are skipped', () => {
+  it('does not require probe_type – rows with falsy probe_type are skipped', () => {
     const rows = [
       { phase: 'd_only_probe', block_label: 'main_a' } /* no probe_type */,
       { phase: 'd_only_probe', probe_type: '', block_label: 'main_a' },

@@ -159,7 +159,7 @@ export function attentionCheckSummaryNode() {
   const stepId = 'attention_check_summary';
   const node = {
     type: surveyHtmlForm,
-    preamble: `<h2>Thanks — moving on.</h2>`,
+    preamble: `<h2>Thanks – moving on.</h2>`,
     html: `
       <div style="max-width: 36rem; margin: 0 auto;">
         <p>Press <strong>Continue</strong> to proceed to the main task.</p>

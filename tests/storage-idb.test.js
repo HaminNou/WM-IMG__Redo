@@ -47,7 +47,7 @@ beforeEach(async () => {
   await initStorage({ backend: 'indexeddb' });
 });
 
-describe('IndexedDB backend — kind reporting', () => {
+describe('IndexedDB backend – kind reporting', () => {
   it('reports the active backend kind as "indexeddb"', async () => {
     /* The backend was initialised once in beforeAll; a second initStorage call
      * is idempotent and should report the same kind. */
@@ -56,7 +56,7 @@ describe('IndexedDB backend — kind reporting', () => {
   });
 });
 
-describe('IndexedDB backend — appendTrialRow + getAllTrialRows', () => {
+describe('IndexedDB backend – appendTrialRow + getAllTrialRows', () => {
   it('persists rows with autoIncrement seq', async () => {
     await appendTrialRow({ phase: 'a' });
     await appendTrialRow({ phase: 'b' });
@@ -83,7 +83,7 @@ describe('IndexedDB backend — appendTrialRow + getAllTrialRows', () => {
   });
 });
 
-describe('IndexedDB backend — getTrialRowsAfter (cursor semantics)', () => {
+describe('IndexedDB backend – getTrialRowsAfter (cursor semantics)', () => {
   it('returns only rows with seq > cursor', async () => {
     for (let i = 0; i < 5; i++) await appendTrialRow({ phase: 'p', i });
     const all = await getAllTrialRows();
@@ -95,7 +95,7 @@ describe('IndexedDB backend — getTrialRowsAfter (cursor semantics)', () => {
   });
 });
 
-describe('IndexedDB backend — meta store (cursor + completion URL + session)', () => {
+describe('IndexedDB backend – meta store (cursor + completion URL + session)', () => {
   it('upload cursor defaults to 0 when unset', async () => {
     expect(await getUploadCursor()).toBe(0);
   });

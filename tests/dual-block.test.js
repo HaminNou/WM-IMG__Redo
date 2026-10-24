@@ -17,7 +17,7 @@ import { setSessionPRNG } from '../src/prng.js';
 import { onPatternCells, offPatternCells } from '../src/grid.js';
 import { config } from '../src/config.js';
 
-describe.each([['i_d'], ['i_t']])('dual-block: %s — structural invariants', (trialType) => {
+describe.each([['i_d'], ['i_t']])('dual-block: %s – structural invariants', (trialType) => {
   beforeEach(() => {
     setSessionPRNG(`test-seed-dual-block-struct-${trialType}`);
     resetSequencePools();
@@ -182,7 +182,7 @@ describe.each([['i_d'], ['i_t']])('dual-block: %s — structural invariants', (t
   });
 });
 
-describe.each([['i_d'], ['i_t']])('dual-block: %s — block-level counterbalance', (trialType) => {
+describe.each([['i_d'], ['i_t']])('dual-block: %s – block-level counterbalance', (trialType) => {
   beforeEach(() => {
     setSessionPRNG(`test-seed-dual-block-counterbal-${trialType}`);
     resetSequencePools();
@@ -275,7 +275,7 @@ describe.each([['i_d'], ['i_t']])('dual-block: %s — block-level counterbalance
   });
 });
 
-describe.each([['i_d'], ['i_t']])('dual-block: %s — visual disjointness', (trialType) => {
+describe.each([['i_d'], ['i_t']])('dual-block: %s – visual disjointness', (trialType) => {
   beforeEach(() => {
     setSessionPRNG(`test-seed-dual-block-disjoint-${trialType}`);
     resetSequencePools();

@@ -82,7 +82,7 @@ export function demographicsTrial() {
           <div class="field">
             <label class="field-label" for="d-handedness">Handedness<span class="req">&bull;</span></label>
             <select id="d-handedness" name="handedness" required>
-              <option value="">— select —</option>
+              <option value="">– select –</option>
               <option value="right">Right</option>
               <option value="left">Left</option>
               <option value="ambidextrous">Ambidextrous</option>
@@ -93,7 +93,7 @@ export function demographicsTrial() {
           <div class="field">
             <label class="field-label" for="d-education">Highest level of education<span class="req">&bull;</span></label>
             <select id="d-education" name="education" required>
-              <option value="">— select —</option>
+              <option value="">– select –</option>
               <option value="high_school">High school</option>
               <option value="ged">GED</option>
               <option value="some_college">Some college</option>
@@ -109,7 +109,7 @@ export function demographicsTrial() {
           <div class="field">
             <label class="field-label" for="d-english">English fluency<span class="req">&bull;</span></label>
             <select id="d-english" name="english_fluency" required>
-              <option value="">— select —</option>
+              <option value="">– select –</option>
               <option value="native">Native speaker</option>
               <option value="fluent">Fluent</option>
               <option value="intermediate">Intermediate</option>
@@ -126,7 +126,7 @@ export function demographicsTrial() {
           <div class="field">
             <label class="field-label" for="d-glasses">Are you wearing glasses or contacts right now?<span class="req">&bull;</span></label>
             <select id="d-glasses" name="glasses_contacts" required>
-              <option value="">— select —</option>
+              <option value="">– select –</option>
               <option value="yes">Yes</option>
               <option value="no">No</option>
               <option value="prefer_not">Prefer not to say</option>

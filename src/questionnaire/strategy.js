@@ -45,11 +45,11 @@ import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
  * `1 = Strongly disagree`, `5 = Strongly agree`. Higher = more endorsement.
  */
 export const STRATEGY_SCALE = Object.freeze([
-  Object.freeze({ value: '1', label: '1 — Strongly disagree', score: 1 }),
-  Object.freeze({ value: '2', label: '2 — Disagree', score: 2 }),
-  Object.freeze({ value: '3', label: '3 — Neither agree nor disagree', score: 3 }),
-  Object.freeze({ value: '4', label: '4 — Agree', score: 4 }),
-  Object.freeze({ value: '5', label: '5 — Strongly agree', score: 5 }),
+  Object.freeze({ value: '1', label: '1 – Strongly disagree', score: 1 }),
+  Object.freeze({ value: '2', label: '2 – Disagree', score: 2 }),
+  Object.freeze({ value: '3', label: '3 – Neither agree nor disagree', score: 3 }),
+  Object.freeze({ value: '4', label: '4 – Agree', score: 4 }),
+  Object.freeze({ value: '5', label: '5 – Strongly agree', score: 5 }),
 ]);
 
 if (STRATEGY_SCALE.length !== 5) {
@@ -89,7 +89,7 @@ export const STRATEGY_ITEMS = Object.freeze([
     id: 'strategy_q04',
     section: 'memory_only',
     construct: 'relational_positioning',
-    text: 'I noted spatial relationships between the dots — which were adjacent, opposite, or close to each other.',
+    text: 'I noted spatial relationships between the dots – which were adjacent, opposite, or close to each other.',
   }),
   Object.freeze({
     id: 'strategy_q05',
@@ -106,21 +106,21 @@ export const STRATEGY_ITEMS = Object.freeze([
     section: 'tone_only',
     construct: 'pitch_labeling',
     text: 'I gave each tone a label (e.g., "high", "medium", "low", or a musical note name) and used the labels to remember the sequence.',
-    literature_anchor: 'Williamson et al. 2010 — verbal/phonological coding of pitch',
+    literature_anchor: 'Williamson et al. 2010 – verbal/phonological coding of pitch',
   }),
   Object.freeze({
     id: 'strategy_q07',
     section: 'tone_only',
     construct: 'auditory_imagery_rehearsal',
     text: 'I silently sang or hummed the tones to myself between hearing them and the tone tests.',
-    literature_anchor: 'Hubbard 2010 — auditory imagery / echoic rehearsal in auditory STM',
+    literature_anchor: 'Hubbard 2010 – auditory imagery / echoic rehearsal in auditory STM',
   }),
   Object.freeze({
     id: 'strategy_q08',
     section: 'tone_only',
     construct: 'contour_encoding',
-    text: 'I remembered the tones by their up-and-down direction — e.g., "higher, then lower, then higher".',
-    literature_anchor: 'Dowling 1978 — melodic contour encoding in tonal memory',
+    text: 'I remembered the tones by their up-and-down direction – e.g., "higher, then lower, then higher".',
+    literature_anchor: 'Dowling 1978 – melodic contour encoding in tonal memory',
   }),
   Object.freeze({
     id: 'strategy_q09',
@@ -140,9 +140,9 @@ export const STRATEGY_ITEMS = Object.freeze([
     id: 'strategy_q10',
     section: 'imagery_only',
     construct: 'imagery_vividness',
-    text: 'When the stars appeared, I could see the rotated pattern as a clear, vivid mental image — not just a vague sense of where it should be.',
+    text: 'When the stars appeared, I could see the rotated pattern as a clear, vivid mental image – not just a vague sense of where it should be.',
     literature_anchor:
-      'Pearson et al. 2015; Marks 1973 (VVIQ); Cui et al. 2007 — vividness as a percept-like vs. propositional distinction in visual imagery, central to imagery-maintenance accounts of dual-task cost',
+      'Pearson et al. 2015; Marks 1973 (VVIQ); Cui et al. 2007 – vividness as a percept-like vs. propositional distinction in visual imagery, central to imagery-maintenance accounts of dual-task cost',
   }),
   Object.freeze({
     id: 'strategy_q11',
@@ -150,7 +150,7 @@ export const STRATEGY_ITEMS = Object.freeze([
     construct: 'continuous_pattern_maintenance',
     text: 'I held the rotated pattern in my mind as a continuous image throughout the trial, rather than recreating it from scratch each time a star appeared.',
     literature_anchor:
-      'Cooper 1975; Kosslyn 1980; Logie 1995 — continuous maintenance of a visuospatial image vs. on-demand reconstruction; the within-subject mechanism the I-only condition is designed to isolate',
+      'Cooper 1975; Kosslyn 1980; Logie 1995 – continuous maintenance of a visuospatial image vs. on-demand reconstruction; the within-subject mechanism the I-only condition is designed to isolate',
   }),
   Object.freeze({
     id: 'strategy_q12',
@@ -158,7 +158,7 @@ export const STRATEGY_ITEMS = Object.freeze([
     construct: 'imagery_lapse_guessing',
     text: 'I often lost track of where the rotated pattern was and ended up just guessing on the stars.',
     literature_anchor:
-      'Construct-validity check on the imagery-maintenance manipulation — endorsement signals the imagery channel failed to hold the rotated pattern long enough to support star judgements, mirroring "give-up" responding in Sperling-style decay paradigms',
+      'Construct-validity check on the imagery-maintenance manipulation – endorsement signals the imagery channel failed to hold the rotated pattern long enough to support star judgements, mirroring "give-up" responding in Sperling-style decay paradigms',
   }),
   /* ------------------------------------------------------------------
    * SECTION 4 — Image + Dot dual (3 items).
@@ -227,35 +227,35 @@ export const STRATEGY_SECTIONS = Object.freeze([
   Object.freeze({
     id: 'memory_only',
     phase: 'strategy_memory_only',
-    header: 'Strategies — dot-memory trials',
+    header: 'Strategies – dot-memory trials',
     blurb:
       'Think about the trials where you only had to remember and judge the locations of <strong>dots</strong> (no pattern, no tones). For each statement, rate how much it describes the way you approached those trials.',
   }),
   Object.freeze({
     id: 'tone_only',
     phase: 'strategy_tone_only',
-    header: 'Strategies — tone-memory trials',
+    header: 'Strategies – tone-memory trials',
     blurb:
       'Think about the trials where you only had to remember and judge a sequence of <strong>tones</strong> (no pattern, no dots). For each statement, rate how much it describes the way you approached those trials.',
   }),
   Object.freeze({
     id: 'imagery_only',
     phase: 'strategy_imagery_only',
-    header: 'Strategies — pattern-imagery trials',
+    header: 'Strategies – pattern-imagery trials',
     blurb:
       'Think about the trials where you had to <strong>picture the rotated pattern</strong> and judge stars as on-pattern or not on-pattern (no dots, no tones). For each statement, rate how much it describes the way you approached those trials.',
   }),
   Object.freeze({
     id: 'i_d',
     phase: 'strategy_i_d',
-    header: 'Strategies — pattern + dots (dual) trials',
+    header: 'Strategies – pattern + dots (dual) trials',
     blurb:
       'Think about the trials where you had to <strong>both</strong> picture the rotated pattern <strong>and</strong> remember dot locations at the same time. For each statement, rate how much it describes the way you approached those dual trials.',
   }),
   Object.freeze({
     id: 'i_t',
     phase: 'strategy_i_t',
-    header: 'Strategies — pattern + tones (dual) trials',
+    header: 'Strategies – pattern + tones (dual) trials',
     blurb:
       'Think about the trials where you had to <strong>both</strong> picture the rotated pattern <strong>and</strong> remember a sequence of tones at the same time. For each statement, rate how much it describes the way you approached those dual trials.',
   }),
@@ -311,7 +311,7 @@ function strategySectionFormNode(section) {
         </td>
         <td style="padding: 0.75rem 0; vertical-align: top;">
           <select name="${item.id}" required>
-            <option value="">—</option>
+            <option value="">–</option>
             ${scaleOptions}
           </select>
         </td>

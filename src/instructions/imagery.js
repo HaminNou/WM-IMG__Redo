@@ -60,7 +60,7 @@ const NAV_OPTS = Object.freeze({
 
 export function iOnlyInstructionNode() {
   const starsPerTrial = config.imagery.stars_per_trial;
-  const title = 'Task 3 — Picture the pattern';
+  const title = 'Task 3 – Picture the pattern';
   const pages = [
     slideStimulusPage({
       title,
@@ -113,10 +113,10 @@ export function iOnlyInstructionNode() {
         <p>If you answer in time, the star turns
         ${FEEDBACK_GREEN} for correct or
         ${FEEDBACK_RED} for incorrect while it is still on screen.</p>
-        <p>Be honest about your mental picture — if it's fuzzy, just do
+        <p>Be honest about your mental picture – if it's fuzzy, just do
         your best.</p>
       `,
-      narration: `You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture — if it's fuzzy, just do your best.`,
+      narration: `You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best.`,
       exemplar: ['star'],
     }),
   ];

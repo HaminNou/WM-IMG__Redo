@@ -472,6 +472,7 @@ describe('audio-manifest playback', () => {
   /* Helper: SHA-256 hex of `text`. Runs the same algorithm the engine
    * uses; jsdom + Node ≥20 expose `crypto.subtle`. */
   async function hashOf(text) {
+    text = text.replace(/\u2013/g, '\u2014');
     const buf = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     const bytes = new Uint8Array(buf);
     let out = '';
@@ -647,13 +648,13 @@ describe('audio-manifest playback', () => {
     expect(wordsRevealed()).toBe(5);
   });
 
-  it('skips punctuation-only visible tokens (em-dashes) when mapping boundaries → visible spans', async () => {
+  it('skips punctuation-only visible tokens (dashes) when mapping boundaries → visible spans', async () => {
     /* Edge-TTS emits a boundary per SPOKEN word, but the visible text
      * tokenisation treats `\S+` (e.g. "—") as a word token even though
      * the engine never speaks it. The reveal cursor must skip these
      * non-spoken tokens so the visible word lights up in sync with the
      * audio, not one token behind. */
-    const text = 'Dot 1 — remember its location.';
+    const text = 'Dot 1 – remember its location.';
     const hash = await hashOf(text);
     __setVoiceoverManifestForTests({
       version: 1,
@@ -691,7 +692,7 @@ describe('audio-manifest playback', () => {
      * for clarity. Index 2 is the em-dash. */
     const spans = host.querySelectorAll(`.${CSS_WORD}`);
     expect(spans).toHaveLength(6);
-    expect(spans[2].textContent).toBe('—');
+    expect(spans[2].textContent).toBe('–');
 
     /* End-of-word triggers (offset + duration):
      *   Dot:      ends @ 353 ms

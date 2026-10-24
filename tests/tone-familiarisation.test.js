@@ -85,7 +85,7 @@ import { toneAudibilityAndComfortTrial } from '../src/calibration/tone-familiari
 /* Mount the combined trial node into jsdom — both the stimulus and the
  * Yes button so DOM lookups by id resolve as they would under jsPsych. */
 function mountTrial(node) {
-  document.body.innerHTML = `${node.stimulus}\n${node.button_html("I'm comfortable — continue")}`;
+  document.body.innerHTML = `${node.stimulus}\n${node.button_html("I'm comfortable – continue")}`;
 }
 
 describe('tone audibility + comfort layout', () => {

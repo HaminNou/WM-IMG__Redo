@@ -86,7 +86,7 @@ export function instructionsOverview() {
           you will first read a short page of instructions and then do a
           few practice trials of that task before moving on to the next.</p>
           <p>Practice has ${totalPractice} trials in total (${perType} per
-          task). A few quick reading checks are mixed in along the way —
+          task). A few quick reading checks are mixed in along the way –
           please read each page carefully.</p>
           <p>If your practice score across all five tasks is below
           ${critPct}%, the whole instructions-and-practice sequence will
@@ -301,8 +301,8 @@ function practiceFailureExit() {
       const pct =
         last?.iteration_accuracy !== undefined && last?.iteration_accuracy !== null
           ? Math.round(last.iteration_accuracy * 100)
-          : '—';
-      const attempts = last?.practice_iteration ?? '—';
+          : '–';
+      const attempts = last?.practice_iteration ?? '–';
       return (
         '<h2>Thank you for your effort</h2>' +
         '<p style="font-size: 1.05rem;">' +

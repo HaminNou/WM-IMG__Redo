@@ -43,7 +43,7 @@ function makeStubFrame() {
   return { rotation_deg: 0, stimuliLayer };
 }
 
-describe('addOpenSquare: visible mode (default — manuscript figures, dev demo)', () => {
+describe('addOpenSquare: visible mode (default – manuscript figures, dev demo)', () => {
   it('mounts a rect into the frame stimuli layer', () => {
     const frame = makeStubFrame();
     const el = addOpenSquare(frame, 7);

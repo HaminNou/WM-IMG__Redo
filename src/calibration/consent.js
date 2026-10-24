@@ -23,7 +23,7 @@ export function consentTrial() {
   const node = {
     type: htmlButtonResponse,
     stimulus: consentBodyHtml(),
-    choices: ['I consent — begin', 'I do not consent — exit'],
+    choices: ['I consent – begin', 'I do not consent – exit'],
     button_html: (choice, idx) =>
       `<button class="jspsych-btn" data-idx="${idx}"${idx === 0 ? ' disabled' : ''}>${choice}</button>`,
     on_load: () => {

@@ -36,7 +36,7 @@ const UA = Object.freeze({
     'Mozilla/5.0 (Linux; Android 13; SM-X910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 });
 
-describe('evaluateEnvironment — desktop user agents pass', () => {
+describe('evaluateEnvironment – desktop user agents pass', () => {
   it('macOS Chrome with mouse passes', () => {
     const out = evaluateEnvironment({
       userAgent: UA.mac_chrome,
@@ -86,7 +86,7 @@ describe('evaluateEnvironment — desktop user agents pass', () => {
     expect(out.isDesktop).toBe(true);
   });
 
-  it('Surface Pro hybrid (touch + mouse) passes — hover + fine pointer override touchPoints', () => {
+  it('Surface Pro hybrid (touch + mouse) passes – hover + fine pointer override touchPoints', () => {
     const out = evaluateEnvironment({
       userAgent: UA.surface_pro,
       hasHover: true,
@@ -98,7 +98,7 @@ describe('evaluateEnvironment — desktop user agents pass', () => {
   });
 });
 
-describe('evaluateEnvironment — mobile / tablet UAs fail with a reason code', () => {
+describe('evaluateEnvironment – mobile / tablet UAs fail with a reason code', () => {
   it('iPhone fails with `iphone` reason', () => {
     const out = evaluateEnvironment({
       userAgent: UA.iphone_safari,
@@ -176,7 +176,7 @@ describe('evaluateEnvironment — mobile / tablet UAs fail with a reason code', 
   });
 });
 
-describe('evaluateEnvironment — capability fallback for unknown UAs', () => {
+describe('evaluateEnvironment – capability fallback for unknown UAs', () => {
   it('a UA with no mobile markers + coarse-only input fails via capability fallback', () => {
     const out = evaluateEnvironment({
       userAgent: 'CustomBrowser/1.0',
@@ -210,7 +210,7 @@ describe('evaluateEnvironment — capability fallback for unknown UAs', () => {
   });
 });
 
-describe('evaluateEnvironment — defensive defaults', () => {
+describe('evaluateEnvironment – defensive defaults', () => {
   it('handles a fully missing input (empty object)', () => {
     const out = evaluateEnvironment({});
     expect(out.isDesktop).toBe(true);
@@ -228,7 +228,7 @@ describe('evaluateEnvironment — defensive defaults', () => {
     const out = evaluateEnvironment({ userAgent: null });
     expect(out.userAgent).toBe(
       'null'
-    ); /* String(null) === 'null' — predictable, lower-cases harmlessly */
+    ); /* String(null) === 'null' – predictable, lower-cases harmlessly */
     expect(out.isDesktop).toBe(true);
   });
 

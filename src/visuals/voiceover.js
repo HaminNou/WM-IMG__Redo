@@ -84,7 +84,7 @@
  * without triggering accidental utterance starts.
  */
 
-const WORD_REVEAL_MS_PER_WORD = 60_000 / 175; /* ≈343 ms — 175 WPM */
+const WORD_REVEAL_MS_PER_WORD = 60_000 / 175; /* ≈343 ms – 175 WPM */
 const BOUNDARY_WATCHDOG_MS = 600;
 const STORAGE_KEY = 'voiceover_enabled';
 
@@ -432,7 +432,10 @@ export function wrapWordsInPlace(host) {
  * non-secure contexts on http://) — caller treats `null` as "no manifest
  * match possible" and falls through to Web Speech.
  */
+/* Audio is keyed on the text with en dashes written as em dashes, so the
+ * dash style shown on screen does not change which recording is played. */
 async function sha256Hex(text) {
+  text = text.replace(/\u2013/g, '\u2014');
   if (typeof crypto === 'undefined' || !crypto.subtle?.digest) return null;
   if (typeof TextEncoder === 'undefined') return null;
   try {
@@ -1053,7 +1056,7 @@ class VoiceoverEngine {
    */
   async _tryAudioPath({ text, host, opts, state, finish }) {
     const manifest = await loadManifest();
-    if (state.finished) return true; /* already cancelled — don't start */
+    if (state.finished) return true; /* already cancelled – don't start */
     const hash = await sha256Hex(text);
     if (state.finished) return true;
     if (!manifest || !hash) {

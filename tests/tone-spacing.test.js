@@ -134,7 +134,7 @@ describe('enumerateValidEncodingSets', () => {
   });
 });
 
-describe('pickValidEncodingSet — determinism', () => {
+describe('pickValidEncodingSet – determinism', () => {
   it('returns the same sequence of picks under the same seed', () => {
     const rngA = createPRNG('tone-spacing-seed-1');
     const rngB = createPRNG('tone-spacing-seed-1');
@@ -148,7 +148,7 @@ describe('pickValidEncodingSet — determinism', () => {
   });
 });
 
-describe('pickFeasibleEncodingSet — foil-aware selection', () => {
+describe('pickFeasibleEncodingSet – foil-aware selection', () => {
   it('returns a set that leaves enough foil cells for the requested probe counts', () => {
     const rng = createPRNG('tone-feasible-set-seed');
     const set = pickFeasibleEncodingSet(rng, {
@@ -171,7 +171,7 @@ describe('pickFeasibleEncodingSet — foil-aware selection', () => {
   });
 });
 
-describe('filterAllowedFoilCells — foil constraint', () => {
+describe('filterAllowedFoilCells – foil constraint', () => {
   it('worked example: encoded={6, 9} → forbidden foil ranks={4, 5, 7, 8, 10, 11} (and 6, 9 themselves)', () => {
     /* The user's spec example. We pass ALL non-encoded cells as candidates
      * (across both labels) to verify the rank-based filter, independent of
@@ -210,7 +210,7 @@ describe('filterAllowedFoilCells — foil constraint', () => {
   });
 });
 
-describe('integration — t_only blocks respect the spacing rule', () => {
+describe('integration – t_only blocks respect the spacing rule', () => {
   it('every memory_items 4-tuple in a 24-trial t_only block is pairwise ≥3 ranks apart', () => {
     const rng = createPRNG('t-only-spacing-test-seed');
     const trials = generateMemoryBlock({

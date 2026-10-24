@@ -49,16 +49,16 @@ const POSTURE_HTML = slideTextPage({
       <li>Centre yourself in front of the screen: your eyes should be
       <strong>directly in front of the middle of the monitor</strong>,
       not off to one side.</li>
-      <li>Make sure the screen is roughly at <strong>eye level</strong> —
+      <li>Make sure the screen is roughly at <strong>eye level</strong> –
       adjust your chair or the monitor if needed.</li>
       <li>Try to <strong>stay in this position</strong> for the rest of
-      the study — moving your head closer or farther between trials can
+      the study – moving your head closer or farther between trials can
       change how the task looks and how well you can do it.</li>
     </ul>
     <p>When you are settled in this position, click the button below to
     continue.</p>
   `,
-  narration: `Before we begin the tasks, let's get you set up. This study works best when you are seated comfortably and stay in roughly the same position for the rest of the session. Please take a moment to set yourself up. Sit so that your eyes are about an arm's length, roughly 60 centimetres, away from the monitor. Centre yourself in front of the screen: your eyes should be directly in front of the middle of the monitor, not off to one side. Make sure the screen is roughly at eye level — adjust your chair or the monitor if needed. And try to stay in this position for the rest of the study — moving your head closer or farther between trials can change how the task looks, and how well you can do it. When you are settled in this position, click the button below to continue.`,
+  narration: `Before we begin the tasks, let's get you set up. This study works best when you are seated comfortably and stay in roughly the same position for the rest of the session. Please take a moment to set yourself up. Sit so that your eyes are about an arm's length, roughly 60 centimetres, away from the monitor. Centre yourself in front of the screen: your eyes should be directly in front of the middle of the monitor, not off to one side. Make sure the screen is roughly at eye level – adjust your chair or the monitor if needed. And try to stay in this position for the rest of the study – moving your head closer or farther between trials can change how the task looks, and how well you can do it. When you are settled in this position, click the button below to continue.`,
 });
 
 const HANDS_HTML = slideTextPage({
@@ -79,13 +79,13 @@ const HANDS_HTML = slideTextPage({
       <li>Place <strong>one index finger on each of the two horizontal
       arrow keys</strong>, one finger per hand.</li>
       <li>Keep them resting on those two keys throughout the study.</li>
-      <li><strong>Do not use two fingers of the same hand</strong> — one
+      <li><strong>Do not use two fingers of the same hand</strong> – one
       index finger per hand, on its own response key.</li>
     </ul>
     <p>When both index fingers are resting on the two response keys,
     click the button below to continue.</p>
   `,
-  narration: `Next, let's set up your hands. Throughout the study you will respond with the two horizontal arrow keys on your keyboard, the left arrow and the right arrow. The demonstrations will label them No or Yes, and Not on-pattern or On-pattern. How you place your hands matters. Use both hands, and only your index fingers. Place one index finger on each of the two horizontal arrow keys, one finger per hand. Keep them resting on those two keys throughout the study. Do not use two fingers of the same hand — one index finger per hand, on its own response key. When both index fingers are resting on the two response keys, click the button below to continue.`,
+  narration: `Next, let's set up your hands. Throughout the study you will respond with the two horizontal arrow keys on your keyboard, the left arrow and the right arrow. The demonstrations will label them No or Yes, and Not on-pattern or On-pattern. How you place your hands matters. Use both hands, and only your index fingers. Place one index finger on each of the two horizontal arrow keys, one finger per hand. Keep them resting on those two keys throughout the study. Do not use two fingers of the same hand – one index finger per hand, on its own response key. When both index fingers are resting on the two response keys, click the button below to continue.`,
 });
 
 export function viewingDistanceTrial() {

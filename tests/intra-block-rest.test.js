@@ -94,7 +94,7 @@ describe('intra-block rest insertion', () => {
     expect(aRest?.data?.duration_ms).toBe(30000);
   });
 
-  it('trial numbering is unchanged after splicing — gates still read 1..60 (A) and 61..120 (B)', () => {
+  it('trial numbering is unchanged after splicing – gates still read 1..60 (A) and 61..120 (B)', () => {
     const pair = generateMainBlockPair();
     const aNumbers = gatesIn(pair.mainA.nodes).map((n) => n.data.main_trial_number_overall);
     const bNumbers = gatesIn(pair.mainB.nodes).map((n) => n.data.main_trial_number_overall);

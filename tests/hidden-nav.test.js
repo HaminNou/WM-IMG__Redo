@@ -275,7 +275,7 @@ describe('installHiddenNav', () => {
     document.body.removeChild(input);
   });
 
-  it('install is idempotent — repeated calls do not double-bind', () => {
+  it('install is idempotent – repeated calls do not double-bind', () => {
     registerHiddenNavStep('instructions_overview', () => ({
       type: 'mock',
       data: { phase: 'instructions_overview' },
@@ -682,7 +682,7 @@ describe('audio mute gate around hidden-nav skip', () => {
     expect(__isAudioMutedForTests()).toBe(true);
   });
 
-  it('R from a registered checkpoint clears the gate (defensive — no async loops to suppress)', () => {
+  it('R from a registered checkpoint clears the gate (defensive – no async loops to suppress)', () => {
     /* Belt-and-braces: a stale `audioMuted=true` left over from any
      * earlier path should not survive an R press from a checkpoint. */
     const prevNode = { type: 'mock-plugin', data: { phase: 'demographics' } };

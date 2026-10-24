@@ -67,7 +67,7 @@ export function iDInstructionNode() {
   const setSize = config.memory.set_size;
   const starsPerTrial = config.imagery.stars_per_trial;
   const totalEvents = setSize + starsPerTrial;
-  const title = 'Task 4 — Dots and pattern together';
+  const title = 'Task 4 – Dots and pattern together';
   const pages = [
     slideStimulusPage({
       title,
@@ -87,17 +87,17 @@ export function iDInstructionNode() {
         <p>Then <strong>${totalEvents} things</strong> appear inside the
         circle one at a time, <strong>mixed together</strong>:</p>
         <ul style="margin: 0.75rem 1.25rem;">
-          <li><strong>${starsPerTrial} stars</strong> — for each star,
+          <li><strong>${starsPerTrial} stars</strong> – for each star,
           press <strong>On-pattern</strong>
           (<kbd>&rarr;</kbd> RIGHT arrow) if it lands on your rotated
           pattern, or <strong>Not on-pattern</strong>
           (<kbd>&larr;</kbd> LEFT arrow) if it does not.</li>
-          <li><strong>${setSize} dots</strong> — remember
+          <li><strong>${setSize} dots</strong> – remember
           <strong>which locations</strong> they appear in, for the dot
           tests at the end of the trial.</li>
         </ul>
       `,
-      narration: `Then ${totalEvents} things appear inside the circle one at a time, mixed together. ${starsPerTrial} stars — for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} dots — remember which locations they appear in, for the dot tests at the end of the trial.`,
+      narration: `Then ${totalEvents} things appear inside the circle one at a time, mixed together. ${starsPerTrial} stars – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} dots – remember which locations they appear in, for the dot tests at the end of the trial.`,
       exemplar: ['star', 'dot'],
     }),
     slideStimulusPage({
@@ -126,10 +126,10 @@ export function iDInstructionNode() {
         <strong style="color: #772139;">VERY important:</strong> keep the
         picture of the rotated pattern in mind during the
         <strong>entire</strong> trial. You may drop it only when the
-        central <strong>question mark (?)</strong> appears — that is
+        central <strong>question mark (?)</strong> appears – that is
         when the dot tests begin.</p>
       `,
-      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the dot tests begin.`,
+      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the dot tests begin.`,
       exemplar: ['pattern'],
     }),
   ];
@@ -147,7 +147,7 @@ export function iTInstructionNode() {
   const setSize = config.memory.set_size;
   const starsPerTrial = config.imagery.stars_per_trial;
   const totalEvents = setSize + starsPerTrial;
-  const title = 'Task 5 — Tones and pattern together';
+  const title = 'Task 5 – Tones and pattern together';
   const pages = [
     slideStimulusPage({
       title,
@@ -167,17 +167,17 @@ export function iTInstructionNode() {
         <p>Then <strong>${totalEvents} things</strong> happen one at a
         time, <strong>mixed together</strong>:</p>
         <ul style="margin: 0.75rem 1.25rem;">
-          <li><strong>${starsPerTrial} stars</strong> inside the circle —
+          <li><strong>${starsPerTrial} stars</strong> inside the circle –
           for each star, press <strong>On-pattern</strong>
           (<kbd>&rarr;</kbd> RIGHT arrow) if it lands on your rotated
           pattern, or <strong>Not on-pattern</strong>
           (<kbd>&larr;</kbd> LEFT arrow) if it does not.</li>
-          <li><strong>${setSize} tones</strong> — remember
+          <li><strong>${setSize} tones</strong> – remember
           <strong>each tone you hear</strong>, for the tone tests at the
           end of the trial.</li>
         </ul>
       `,
-      narration: `Then ${totalEvents} things happen one at a time, mixed together. ${starsPerTrial} stars inside the circle — for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} tones — remember each tone you hear, for the tone tests at the end of the trial.`,
+      narration: `Then ${totalEvents} things happen one at a time, mixed together. ${starsPerTrial} stars inside the circle – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} tones – remember each tone you hear, for the tone tests at the end of the trial.`,
       exemplar: ['star', 'tone'],
     }),
     slideStimulusPage({
@@ -206,12 +206,12 @@ export function iTInstructionNode() {
         <strong style="color: #772139;">VERY important:</strong> keep the
         picture of the rotated pattern in mind during the
         <strong>entire</strong> trial. You may drop it only when the
-        central <strong>question mark (?)</strong> appears — that is
+        central <strong>question mark (?)</strong> appears – that is
         when the tone tests begin.</p>
         <p>Please make sure your audio volume is still at the level you
         set earlier.</p>
       `,
-      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears — that is when the tone tests begin. Please make sure your audio volume is still at the level you set earlier.`,
+      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the tone tests begin. Please make sure your audio volume is still at the level you set earlier.`,
       exemplar: ['pattern'],
     }),
   ];

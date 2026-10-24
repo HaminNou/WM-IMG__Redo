@@ -55,7 +55,7 @@ function mountTrial(node) {
   };
 }
 
-describe('displayModeCheckTrial — Continue gate (first visit, lock not yet engaged)', () => {
+describe('displayModeCheckTrial – Continue gate (first visit, lock not yet engaged)', () => {
   beforeEach(() => {
     document.documentElement.className = '';
   });
@@ -113,7 +113,7 @@ describe('displayModeCheckTrial — Continue gate (first visit, lock not yet eng
   });
 });
 
-describe('displayModeCheckTrial — Continue gate (re-entry, lock already engaged)', () => {
+describe('displayModeCheckTrial – Continue gate (re-entry, lock already engaged)', () => {
   beforeEach(() => {
     document.documentElement.className = '';
   });
@@ -144,7 +144,7 @@ describe('displayModeCheckTrial — Continue gate (re-entry, lock already engage
   });
 });
 
-describe('displayModeCheckTrial — slide registration', () => {
+describe('displayModeCheckTrial – slide registration', () => {
   it('registers itself under the display_mode_check hidden-nav step id', () => {
     registerHiddenNavStep.mockClear();
     displayModeCheckTrial();

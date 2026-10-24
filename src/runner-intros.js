@@ -31,7 +31,7 @@ export function mainAIntroNode() {
     type: htmlKeyboardResponse,
     stimulus: `
       <div style="max-width: 36rem; margin: 0 auto;">
-        <h2>Practice is over — the main trials start now</h2>
+        <h2>Practice is over – the main trials start now</h2>
         <div data-voiceover-target>
           <p>Practice is over. The main trials start now. There are two
           blocks of 60 trials. Each block includes a
@@ -74,7 +74,7 @@ export function mainBIntroNode() {
     type: htmlKeyboardResponse,
     stimulus: `
       <div style="max-width: 36rem; margin: 0 auto;">
-        <h2>Main task — Block 2 of 2</h2>
+        <h2>Main task – Block 2 of 2</h2>
         <div data-voiceover-target>
           <p>Last block. 60 more trials, same controls, with
           ${config.blocks.rest_duration_s}-second rests after trials 20
@@ -96,7 +96,7 @@ export function endOfTaskIntroNode() {
     type: htmlKeyboardResponse,
     stimulus: `
       <div style="max-width: 36rem; margin: 0 auto;">
-        <h2>Thank you — you've finished the task</h2>
+        <h2>Thank you – you've finished the task</h2>
         <div data-voiceover-target>
           <p>Thank you for completing the trials. Your work is enormously
           helpful to our research, and we are grateful for your time and

@@ -190,7 +190,7 @@ describe('imagery-block: input validation and small-N behaviour', () => {
     }
   });
 
-  it('star on-counts vary across trials — block-level (not trial-level) on/off balance', () => {
+  it('star on-counts vary across trials – block-level (not trial-level) on/off balance', () => {
     const block = generateImageryBlock({ blockSize: 24 });
     /* With 3 stars per trial and 36/36 across 24 trials, individual trials
      * cannot all share the same on-count (3 doesn't divide 36 into a single

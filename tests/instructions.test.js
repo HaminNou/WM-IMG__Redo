@@ -76,7 +76,7 @@ describe('per-type instruction node accessors', () => {
   });
 });
 
-describe('rotation cue framing — design constraint', () => {
+describe('rotation cue framing – design constraint', () => {
   /* The rotation cue arrow is shown ONLY in trial types that involve
    * imagery (I-only, I+D, I+T). D-only and T-only screens must not
    * mention an "arrow" or "rotation cue", because no such cue appears

@@ -43,7 +43,7 @@ describe('storage init', () => {
     expect(info.kind).toBe('memory');
   });
 
-  it('is idempotent — second call returns the same backend', async () => {
+  it('is idempotent – second call returns the same backend', async () => {
     const info1 = await initStorage({ backend: 'memory' });
     const info2 = await initStorage({ backend: 'memory' });
     expect(info1.kind).toBe(info2.kind);
@@ -113,7 +113,7 @@ describe('getTrialRowsAfter', () => {
 });
 
 describe('upload cursor', () => {
-  it('defaults to 0 when never set — guards the operator-precedence bug', async () => {
+  it('defaults to 0 when never set – guards the operator-precedence bug', async () => {
     /* Regression test for the original `?? 0` bug: `?? 0` was being applied
      * to the unresolved Promise (truthy), so the cursor leaked `undefined`
      * to the uploader and `getTrialRowsAfter(undefined)` matched no rows.
