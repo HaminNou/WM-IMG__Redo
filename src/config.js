@@ -232,17 +232,17 @@ export const config = deepFreeze({
   },
 
   /* Data egress — DataPipe (https://pipe.jspsych.org), jsPsych's free
-   * forwarding service into an OSF project. The uploader partitions the
+   * forwarding service into a storage folder. The uploader partitions the
    * captured rows into the canonical 10-bucket layout
    * (`src/uploader.js#BUCKETS`) and POSTs one DataPipe envelope per
-   * non-empty bucket. DataPipe writes one OSF file per envelope, named
+   * non-empty bucket. DataPipe writes one file per envelope, named
    * `<session_id>__<NN_label>.json` (e.g. `<sid>__03_d_only.json`). A
    * complete session therefore yields up to 10 bucket files: consent +
    * demographics, practice, d_only, i_only (= "star-only"), t_only, i_t
    * (= "dual tone+star"), i_d (= "dual dot+star"), music questionnaire,
    * strategy questionnaire, and a meta bucket for everything else
    * (calibration, instructions, demos, fullscreen events, pattern phases,
-   * etc.). The two-digit prefix is so an OSF directory listing sorts in
+   * etc.). The two-digit prefix is so a directory listing sorts in
    * canonical reading order without manual sort.
    *
    * Timeline of uploads: the consent and practice buckets are sent at the

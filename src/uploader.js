@@ -7,13 +7,13 @@
  * Design:
  *
  *   - **One DataPipe POST per logical bucket.** A session produces up to 10
- *     named bucket files on OSF: one per analysis-relevant slice of the data
+ *     named bucket files in storage: one per analysis-relevant slice of the data
  *     (consent + demographics, practice, each of the five main-task
  *     conditions, music questionnaire, strategy questionnaire, and a meta
  *     bucket for everything else). Buckets that received no rows are not
  *     sent. Filenames are deterministic (`<session_id>__NN_<label>.json`) so a
- *     retry just overwrites the already-successful buckets idempotently on
- *     the OSF side.
+ *     repeat of a bucket DataPipe already holds is reported as FILE_EXISTS and
+ *     counted as delivered.
  *
  *   - **When uploads happen.** The consent and practice buckets are sent at
  *     the inter-block rest (`uploadConsentAndPractice`), and every rest screen
@@ -32,8 +32,8 @@
  *   - **All-or-nothing cursor advance.** The upload cursor advances past the
  *     session's highest seq only after every bucket POST succeeds. A failure
  *     leaves the cursor untouched, so a re-run re-POSTs every bucket
- *     (successful ones overwrite their own files on OSF, failed ones get
- *     another retry).
+ *     (buckets already stored come back as FILE_EXISTS and count as
+ *     delivered, failed ones get another retry).
  *
  *   - **No silent failures.** A permanent bucket failure returns
  *     `status: 'partial'`. The caller (debrief node) offers a JSON download
@@ -60,8 +60,8 @@ const midSessionUploaded = new Set();
 /* ---------- Bucket definitions ---------- */
 
 /**
- * The 10 OSF-destined buckets, in the order they're uploaded and the order
- * they should appear in an OSF directory listing (filenames carry the
+ * The 10 uploaded buckets, in the order they're uploaded and the order
+ * they should appear in a directory listing (filenames carry the
  * two-digit prefix so alphanumeric sort matches this array).
  *
  * Each bucket has:
@@ -170,7 +170,7 @@ export function bucketForRow(row) {
  * Partition `rows` into per-bucket lists, preserving input order within each
  * bucket. Returns one entry per bucket in `BUCKETS` order, including empty
  * buckets — the uploader filters those out before POSTing so empty files
- * don't pollute OSF, but the full structure is returned for testing /
+ * don't pollute storage, but the full structure is returned for testing /
  * introspection.
  *
  * @param {object[]} rows
@@ -235,13 +235,14 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
  *
  * Stability requirements:
  *   - **Unique per bucket per session.** DataPipe stores each POST as a
- *     separate file under the project; same filename = overwrite. Each
+ *     separate file under the project; a repeated filename is refused. Each
  *     bucket's `label` is unique, so the composite is unique per session.
  *   - **Deterministic across runs of the same session.** The bucket label
  *     comes from the static `BUCKETS` table, so a retry POSTs the same
- *     filename — successful prior POSTs just get overwritten with identical
- *     content (idempotent), and failed ones get another attempt.
- *   - **Sorts alphabetically in OSF in canonical order.** Labels carry a
+ *     filename. DataPipe rejects a name that already exists (FILE_EXISTS);
+ *     the uploader counts that as delivered, and failed posts get another
+ *     attempt.
+ *   - **Sorts alphabetically in storage in canonical order.** Labels carry a
  *     two-digit prefix (`01_…` through `10_…`) so a directory listing matches
  *     the analysis-relevant order without manual sort.
  */
@@ -259,7 +260,7 @@ export function dataPipeFilenameForBucket({ session_id, bucket_label }) {
  * Wrap a bucket envelope in DataPipe's `{experimentID, filename, data}` POST
  * shape (https://pipe.jspsych.org). DataPipe ignores everything outside the
  * three named fields, so the full bucket envelope is JSON-stringified into
- * `data` and stored on OSF as a single per-bucket file.
+ * `data` and stored in storage as a single per-bucket file.
  *
  * @param {object} opts
  * @param {object} opts.bucketEnvelope    output of `buildBucketEnvelope`
@@ -366,6 +367,12 @@ export async function postWithRetry({
     }
     if ([400, 401, 403, 404, 422].includes(response.status)) {
       const text = await safeReadText(response);
+      /* DataPipe refuses a second file with the same name. A repeat of a
+       * file that already arrived (for example after a lost response) is
+       * therefore already stored, not a failure. */
+      if (response.status === 400 && text && text.includes('FILE_EXISTS')) {
+        return { ok: true, status: response.status, attempt, duplicate: true };
+      }
       throw new Error(
         `postWithRetry: non-retryable ${response.status} from ${url}: ${text || 'no body'}`
       );
@@ -408,7 +415,7 @@ function defaultSleep(ms) {
 /**
  * Upload ONLY the consent_demographics and practice buckets during the
  * inter-block rest. These two small files serve as proof-of-progress: their
- * presence on OSF confirms the participant completed calibration, consent,
+ * presence in storage confirms the participant completed calibration, consent,
  * demographics, instructions, practice, and all of Main A.
  *
  * Successfully uploaded bucket IDs are recorded in `midSessionUploaded` so
@@ -657,8 +664,8 @@ export async function uploadPendingData({
         error: err.message,
       });
       /* All-or-nothing cursor: don't advance on partial — the re-run re-POSTs
-       * every bucket (filenames are deterministic, so already-successful
-       * buckets overwrite themselves idempotently on OSF). */
+       * every bucket (filenames are deterministic, so buckets already stored
+       * come back as FILE_EXISTS and count as delivered). */
       return {
         status: 'partial',
         uploadedBuckets,

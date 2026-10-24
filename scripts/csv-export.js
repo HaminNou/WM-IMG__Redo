@@ -5,17 +5,17 @@
  * Ingests one or more JSON dumps (download-fallback exports from
  * `uploader.downloadAsJson` or bucket envelopes from
  * `uploader.buildBucketEnvelope`) and emits a directory of analysis-ready
- * CSVs whose column conventions track Project 1's `OSF/Data/` files as
+ * CSVs whose column conventions track the original experiment's data files as
  * closely as the new design allows.
  *
- * Each live session uploads up to 10 bucket envelopes to OSF (one per
+ * Each live session uploads up to 10 bucket envelopes to storage (one per
  * analysis-relevant slice: consent + demographics, practice, d_only, i_only
  * (= "star-only"), t_only, i_t, i_d, music questionnaire, strategy
  * questionnaire, meta). `loadAndFlattenDumps` merges them back by
  * `prolific_pid` before the wide-row builders run, so the exporter is
  * agnostic to whether its input is one big dump or 10 per-bucket files.
  *
- * Project-1 conventions preserved (see OSF/Data/README.md):
+ * Original-experiment conventions preserved:
  *   prefixes  Ast_ (star/imagery), Dot_ (encoded dot), Tone_ (encoded tone),
  *             Qmark_ (probe)
  *   suffixes  _Cell, _CellTY, _OrderN, _Type, _Res, _ResVA, _RecTI, _RecTI_1,
@@ -49,9 +49,9 @@
  *                               row counts, heterogeneity flags, generator
  *                               version)
  *
- * Rationale for diverging from Project 1's per-block file split:
+ * Rationale for diverging from the original experiment's per-block file split:
  *   Follow-up has 5 trial types interleaved within 2 main blocks (rather than
- *   one trial type per block, as Project 1). Per-trial-type files keep each
+ *   one trial type per block, as the original experiment). Per-trial-type files keep each
  *   wide-format CSV rectangular and avoid carrying a forest of optional
  *   prefix groups in a single file.
  *
@@ -165,7 +165,7 @@ export function expandInputPaths(inputPaths, opts = {}) {
 
 /**
  * Cell index 0–24 → [row, col] pair on the 5×5 grid (row-major, 0-indexed).
- * Project 1 convention: row first, then col, both 0-indexed. Returns null
+ * the original experiment convention: row first, then col, both 0-indexed. Returns null
  * for invalid input (the caller decides whether to surface as NA).
  */
 export function cellToRowCol(cellIndex) {
@@ -174,7 +174,7 @@ export function cellToRowCol(cellIndex) {
 }
 
 /**
- * Format a [row, col] pair as "[row, col]" — exactly Project 1's format.
+ * Format a [row, col] pair as "[row, col]" — exactly the original experiment's format.
  * Accepts the [row, col] pair OR the raw cell index. Returns NA for null.
  */
 export function formatCell(input) {
@@ -247,7 +247,7 @@ export function applyCriterion2(rtMs, resVA) {
  * Compute Res / ResVA codes for a memory-probe row.
  *   Res:    1 if said yes, 0 if said no, -1 if no response
  *   ResVA:  1 if correct, 0 if incorrect, -1 if no response
- * Mirrors Project 1's response coding so analysis scripts can be reused.
+ * Mirrors the original experiment's response coding so analysis scripts can be reused.
  */
 export function probeResCodes(row) {
   if (row.responded !== true) return { res: -1, resVA: -1 };
@@ -317,7 +317,7 @@ function slotOnsetMs(encodingRow, slotIdx) {
 /* ---------- CSV serialisation ---------- */
 
 /**
- * Format one cell value for CSV emission per Project 1's quoting style:
+ * Format one cell value for CSV emission per the original experiment's quoting style:
  *   strings → double-quoted with embedded quotes doubled
  *   integers / finite numbers → bare digits
  *   booleans → unquoted `true` / `false`
@@ -339,8 +339,8 @@ export function formatCsvValue(v) {
 
 /**
  * Serialise an array of row objects to a CSV string with the given column
- * order. Header row is always emitted (matching Project 1). Line ending is
- * LF (Project 1's actual files use LF; CRLF is also valid CSV but R / pandas
+ * order. Header row is always emitted (matching the original experiment). Line ending is
+ * LF (the original experiment's actual files use LF; CRLF is also valid CSV but R / pandas
  * read both transparently).
  */
 export function serializeRowsToCsv(rows, columns) {
@@ -712,7 +712,7 @@ export function buildWideRowID(group, criterion, sessionMeta = {}) {
   const stars = sortedStars(group.stars);
   for (let i = 0; i < 3; i++) {
     /* Encoding-time star slot gives the cell at trial-design time; the
-     * runtime `stars` array carries the participant's response. Project 1
+     * runtime `stars` array carries the participant's response. the original experiment
      * recorded both, so we keep the parallel here. */
     const e = encStars[i];
     out[`Ast_${i + 1}_SlotN`] = e ? i + 1 : NA;

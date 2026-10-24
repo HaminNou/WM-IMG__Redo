@@ -78,7 +78,7 @@ beforeEach(async () => {
 /* ---------- Bucket-routing primitives ---------- */
 
 describe('BUCKETS table', () => {
-  it('has exactly 10 entries in the canonical OSF order', () => {
+  it('has exactly 10 entries in the canonical order', () => {
     expect(BUCKETS).toHaveLength(10);
     expect(BUCKETS.map((b) => b.id)).toEqual([
       'consent_demographics',
@@ -94,7 +94,7 @@ describe('BUCKETS table', () => {
     ]);
   });
 
-  it('labels are prefixed 01_..10_ so OSF alphanumeric sort matches array order', () => {
+  it('labels are prefixed 01_..10_ so alphanumeric sort matches array order', () => {
     const labels = BUCKETS.map((b) => b.label);
     expect(labels).toEqual([
       '01_consent_demographics',
@@ -533,6 +533,37 @@ describe('postWithRetry', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it('counts a FILE_EXISTS refusal as already delivered', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => '{"error":"FILE_EXISTS"}',
+    });
+    const result = await postWithRetry({
+      url: 'http://x',
+      body: { a: 1 },
+      retryMax: 3,
+      initialBackoffMs: 10,
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(result).toMatchObject({ ok: true, duplicate: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('still fails on other 400 responses', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      text: async () => '{"error":"INVALID_FORMAT"}',
+    });
+    await expect(
+      postWithRetry({ url: 'http://x', body: {}, retryMax: 3, fetchImpl, sleepImpl: instantSleep })
+    ).rejects.toThrow(/non-retryable 400/);
+  });
+
   it('retries on 5xx and succeeds eventually', async () => {
     const fetchImpl = vi
       .fn()
@@ -867,7 +898,7 @@ describe('uploadPendingData', () => {
     expect(await getUploadCursor()).toBe(0);
 
     /* Phase 2: server back online — re-run re-POSTs all 10 buckets
-     * (deterministic filenames make this idempotent on the OSF side). */
+     * (deterministic filenames make this idempotent in storage). */
     phase2 = true;
     const fetchPhase1Calls = fetchImpl.mock.calls.length;
     const resume = await uploadPendingData({
@@ -1123,7 +1154,7 @@ describe('uploadPendingData', () => {
       expect(resume.status).toBe('uploaded');
       expect(resume.uploadedBuckets).toBe(10);
       /* Re-run POSTs all 10 buckets again — earlier successes overwrite
-       * themselves on OSF (filenames are deterministic). */
+       * themselves in storage (filenames are deterministic). */
       expect(fetchImpl.mock.calls.length - callsBefore).toBe(10);
       expect(await getUploadCursor()).toBe(12);
     });
