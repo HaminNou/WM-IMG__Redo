@@ -425,3 +425,24 @@ describe('evaluatePreflight – placeholders in participant-facing text', () => 
     expect(findPlaceholderTokens(description)).toEqual([]);
   });
 });
+
+describe('evaluatePreflight – uncommitted changes', () => {
+  const base = { config: fakeConfig(), preReg: fakePreReg() };
+
+  it('is silent when nothing that ships is uncommitted', () => {
+    const issues = evaluatePreflight({ ...base, strictDeployment: true, uncommittedPaths: [] });
+    expect(issues.find((i) => i.code === 'UNCOMMITTED_CHANGES')).toBeUndefined();
+  });
+
+  it('is an error in strict mode and a warning otherwise, and names the files', () => {
+    const paths = ['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js', 'src/e.js', 'src/f.js'];
+    const strict = evaluatePreflight({ ...base, strictDeployment: true, uncommittedPaths: paths });
+    const loose = evaluatePreflight({ ...base, strictDeployment: false, uncommittedPaths: paths });
+    const s = strict.find((i) => i.code === 'UNCOMMITTED_CHANGES');
+    const l = loose.find((i) => i.code === 'UNCOMMITTED_CHANGES');
+    expect(s.severity).toBe('error');
+    expect(l.severity).toBe('warning');
+    expect(s.message).toContain('src/a.js');
+    expect(s.message).toContain('+1 more');
+  });
+});

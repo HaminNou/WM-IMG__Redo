@@ -22,6 +22,7 @@ import {
   getTrialRowsAfter,
   getUploadCursor,
   setUploadCursor,
+  getPendingRows,
   setCompletionUrl,
   getCompletionUrl,
   setSessionId,
@@ -147,6 +148,28 @@ describe('upload cursor', () => {
     await setUploadCursor(10);
     await setUploadCursor(25);
     expect(await getUploadCursor()).toBe(25);
+  });
+});
+
+describe('upload cursor, one per run', () => {
+  it('keeps a separate cursor for each run', async () => {
+    await setUploadCursor(5, 'old-run');
+    await setUploadCursor(9);
+    expect(await getUploadCursor('old-run')).toBe(5);
+    expect(await getUploadCursor()).toBe(9);
+    expect(await getUploadCursor('never-seen')).toBe(0);
+  });
+
+  it('a later run that has uploaded does not hide the unsent rows of an earlier run', async () => {
+    await appendTrialRow({ run_id: 'old-run', phase: 'a' }); /* seq 1 */
+    await appendTrialRow({ run_id: 'old-run', phase: 'b' }); /* seq 2 */
+    await appendTrialRow({ phase: 'c' }); /* seq 3, this run */
+    await setUploadCursor(3); /* this run has uploaded everything */
+    expect((await getPendingRows()).map((r) => r.phase)).toEqual(['a', 'b']);
+    await setUploadCursor(1, 'old-run');
+    expect((await getPendingRows()).map((r) => r.phase)).toEqual(['b']);
+    await setUploadCursor(2, 'old-run');
+    expect(await getPendingRows()).toEqual([]);
   });
 });
 

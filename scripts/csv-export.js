@@ -42,7 +42,13 @@
  *                               presentation order and screen positions (see
  *                               scripts/tidy-tables.js and schemas/tidy-tables.schema.json)
  *   CALIBRATION_SUMMARY.csv     one row per participant (screen / volume +
- *                               session metadata + storage failures)
+ *                               session metadata + storage failures). The
+ *                               Screen_Cal_* columns describe the final card
+ *                               calibration attempt (status, the two settings,
+ *                               relative difference, tolerance) and
+ *                               Exclude_Screen_Cal_Inconsistent applies the
+ *                               pre-registered exclusion (status ==
+ *                               inconsistent_accepted; 1 = exclude).
  *   STRATEGY_SCORES.csv         one row per participant: strategy composites
  *   MUSIC.csv                   one row per participant: music-experience items,
  *                               Gold-MSI MT composite, absolute-pitch item
@@ -97,6 +103,9 @@ globalThis.window ??= globalThis;
 const { MUSIC_EXPERIENCE_ITEMS, scoreMusicExperience } =
   await import('../src/questionnaire/music-experience.js');
 const { STRATEGY_ITEMS, scoreStrategy } = await import('../src/questionnaire/strategy.js');
+/* The calibration consistency tolerance is read from the module that applies
+ * it at collection time, so the exclusion flag below cannot drift from it. */
+const { _testHelpers: SCREEN_CAL } = await import('../src/calibration/screen.js');
 
 const GENERATOR_VERSION = '1.0.0';
 
@@ -125,6 +134,23 @@ const numOrNA = (v) => (Number.isFinite(v) ? v : NA);
 function rotationOf(enc) {
   return [enc?.rotation_deg, enc?.display_rotation_deg].find(Number.isFinite) ?? NA;
 }
+
+/**
+ * Pattern-reminder design fields. The scheduler stamps `pattern_reminder` and
+ * `trials_since_pattern_reminder` on every row of a trial (see
+ * src/scheduler/pattern-reminders.js), so they are read from the trial's
+ * encoding row like Rotation_Deg. `Pattern_Reminder` is 1/0 (NA when the field
+ * is absent, i.e. dumps from before it was stamped); `Trials_Since_Pattern_Reminder`
+ * is 0 on the reminded trial and NA on memory-only trials, which never get one.
+ */
+function reminderFields(enc) {
+  return {
+    Pattern_Reminder:
+      typeof enc?.pattern_reminder === 'boolean' ? (enc.pattern_reminder ? 1 : 0) : NA,
+    Trials_Since_Pattern_Reminder: numOrNA(enc?.trials_since_pattern_reminder),
+  };
+}
+const REMINDER_COLUMNS = Object.freeze(['Pattern_Reminder', 'Trials_Since_Pattern_Reminder']);
 const KEYBOARD_RECTY = 1;
 
 /* ---------- Pure helpers ---------- */
@@ -134,6 +160,17 @@ const KEYBOARD_RECTY = 1;
  * Recognised flags:
  *   --out <dir>          Output directory (created if missing). Required.
  *   --json-manifest      Also print the manifest JSON to stdout when done.
+ *   --excel-bom          Prefix every CSV with a UTF-8 byte-order mark so Excel
+ *                        shows eta-squared, accents and free text correctly.
+ *                        Off by default: R's readr::read_csv drops the BOM, but
+ *                        base read.csv keeps it in the first column name unless
+ *                        fileEncoding = "UTF-8-BOM".
+ *   --neutralise-formulas  Prefix text cells that start with = + - @ (tab, CR)
+ *                        with an apostrophe so spreadsheets cannot run them as
+ *                        formulas. Off by default (it changes the text of those
+ *                        cells); numeric cells are never touched. Use it for
+ *                        files you will open in Excel/Sheets; analyse with R from
+ *                        the default output.
  *
  * Anything that isn't a flag is treated as an input path (file or dir).
  */
@@ -142,19 +179,25 @@ export function parseExportArgs(argv) {
   const inputs = [];
   let outputDir = null;
   let jsonManifest = false;
+  let excelBom = false;
+  let neutraliseFormulas = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--out') {
       outputDir = args[++i] ?? null;
     } else if (a === '--json-manifest') {
       jsonManifest = true;
+    } else if (a === '--excel-bom') {
+      excelBom = true;
+    } else if (a === '--neutralise-formulas') {
+      neutraliseFormulas = true;
     } else if (a.startsWith('--')) {
       throw new Error(`unknown flag: ${a}`);
     } else {
       inputs.push(a);
     }
   }
-  return { inputs, outputDir, jsonManifest };
+  return { inputs, outputDir, jsonManifest, excelBom, neutraliseFormulas };
 }
 
 /**
@@ -339,7 +382,7 @@ function slotOnsetMs(encodingRow, slotIdx) {
  *   null / undefined → NA (unquoted)
  *   "NA" sentinel string → NA (unquoted) — for downstream R's read.csv default
  */
-export function formatCsvValue(v) {
+export function formatCsvValue(v, opts = {}) {
   if (v === null || v === undefined) return NA;
   if (v === NA) return NA;
   if (typeof v === 'number') {
@@ -348,9 +391,16 @@ export function formatCsvValue(v) {
   }
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   /* Everything else gets stringified + quoted. Embedded quotes double up. */
-  const s = String(v);
+  let s = String(v);
+  /* Optional spreadsheet-safety (--neutralise-formulas): Excel and Sheets
+   * evaluate a text cell that begins with = + - @ (or a tab / CR) as a
+   * formula. A leading apostrophe makes it plain text. Only strings are
+   * touched, numbers and the NA sentinel are never altered. */
+  if (opts.neutraliseFormulas && FORMULA_TRIGGER.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 }
+
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
 
 /**
  * Serialise an array of row objects to a CSV string with the given column
@@ -358,14 +408,17 @@ export function formatCsvValue(v) {
  * LF (the original experiment's actual files use LF; CRLF is also valid CSV but R / pandas
  * read both transparently).
  */
-export function serializeRowsToCsv(rows, columns) {
+export function serializeRowsToCsv(rows, columns, opts = {}) {
   const lines = [];
   lines.push(columns.map((c) => `"${c}"`).join(','));
   for (const r of rows) {
-    lines.push(columns.map((c) => formatCsvValue(r[c])).join(','));
+    lines.push(columns.map((c) => formatCsvValue(r[c], opts)).join(','));
   }
   return lines.join('\n') + '\n';
 }
+
+/** UTF-8 byte-order mark; prepended on request so Excel reads the file as UTF-8. */
+export const UTF8_BOM = '\uFEFF';
 
 /* ---------- Trial-row grouping ---------- */
 
@@ -574,6 +627,7 @@ export function buildWideRowDOnly(group, criterion, sessionMeta = {}) {
     Trial: group.trial_index_in_block + 1,
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
+    ...reminderFields(group.encoding),
   };
   const items = sortedEncodedItems(group.encoding);
   for (let i = 0; i < 3; i++) {
@@ -602,6 +656,7 @@ function buildColumnsForDOnly() {
     'Trial',
     'Background_Shade',
     'Rotation_Deg',
+    ...REMINDER_COLUMNS,
   ];
   for (let i = 1; i <= 3; i++) {
     cols.push(`Dot_${i}_OrderN`, `Dot_${i}_Cell`, `Dot_${i}_CellTY`, `Dot_${i}_OnsetMs`);
@@ -624,6 +679,7 @@ export function buildWideRowTOnly(group, criterion, sessionMeta = {}) {
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
     Background_Shade: group.encoding?.background_shade ?? NA,
+    ...reminderFields(group.encoding),
   };
   const items = sortedEncodedItems(group.encoding);
   for (let i = 0; i < 3; i++) {
@@ -652,7 +708,14 @@ export function buildWideRowTOnly(group, criterion, sessionMeta = {}) {
 
 export const COLUMNS_T_ONLY = Object.freeze(buildColumnsForTOnly());
 function buildColumnsForTOnly() {
-  const cols = ['Participant_ID', 'Block', 'Trial_Type', 'Trial', 'Background_Shade'];
+  const cols = [
+    'Participant_ID',
+    'Block',
+    'Trial_Type',
+    'Trial',
+    'Background_Shade',
+    ...REMINDER_COLUMNS,
+  ];
   for (let i = 1; i <= 3; i++) {
     cols.push(
       `Tone_${i}_OrderN`,
@@ -682,6 +745,7 @@ export function buildWideRowIOnly(group, criterion, sessionMeta = {}) {
     Trial: group.trial_index_in_block + 1,
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
+    ...reminderFields(group.encoding),
   };
   /* On I-only there's no probe — stars carry the response. The encoding
    * row's `stars` array gives presentation order; on-screen ordering matches
@@ -704,6 +768,7 @@ function buildColumnsForIOnly() {
     'Trial',
     'Background_Shade',
     'Rotation_Deg',
+    ...REMINDER_COLUMNS,
   ];
   for (let i = 1; i <= 3; i++) addStarColumnNames(cols, `Ast_${i}`);
   cols.push(...SESSION_META_COLUMNS);
@@ -721,6 +786,7 @@ export function buildWideRowID(group, criterion, sessionMeta = {}) {
     Trial: group.trial_index_in_block + 1,
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
+    ...reminderFields(group.encoding),
   };
   const items = sortedEncodedItems(group.encoding);
   for (let i = 0; i < 3; i++) {
@@ -760,6 +826,7 @@ function buildColumnsForID() {
     'Trial',
     'Background_Shade',
     'Rotation_Deg',
+    ...REMINDER_COLUMNS,
   ];
   for (let i = 1; i <= 3; i++) {
     cols.push(`Dot_${i}_OrderN`, `Dot_${i}_Cell`, `Dot_${i}_CellTY`, `Dot_${i}_OnsetMs`);
@@ -787,6 +854,7 @@ export function buildWideRowIT(group, criterion, sessionMeta = {}) {
     Trial: group.trial_index_in_block + 1,
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
+    ...reminderFields(group.encoding),
   };
   const items = sortedEncodedItems(group.encoding);
   for (let i = 0; i < 3; i++) {
@@ -829,6 +897,7 @@ function buildColumnsForIT() {
     'Trial',
     'Background_Shade',
     'Rotation_Deg',
+    ...REMINDER_COLUMNS,
   ];
   for (let i = 1; i <= 3; i++) {
     cols.push(
@@ -858,7 +927,8 @@ function buildColumnsForIT() {
  * frame: one row per stimulus event (6 encoding events + 3 recognition probes
  * for d_only/t_only/i_d/i_t; 3 encoding star events for i_only). Rotation_Deg
  * is constant within a trial — repeated to keep each row self-contained for
- * downstream filtering. `Pattern_Label` carries the on/off pattern membership
+ * downstream filtering. `Pattern_Reminder` / `Trials_Since_Pattern_Reminder` are
+ * trial-level design fields repeated the same way (see reminderFields). `Pattern_Label` carries the on/off pattern membership
  * of the cell where applicable; `Probe_Type` is set only on recognition rows.
  */
 
@@ -875,6 +945,7 @@ const EVENTS_COLUMNS = Object.freeze([
   'Tone_Idx',
   'Tone_Freq_Hz',
   'Rotation_Deg',
+  ...REMINDER_COLUMNS,
   'Probe_Type',
   'Encoding_Position',
   'Onset_Ms',
@@ -950,6 +1021,7 @@ function composeEventsRows(group, sessionMeta = {}) {
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
     Rotation_Deg: rotation,
+    ...reminderFields(enc),
     Build_ID: sessionMeta.build_id ?? NA,
     Schema_Version: sessionMeta.schema_version ?? NA,
     Pilot_Run: sessionMeta.is_pilot_run === true ? 1 : 0,
@@ -1106,6 +1178,17 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Px_Per_Mm_In_Bounds',
   'Screen_Cal_Attempts',
   'Screen_Cal_Retried',
+  'Screen_Cal_Status',
+  'Screen_Cal_Accepted',
+  'Screen_Cal_Usable',
+  'Screen_Cal_Pass1_Px',
+  'Screen_Cal_Pass2_Px',
+  'Screen_Cal_Rel_Diff',
+  'Screen_Cal_Consistent',
+  'Screen_Cal_Tolerance',
+  'Screen_Cal_Implied_Screen_Mm',
+  'Screen_Cal_Reasons',
+  'Exclude_Screen_Cal_Inconsistent',
   'Display_Colour_Locked',
   'Tones_Audible',
   'User_Playback_Pct',
@@ -1206,6 +1289,8 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
         : 0
       : NA;
 
+  const screenCalDetail = extractScreenCalDetail(outcomeValue, screenCals);
+
   return {
     Participant_ID: participantId,
     Build_ID: sessionMeta.build_id ?? NA,
@@ -1220,6 +1305,7 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
     Px_Per_Mm_In_Bounds: inBounds,
     Screen_Cal_Attempts: screenAttempts,
     Screen_Cal_Retried: screenRetried,
+    ...screenCalDetail,
     Display_Colour_Locked:
       screenCal?.display_colour_locked === true
         ? 1
@@ -1264,6 +1350,70 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
         : NA,
     User_Agent: sessionMeta.user_agent ?? NA,
     ...extractSessionEnvironment(rows),
+  };
+}
+
+/**
+ * Detail of the final screen-calibration attempt and the pre-registered
+ * exclusion flag (pre-reg rule `screen_calibration_inconsistent`: exclude a
+ * participant whose outcome is `inconsistent_accepted`, i.e. the two card
+ * settings of the last attempt differ by more than the consistency tolerance
+ * but the attempt was accepted).
+ *
+ * `outcome` is the LAST `screen_calibration_outcome` value (attempt-level:
+ * status 'ok' | 'inconsistent_accepted' | 'retry'); `passRows` are all
+ * `screen_calibration` slider rows. Status is read from the row; dumps that
+ * predate the field fall back to `accepted` + `consistent` (or rel_diff
+ * against the live tolerance). The exclusion flag is NA when there is no
+ * outcome row at all, 1 for `inconsistent_accepted`, otherwise 0 (a final
+ * 'retry' means the session ended at the calibration screen-out, which is a
+ * collection-time rule, not this analysis exclusion).
+ */
+function extractScreenCalDetail(outcome, passRows) {
+  const tol = SCREEN_CAL.CONSISTENCY_TOL;
+  const hasOutcome = outcome && Object.keys(outcome).length > 0;
+  const relDiffRecorded = Number.isFinite(outcome?.rel_diff) ? outcome.rel_diff : null;
+
+  /* The two card-width settings of the final attempt, in presentation order. */
+  const attempt = Number.isInteger(outcome?.attempt) ? outcome.attempt : null;
+  const attemptPasses = passRows.filter((r) =>
+    attempt === null ? true : r.cal_attempt === attempt
+  );
+  const lastTwo = attempt === null ? attemptPasses.slice(-2) : attemptPasses.slice(0, 2);
+  const px = lastTwo.map((r) => (Number.isFinite(r.cc_px_width) ? r.cc_px_width : null));
+  const pass1 = px[0] ?? null;
+  const pass2 = px[1] ?? null;
+
+  let relDiff = relDiffRecorded;
+  if (relDiff === null && pass1 !== null && pass2 !== null) {
+    relDiff = Math.abs(pass1 - pass2) / ((pass1 + pass2) / 2);
+  }
+  const consistent =
+    typeof outcome?.consistent === 'boolean'
+      ? outcome.consistent
+      : relDiff !== null
+        ? relDiff <= tol
+        : null;
+  const accepted = typeof outcome?.accepted === 'boolean' ? outcome.accepted : null;
+
+  let status = typeof outcome?.status === 'string' ? outcome.status : null;
+  if (status === null && accepted !== null && consistent !== null) {
+    status = !accepted ? 'retry' : consistent ? 'ok' : 'inconsistent_accepted';
+  }
+
+  return {
+    Screen_Cal_Status: status ?? NA,
+    Screen_Cal_Accepted: flagOrNA(accepted),
+    Screen_Cal_Usable: flagOrNA(typeof outcome?.usable === 'boolean' ? outcome.usable : undefined),
+    Screen_Cal_Pass1_Px: numOrNA(pass1),
+    Screen_Cal_Pass2_Px: numOrNA(pass2),
+    Screen_Cal_Rel_Diff: numOrNA(relDiff),
+    Screen_Cal_Consistent: flagOrNA(consistent === null ? undefined : consistent),
+    Screen_Cal_Tolerance: tol,
+    Screen_Cal_Implied_Screen_Mm: numOrNA(outcome?.implied_screen_mm),
+    Screen_Cal_Reasons: Array.isArray(outcome?.reasons) ? outcome.reasons.join(';') || '' : NA,
+    Exclude_Screen_Cal_Inconsistent:
+      !hasOutcome || status === null ? NA : status === 'inconsistent_accepted' ? 1 : 0,
   };
 }
 
@@ -1792,6 +1942,8 @@ const TRIAL_TYPE_BUILDERS = Object.freeze({
  */
 export function composeExport(perParticipant, opts = {}) {
   const criteria = opts.criteria ?? [1, 2];
+  const serOpts = { neutraliseFormulas: opts.neutraliseFormulas === true };
+  const toCsv = (rows, columns) => serializeRowsToCsv(rows, columns, serOpts);
   const generatedAtIso = opts.generatedAtIso ?? new Date().toISOString();
   const generatorVersion = opts.generatorVersion ?? GENERATOR_VERSION;
 
@@ -1827,7 +1979,7 @@ export function composeExport(perParticipant, opts = {}) {
         return build(g, criterion, meta);
       });
       const path = `${label}_Criterion${criterion}.csv`;
-      files[path] = serializeRowsToCsv(rows, columns);
+      files[path] = toCsv(rows, columns);
       fileList.push({ path, n_rows: rows.length, columns: columns.length });
     }
   }
@@ -1839,7 +1991,7 @@ export function composeExport(perParticipant, opts = {}) {
   const eventsRows = sortedGroups.flatMap((g) =>
     composeEventsRows(g, sessionMetaByPid.get(g.participant_id) ?? {})
   );
-  files['EVENTS.csv'] = serializeRowsToCsv(eventsRows, EVENTS_COLUMNS);
+  files['EVENTS.csv'] = toCsv(eventsRows, EVENTS_COLUMNS);
   fileList.push({ path: 'EVENTS.csv', n_rows: eventsRows.length, columns: EVENTS_COLUMNS.length });
 
   /* Tidy tables: trials.csv, stars.csv, probes.csv (see tidy-tables.js). */
@@ -1849,7 +2001,7 @@ export function composeExport(perParticipant, opts = {}) {
     ['stars', STARS_COLUMNS],
     ['probes', PROBES_COLUMNS],
   ]) {
-    files[`${name}.csv`] = serializeRowsToCsv(tidy[name], columns);
+    files[`${name}.csv`] = toCsv(tidy[name], columns);
     fileList.push({ path: `${name}.csv`, n_rows: tidy[name].length, columns: columns.length });
   }
 
@@ -1857,7 +2009,7 @@ export function composeExport(perParticipant, opts = {}) {
   const calibRows = perParticipant.map((p) =>
     extractCalibrationRow(p.participant_id, p.session ?? {}, p.rows)
   );
-  files['CALIBRATION_SUMMARY.csv'] = serializeRowsToCsv(calibRows, CALIBRATION_COLUMNS);
+  files['CALIBRATION_SUMMARY.csv'] = toCsv(calibRows, CALIBRATION_COLUMNS);
   fileList.push({
     path: 'CALIBRATION_SUMMARY.csv',
     n_rows: calibRows.length,
@@ -1865,7 +2017,7 @@ export function composeExport(perParticipant, opts = {}) {
   });
 
   const strategyRows = perParticipant.flatMap((p) => extractStrategyRows(p.participant_id, p.rows));
-  files['STRATEGY.csv'] = serializeRowsToCsv(strategyRows, STRATEGY_COLUMNS);
+  files['STRATEGY.csv'] = toCsv(strategyRows, STRATEGY_COLUMNS);
   fileList.push({
     path: 'STRATEGY.csv',
     n_rows: strategyRows.length,
@@ -1875,7 +2027,7 @@ export function composeExport(perParticipant, opts = {}) {
   const strategyScoreRows = perParticipant.map((p) =>
     extractStrategyScoreRow(p.participant_id, p.rows)
   );
-  files['STRATEGY_SCORES.csv'] = serializeRowsToCsv(strategyScoreRows, STRATEGY_SCORE_COLUMNS);
+  files['STRATEGY_SCORES.csv'] = toCsv(strategyScoreRows, STRATEGY_SCORE_COLUMNS);
   fileList.push({
     path: 'STRATEGY_SCORES.csv',
     n_rows: strategyScoreRows.length,
@@ -1883,11 +2035,11 @@ export function composeExport(perParticipant, opts = {}) {
   });
 
   const musicRows = perParticipant.map((p) => extractMusicRow(p.participant_id, p.rows));
-  files['MUSIC.csv'] = serializeRowsToCsv(musicRows, MUSIC_COLUMNS);
+  files['MUSIC.csv'] = toCsv(musicRows, MUSIC_COLUMNS);
   fileList.push({ path: 'MUSIC.csv', n_rows: musicRows.length, columns: MUSIC_COLUMNS.length });
 
   const attRows = perParticipant.flatMap((p) => extractAttentionRows(p.participant_id, p.rows));
-  files['ATTENTION_CHECKS.csv'] = serializeRowsToCsv(attRows, ATTENTION_COLUMNS);
+  files['ATTENTION_CHECKS.csv'] = toCsv(attRows, ATTENTION_COLUMNS);
   fileList.push({
     path: 'ATTENTION_CHECKS.csv',
     n_rows: attRows.length,
@@ -1897,7 +2049,7 @@ export function composeExport(perParticipant, opts = {}) {
   const demoRows = perParticipant.map((p) =>
     extractDemographicsRow(p.participant_id, p.session ?? {}, p.rows)
   );
-  files['DEMOGRAPHICS.csv'] = serializeRowsToCsv(demoRows, DEMOGRAPHICS_COLUMNS);
+  files['DEMOGRAPHICS.csv'] = toCsv(demoRows, DEMOGRAPHICS_COLUMNS);
   fileList.push({
     path: 'DEMOGRAPHICS.csv',
     n_rows: demoRows.length,
@@ -1974,11 +2126,16 @@ async function main(argv) {
     inputPaths: expanded,
     fileSha256ByPath,
     loadReport: report,
+    neutraliseFormulas: opts.neutraliseFormulas,
   });
+  manifest.export_options = {
+    excel_bom: opts.excelBom === true,
+    neutralise_formulas: opts.neutraliseFormulas === true,
+  };
   const outDir = resolve(opts.outputDir);
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
   for (const [rel, contents] of Object.entries(files)) {
-    writeFileSync(join(outDir, rel), contents, 'utf-8');
+    writeFileSync(join(outDir, rel), opts.excelBom ? UTF8_BOM + contents : contents, 'utf-8');
   }
   writeFileSync(join(outDir, 'EXPORT_MANIFEST.json'), JSON.stringify(manifest, null, 2), 'utf-8');
   if (opts.jsonManifest) console.log(JSON.stringify(manifest, null, 2));

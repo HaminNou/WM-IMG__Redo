@@ -17,18 +17,23 @@
  *   - session_started_at_iso, session_duration_min (computed from rt sums)
  *   - n_total_rows, n_main_rows, n_practice_rows
  *   - attention check: n typed checks, passed, failed, excluded flag
+ *   - participant-level exclusions (screen calibration, attention checks, single-task
+ *     floor), `completed` and `retained` flags
  *   - upload_summary status (uploaded / partial / no_endpoint / nothing_to_upload)
  *   - completion redirect: was_placeholder boolean, redirect_url
  *
  * Aggregate report:
- *   - n_participants, n_excluded by attention checks (and rate vs the 25-35% pre-reg estimate)
+ *   - n_participants, n_completed, n_retained, and the exclusion rate among completed
+ *     sessions (all three participant-level rules) vs the 25-35% pre-reg estimate
+ *   - the sampling-plan decision (collect / recruit another batch / stop / stop at the
+ *     maximum) computed from pre-reg.json -> sampling_plan; no p-values or Bayes factors
  *   - build_id homogeneity (all sessions must share the same build_id, else flagged)
  *   - schema_version homogeneity
  *   - pilot-flag homogeneity (pilot dumps should all carry is_pilot_run=true)
  *   - condition distribution: counts per (phase × probe_type) pair to spot-check
  *     counterbalance integrity. Aggregate counts should approach 24/type for the
  *     full main batch; per-participant we expect 24/type/participant per design.
- *   - median session duration (target ≈ 35 min per design)
+ *   - median session duration (design estimate 110 min, pre-reg.json design_summary)
  *   - schema-drift detection: any row whose top-level keys diverge from the
  *     locked vocabulary in `schemas/trial.schema.json`
  *
@@ -40,6 +45,20 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+/* Sampling-plan numbers come from the pre-registration file so the rule has one source. */
+const PRE_REG = JSON.parse(
+  readFileSync(new URL('../pre-reg/pre-reg.json', import.meta.url), 'utf8')
+);
+export const SAMPLING_PLAN = Object.freeze({
+  target: PRE_REG.sampling_plan.recruitment_target_n,
+  retainedMinimum: PRE_REG.sampling_plan.retained_n_minimum,
+  batchSize: PRE_REG.sampling_plan.batch_size,
+  maximum: PRE_REG.sampling_plan.max_recruitment_n,
+});
+
+/* pre-reg.json -> exclusion_rules -> single_task_floor: accuracy <= .55 in D_only or T_only. */
+export const SINGLE_TASK_FLOOR = 0.55;
 
 const GREEN = (s) => `\x1b[32m${s}\x1b[0m`;
 const RED = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -113,6 +132,7 @@ export function summariseDump(parsed, { sourceLabel } = {}) {
 
   const phaseCounts = countByKey(rows, 'phase');
   const attention = summariseAttentionChecks(rows);
+  const exclusions = summariseExclusions(rows, attention);
   const uploadSummaryRow = rows.find((r) => r.phase === 'upload_session_end');
   const completionRow = rows.find((r) => r.phase === 'completion_redirect');
   const nMainRows = rows.filter((r) => MAIN_BLOCK_LABELS.includes(r.block_label)).length;
@@ -135,6 +155,9 @@ export function summariseDump(parsed, { sourceLabel } = {}) {
     phase_counts: phaseCounts,
     probe_matrix: probeMatrix,
     attention,
+    exclusions,
+    completed: exclusions.completed,
+    retained: exclusions.retained,
     upload_status: uploadSummaryRow?.status ?? null,
     completion_was_placeholder: completionRow?.completion_was_placeholder ?? null,
     completion_redirect_url: completionRow?.completion_redirect_url ?? null,
@@ -216,6 +239,60 @@ export function summariseAttentionChecks(rows, { maxFailures = 1 } = {}) {
 }
 
 /**
+ * Participant-level exclusion status, as in pre-reg.json -> exclusion_rules:
+ * `screen_calibration_inconsistent` (accepted calibration with status
+ * `inconsistent_accepted`), `instructional_attention_checks` (more than one failed)
+ * and `single_task_floor` (main-block accuracy <= .55 in D_only or in T_only).
+ * `completed` means the session reached the completion redirect and did not end at a
+ * collection-time screen-out; only completed sessions count toward the sample size.
+ * `retained` is completed and not excluded by any of the three rules.
+ */
+export function summariseExclusions(rows, attention = summariseAttentionChecks(rows)) {
+  const outcomes = rows.filter((r) => r.phase === 'screen_calibration_outcome' && r.accepted);
+  const calibrationStatus = outcomes.length > 0 ? outcomes[outcomes.length - 1].status : null;
+  const accuracy = (phase) => {
+    const probes = rows.filter(
+      (r) => r.phase === phase && MAIN_BLOCK_LABELS.includes(r.block_label)
+    );
+    if (probes.length === 0) return null;
+    return probes.filter((r) => r.probe_correct === true).length / probes.length;
+  };
+  const dOnly = accuracy('d_only_probe');
+  const tOnly = accuracy('t_only_probe');
+  const reasons = [];
+  if (calibrationStatus === 'inconsistent_accepted')
+    reasons.push('screen_calibration_inconsistent');
+  if (attention.excluded) reasons.push('instructional_attention_checks');
+  const belowFloor = (a) => a !== null && a <= SINGLE_TASK_FLOOR;
+  if (belowFloor(dOnly) || belowFloor(tOnly)) reasons.push('single_task_floor');
+  const screenedOut = rows.some((r) => r.exit_reason);
+  const completed = !screenedOut && rows.some((r) => r.phase === 'completion_redirect');
+  return {
+    calibration_status: calibrationStatus,
+    d_only_accuracy: dOnly,
+    t_only_accuracy: tOnly,
+    reasons,
+    excluded: reasons.length > 0,
+    completed,
+    retained: completed && reasons.length === 0,
+  };
+}
+
+/**
+ * The pre-registered sampling decision (pre-reg.json -> sampling_plan.stopping_rule).
+ * Uses only the completed and retained counts, never a p-value or Bayes factor.
+ * Returns { action, recruit }: `collect` (fewer completions than the target),
+ * `stop` (retained minimum reached), `recruit_batch` (another batch of `recruit`
+ * completions) or `stop_at_maximum` (maximum reached with too few retained: underpowered).
+ */
+export function samplingDecision(nCompleted, nRetained, plan = SAMPLING_PLAN) {
+  if (nCompleted < plan.target) return { action: 'collect', recruit: plan.target - nCompleted };
+  if (nRetained >= plan.retainedMinimum) return { action: 'stop', recruit: 0 };
+  if (nCompleted >= plan.maximum) return { action: 'stop_at_maximum', recruit: 0 };
+  return { action: 'recruit_batch', recruit: Math.min(plan.batchSize, plan.maximum - nCompleted) };
+}
+
+/**
  * Estimate session duration in minutes from the sum of `rt` values in the
  * dump. Falls back to `time_elapsed` if rt isn't present. This is a coarse
  * estimate — the true wall-clock includes inter-trial gaps and visibility
@@ -253,6 +330,11 @@ export function aggregate(perParticipant, opts = {}) {
   const pilotFlags = new Set(perParticipant.map((s) => Boolean(s.is_pilot_run)));
   const nExcluded = perParticipant.filter((s) => s.attention.excluded).length;
   const exclusionRate = perParticipant.length > 0 ? nExcluded / perParticipant.length : null;
+  const completedSessions = perParticipant.filter((s) => s.completed);
+  const nCompleted = completedSessions.length;
+  const nRetained = completedSessions.filter((s) => s.retained).length;
+  const nExcludedAny = nCompleted - nRetained;
+  const decision = samplingDecision(nCompleted, nRetained);
   const durations = perParticipant
     .map((s) => s.session_duration_min)
     .filter((v) => Number.isFinite(v))
@@ -300,6 +382,11 @@ export function aggregate(perParticipant, opts = {}) {
     schema_versions: [...schemaVersions],
     n_excluded: nExcluded,
     exclusion_rate: exclusionRate,
+    n_completed: nCompleted,
+    n_retained: nRetained,
+    n_excluded_any: nExcludedAny,
+    exclusion_rate_any: nCompleted > 0 ? nExcludedAny / nCompleted : null,
+    sampling_decision: decision,
     median_duration_min: median,
     issues,
   };
@@ -316,9 +403,15 @@ function renderPerParticipant(s) {
     `  rows=${s.n_total_rows} (main=${s.n_main_rows}, practice=${s.n_practice_rows})  duration≈${formatMin(s.session_duration_min)}`
   );
   const excl = s.attention.excluded ? RED('EXCLUDED') : GREEN('included');
+  const status = !s.completed
+    ? YELLOW('not completed (not counted)')
+    : s.retained
+      ? GREEN('retained')
+      : RED(`excluded: ${s.exclusions.reasons.join(', ')}`);
   lines.push(
     `  attention: ${s.attention.passed}/${s.attention.total} pass, ${s.attention.failed} fail (>${s.attention.threshold} ⇒ exclude) → ${excl}`
   );
+  lines.push(`  sample status: ${status}`);
   if (s.upload_status) {
     const colour = s.upload_status === 'uploaded' ? GREEN : YELLOW;
     lines.push(`  upload: ${colour(s.upload_status)}`);
@@ -337,8 +430,20 @@ function renderAggregate(agg) {
   lines.push(`  schema_version:      ${agg.schema_versions.join(', ')}`);
   lines.push(`  median duration:     ${formatMin(agg.median_duration_min)}`);
   lines.push(
-    `  attention-excluded:  ${agg.n_excluded}/${agg.n_participants} (${formatPct(agg.exclusion_rate)})  ${DIM('[pre-reg estimate: 25–35%]')}`
+    `  completed / retained: ${agg.n_completed} / ${agg.n_retained}  (excluded ${agg.n_excluded_any}, ${formatPct(agg.exclusion_rate_any)} of completed)  ${DIM('[pre-reg estimate: 25–35%]')}`
   );
+  lines.push(
+    `  attention-excluded:  ${agg.n_excluded}/${agg.n_participants} (${formatPct(agg.exclusion_rate)})`
+  );
+  const d = agg.sampling_decision;
+  const plan = SAMPLING_PLAN;
+  const next = {
+    collect: `keep recruiting: ${d.recruit} more completions to reach ${plan.target}`,
+    stop: `stop recruiting: retained N ≥ ${plan.retainedMinimum}`,
+    recruit_batch: `recruit another batch of ${d.recruit} completions`,
+    stop_at_maximum: `stop: ${plan.maximum} completions reached with retained N < ${plan.retainedMinimum} (underpowered)`,
+  }[d.action];
+  lines.push(`  sampling plan:       ${BOLD(next)}`);
   if (agg.issues.length === 0) {
     lines.push(`\n  ${GREEN('✓')} no aggregate issues flagged`);
   } else {

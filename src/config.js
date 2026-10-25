@@ -85,12 +85,13 @@ export const config = deepFreeze({
    * Equal-loudness compensation: the per-tone digital amplitude is scaled by 10^(comp_dB/20), where
    * comp_dB is the dB difference between the SPL needed at the tone's
    * frequency and the SPL needed at 1 kHz to elicit the same loudness
-   * in phons (ISO 226:2003 Annex A, `target_phon_level: 70`). Across
-   * 200–3900 Hz the correction ranges from ≈ +7 dB at the low end to
-   * ≈ −4 dB near the ear's 2.5–3 kHz sensitivity peak; with the
+   * in phons (ISO 226:2023 Formula (1) and Table 1, `target_phon_level: 70`, a
+   * nominal listening level: the experiment does not measure SPL).
+   * Across 200–3900 Hz the correction ranges from ≈ +7.8 dB at the low end to
+   * ≈ −3.0 dB near the ear's 3 kHz sensitivity peak; with the
    * default 0.25 peak (≈ −12 dBFS) the worst-case boosted peak is
-   * ≈ 0.56, well below the 0.95 clipping margin. See
-   * `src/audio/equal-loudness.js` for the tabulated lookup. */
+   * ≈ 0.62, well below the 0.95 clipping margin. See
+   * `src/audio/equal-loudness.js` for the formula and parameters. */
   tones: {
     count: 24,
     low_freq_hz: 200,

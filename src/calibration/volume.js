@@ -22,7 +22,7 @@ export function speakerVolumeInstructionTrial() {
   const node = {
     type: htmlButtonResponse,
     stimulus: `
-      <h2>Set your system volume to about 50 %</h2>
+      <h2>Set your system volume to about 50%</h2>
       <div data-voiceover-target>
         <p style="max-width: 38rem; margin: 0 auto 1rem;">
           Open your computer's volume control (in the system toolbar or

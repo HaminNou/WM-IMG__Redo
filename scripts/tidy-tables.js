@@ -187,6 +187,8 @@ export const TRIALS_COLUMNS = [
   'n_probe_rows',
   'pattern_phase_before_trial',
   'trials_since_pattern_phase',
+  'pattern_reminder',
+  'trials_since_pattern_reminder',
   'rest_before_trial',
   'trial_has_stars',
   'n_stars_correct',
@@ -386,6 +388,10 @@ export const COLUMN_DOCS = {
   pattern_phase_before_trial: 'True if the pattern reminder was shown at the start of this trial.',
   trials_since_pattern_phase:
     'Trials since the last pattern reminder (0 when this trial had one); empty before the first.',
+  pattern_reminder:
+    'Scheduler plan: True if this trial was planned to carry the pattern reminder (only imagery trials can). Compare pattern_phase_before_trial, which records what was shown.',
+  trials_since_pattern_reminder:
+    'Scheduler plan: trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped.',
   rest_before_trial: 'True if a rest screen came directly before this trial.',
   trial_has_stars: 'True for conditions that contain stars.',
   n_stars_correct: 'Stars answered correctly.',
@@ -834,6 +840,10 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       n_probe_rows: w.probes.length,
       pattern_phase_before_trial: w.patternPhase,
       trials_since_pattern_phase: sinceReminder,
+      pattern_reminder: typeof enc?.pattern_reminder === 'boolean' ? enc.pattern_reminder : null,
+      trials_since_pattern_reminder: Number.isInteger(enc?.trials_since_pattern_reminder)
+        ? enc.trials_since_pattern_reminder
+        : null,
       rest_before_trial: w.restBefore,
       trial_has_stars: HAS_STARS.has(cond),
       n_stars_correct: cnt(starRecords, (s) => s.star_correct === true),
@@ -931,6 +941,7 @@ const INTEGER_COLUMNS = new Set([
   'n_probes_planned',
   'n_probe_rows',
   'trials_since_pattern_phase',
+  'trials_since_pattern_reminder',
   'n_stars_correct',
   'n_stars_incorrect',
   'n_stars_no_response',
@@ -1009,6 +1020,7 @@ const NUMBER_COLUMNS = new Set([
 const BOOLEAN_COLUMNS = new Set([
   'is_practice',
   'pattern_phase_before_trial',
+  'pattern_reminder',
   'rest_before_trial',
   'trial_has_stars',
   'trial_star_excluded',

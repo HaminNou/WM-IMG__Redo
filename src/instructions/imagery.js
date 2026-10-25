@@ -115,8 +115,9 @@ export function iOnlyInstructionNode() {
         ${FEEDBACK_RED} for incorrect while it is still on screen.</p>
         <p>Be honest about your mental picture – if it's fuzzy, just do
         your best.</p>
+        <p>Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.</p>
       `,
-      narration: `You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best.`,
+      narration: `You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.`,
       exemplar: ['star'],
     }),
   ];

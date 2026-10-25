@@ -42,7 +42,7 @@
  * uploader uniformly.
  */
 import { createEncodingNode } from './encoding-schedule.js';
-import { probeRenderFields } from './trial-record.js';
+import { postEncodingRotationDeg, probeRenderFields } from './trial-record.js';
 
 import { addDot, removeElement } from '../visuals/dot.js';
 import {
@@ -130,7 +130,7 @@ function retentionNode(params) {
     phase: 'i_d_retention',
     trial_duration: RETENTION_MS,
     fixation: '?',
-    rotation_deg: params.rotation_deg,
+    rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     timestamp_field: 'retention_onset_ts_ms',
     data: {
@@ -147,7 +147,7 @@ function probeNode(params, probe) {
     onset_ms: PROBE_RESPONSE_MS,
     offset_ms: PROBE_OFFSET_MS,
     fixation: '?',
-    rotation_deg: params.rotation_deg,
+    rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     allowed_keys: [KEY_YES, KEY_NO],
     timestamp_field: 'probe_onset_ts_ms',

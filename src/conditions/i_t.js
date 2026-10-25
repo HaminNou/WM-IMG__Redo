@@ -37,6 +37,7 @@
  * phase). Probe data is on the probe nodes (`i_t_probe` phase).
  */
 import { createEncodingNode } from './encoding-schedule.js';
+import { postEncodingRotationDeg, probeFrameFields } from './trial-record.js';
 
 import { setFixation } from '../visuals/frame.js';
 import { toneForCell } from '../audio/tones.js';
@@ -128,6 +129,7 @@ function retentionNode(params) {
     phase: 'i_t_retention',
     trial_duration: RETENTION_MS,
     fixation: '?',
+    rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     timestamp_field: 'retention_onset_ts_ms',
     data: {
@@ -145,6 +147,7 @@ function probeNode(params, probe) {
     onset_ms: PROBE_RESPONSE_MS,
     offset_ms: PROBE_OFFSET_MS,
     fixation: '?',
+    rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     allowed_keys: [KEY_YES, KEY_NO],
     timestamp_field: 'probe_onset_ts_ms',
@@ -169,6 +172,7 @@ function probeNode(params, probe) {
     on_finish: (data, state) => {
       const judged = judgeProbeResponse(state.response_key, probe.is_target);
       data.probe_position = probe.probe_position;
+      Object.assign(data, probeFrameFields(state.frame));
       data.encoding_position = probe.encoding_position;
       data.probe_type = probe.type;
       data.probed_cell = probe.cell;

@@ -46,13 +46,12 @@ function buildOnce() {
     index: t.index,
     rank: t.index + 1,
     freq_hz: t.freq_hz,
-    /* ISO 226:2003 70-phon equal-loudness compensation, computed by
-     * interpolation between the tabulated 60-phon and 80-phon contours
-     * (the tabulated contours are in `equal-loudness.js`). The dB value is the
-     * gain needed at this tone's frequency to elicit the same loudness
-     * as a 1 kHz reference at 70 phons. Applied at synthesis time by
-     * `playToneByIndex`. Range across 200..3900 Hz is roughly +6 dB at
-     * the low end to −5 dB near the ear's 2.5–3 kHz sensitivity peak. */
+    /* ISO 226:2023 70-phon equal-loudness compensation, computed from the
+     * standard's Formula (1) at 70 phons (parameters in `equal-loudness.js`).
+     * The dB value is the gain needed at this tone's frequency to elicit the
+     * same loudness as a 1 kHz reference at 70 phons. Applied at synthesis
+     * time by `playToneByIndex`. Range across 200..3900 Hz is roughly +7.8 dB
+     * at the low end to −3.0 dB near the ear's 3 kHz sensitivity peak. */
     gain_compensation_db: equalLoudnessGainDb70Phon(t.freq_hz),
     pattern_label: t.index % 2 === 0 ? 'on' : 'off' /* odd rank ⇔ even index ⇔ 'on' */,
     paired_cell: null /* filled below */,

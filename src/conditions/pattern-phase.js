@@ -1,11 +1,14 @@
 /**
  * Pattern-phase node.
  *
- * The gray imagery pattern is presented at block start and
- * every `config.pattern.pattern_phase_frequency_trials` (= 8) trials
- * thereafter, for `config.pattern.pattern_phase_duration_ms` (= 4000 ms).
- * The participant uses these intervals to refresh their mental image of the
- * pattern, which the imagery (star) judgements depend on.
+ * The gray imagery pattern is presented as a 4 s reminder
+ * (`config.pattern.pattern_phase_duration_ms`) inside the imagery-bearing
+ * trials chosen by `src/scheduler/pattern-reminders.js`: one per window of
+ * `config.pattern.pattern_phase_frequency_trials` (= 8) trials, always on the
+ * first imagery trial of a block, balanced across I-only / I+D / I+T, and
+ * never more than 9 trials before an imagery trial. The participant uses it
+ * to refresh the mental image of the pattern that the imagery (star)
+ * judgements depend on.
  *
  * Implementation: a single jsPsych html-keyboard-response node that mounts a
  * non-rotated grid frame, builds the 13-cell gray pattern overlay at 33 %

@@ -97,7 +97,11 @@ describe('tidy tables from simulated sessions', () => {
     const dotProbes = tidy.probes.filter((p) => p.modality === 'dot');
     expect(dotProbes.length).toBeGreaterThan(0);
     for (const p of dotProbes) {
-      expect(p.probe_frame_rotation_deg).toBe(p.condition === 'd_only' ? p.rotation_deg : 0);
+      /* d_only and i_d draw the dot in the grid rotated by the trial angle; no condition
+       * draws a dot probe on an upright grid when its encoding frame was rotated. */
+      expect(p.probe_frame_rotation_deg).toBe(
+        p.condition === 'd_only' || p.condition === 'i_d' ? p.rotation_deg : 0
+      );
       expect(p.position_matches_runtime).toBe(true);
       if (p.rotation_deg === 0) expect(p.x_mm).toBe(p.cell_x_mm);
       expect(p.min_enc_dist_mm).toBeGreaterThanOrEqual(0);
@@ -106,6 +110,7 @@ describe('tidy tables from simulated sessions', () => {
       }
     }
     for (const p of tidy.probes.filter((x) => x.modality === 'tone')) {
+      expect(p.probe_frame_rotation_deg).toBe(p.condition === 'i_t' ? p.rotation_deg : 0);
       expect(p.x_mm).toBeNull();
       expect(p.tone_index).toBeGreaterThanOrEqual(0);
     }

@@ -44,6 +44,8 @@ import {
   encodingRecord,
   probeRenderFields,
   starRenderFields,
+  postEncodingRotationDeg,
+  probeFrameFields,
 } from '../src/conditions/trial-record.js';
 import { buildSessionInfo } from '../src/session-info.js';
 import { toneForCell } from '../src/audio/tones.js';
@@ -96,6 +98,8 @@ const SIM_CLOCK_BASE_MS = 1_000_000; /* arbitrary non-zero base for relativity *
  *   --response-rate <0..1>  Probability the participant answers (default: 0.97)
  *   --out <path>            Write to file (default: stdout)
  *   --participants <N>      Emit N participants concatenated (default: 1)
+ *   --calibration-inconsistent  Simulate a screen calibration accepted on the last attempt
+ *                           with inconsistent settings (the pre-registered exclusion case)
  */
 function parseSimulateArgs(argv) {
   const args = Array.isArray(argv) ? argv.slice(2) : [];
@@ -107,6 +111,7 @@ function parseSimulateArgs(argv) {
     responseRate: DEFAULT_RESPONSE_RATE,
     out: null,
     participants: 1,
+    calibration: 'ok',
   };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -117,6 +122,7 @@ function parseSimulateArgs(argv) {
     else if (a === '--response-rate') opts.responseRate = parseFloat(args[++i]);
     else if (a === '--out') opts.out = args[++i] ?? null;
     else if (a === '--participants') opts.participants = parseInt(args[++i], 10);
+    else if (a === '--calibration-inconsistent') opts.calibration = 'inconsistent_accepted';
     else if (a.startsWith('--')) throw new Error(`unknown flag: ${a}`);
   }
   if (!Number.isFinite(opts.accuracy) || opts.accuracy < 0 || opts.accuracy > 1) {
@@ -316,6 +322,9 @@ function buildProbeRow(trialType, params, probe, blockLabel, response, timing) {
   const said_yes = response.responded === true ? response.correct === probe.is_target : null;
   const probeOnset = timing.probeOnsets[probe.probe_position] ?? null;
   const responseKey = response.responded ? (said_yes ? 'arrowright' : 'arrowleft') : null;
+  /* Same rule as the runtime: the probe frame keeps the encoding rotation. */
+  const probeFrame = { rotation_deg: postEncodingRotationDeg(params) };
+  const isTone = trialType === 't_only' || trialType === 'i_t';
   const row = {
     phase,
     block_label: blockLabel,
@@ -323,7 +332,7 @@ function buildProbeRow(trialType, params, probe, blockLabel, response, timing) {
     trial_index_in_block: params.trial_index_in_block,
     background_shade: params.background_shade,
     probe_position: probe.probe_position,
-    ...probeRenderFields(probe, { rotation_deg: params.display_rotation_deg ?? 0 }),
+    ...(isTone ? probeFrameFields(probeFrame) : probeRenderFields(probe, probeFrame)),
     probe_type: probe.type,
     probed_cell: probe.cell,
     probe_pattern_label: probe.pattern_label,
@@ -340,7 +349,7 @@ function buildProbeRow(trialType, params, probe, blockLabel, response, timing) {
     response_key: responseKey,
     probe_onset_ts_ms: probeOnset,
   };
-  if (trialType === 't_only' || trialType === 'i_t') {
+  if (isTone) {
     const tone = toneForCell(probe.cell);
     row.probed_tone_index = tone.index;
     row.probed_tone_freq_hz = tone.freq_hz;
@@ -461,35 +470,74 @@ function stamp(row, seqRef, sessionMeta) {
  * dump always carries them and CALIBRATION_SUMMARY.csv pulls fields from
  * them. We emit minimal-but-consistent stand-ins so the auxiliary CSVs land
  * with non-null values. */
-function emitSessionStubRows(seqRef, sessionMeta) {
+/* Two card-width settings and the attempt outcome, shaped like the rows
+ * src/calibration/screen.js writes. 'inconsistent_accepted' reproduces the
+ * pre-registered exclusion case: the two settings differ by more than the
+ * consistency tolerance and the attempt was accepted on the last try. */
+function calibrationStubRows(seqRef, sessionMeta, mode) {
+  const inconsistent = mode === 'inconsistent_accepted';
+  const attempts = inconsistent ? 3 : 1;
+  const [a, b] = inconsistent ? [300, 360] : [318, 322];
+  const mean = (a + b) / 2;
+  const pxPerMm = mean / 85.6;
+  const rows = [];
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const last = attempt === attempts;
+    const passes = last ? [a, b] : [300, 360];
+    [1, 2].forEach((pass) =>
+      rows.push(
+        stamp(
+          {
+            phase: 'screen_calibration',
+            cal_pass: pass,
+            cal_attempt: attempt,
+            cc_px_width: passes[pass - 1],
+            px_per_mm: passes[pass - 1] / 85.6,
+            px_per_mm_in_bounds: true,
+            display_colour_locked: false,
+          },
+          seqRef,
+          sessionMeta
+        )
+      )
+    );
+    const relDiff = Math.abs(passes[0] - passes[1]) / ((passes[0] + passes[1]) / 2);
+    const consistent = relDiff <= 0.05;
+    const accepted = consistent || last;
+    rows.push(
+      stamp(
+        {
+          phase: 'screen_calibration_outcome',
+          value: {
+            attempt,
+            accepted,
+            status: accepted ? (consistent ? 'ok' : 'inconsistent_accepted') : 'retry',
+            px_per_mm: pxPerMm,
+            cc_px_width: mean,
+            rel_diff: relDiff,
+            consistent,
+            usable: true,
+            reasons: [],
+            implied_screen_mm: 1440 / pxPerMm,
+            attempts_used: attempt,
+            max_attempts: 3,
+            retried: attempt > 1,
+            px_per_mm_in_bounds: true,
+          },
+        },
+        seqRef,
+        sessionMeta
+      )
+    );
+  }
+  return rows;
+}
+
+function emitSessionStubRows(seqRef, sessionMeta, calibrationMode = 'ok') {
   const rows = [];
   rows.push(
     stamp({ phase: 'consent', consented: true }, seqRef, sessionMeta),
-    stamp(
-      {
-        phase: 'screen_calibration',
-        cc_px_width: 320,
-        px_per_mm: 3.7795,
-        px_per_mm_in_bounds: true,
-        display_colour_locked: false,
-      },
-      seqRef,
-      sessionMeta
-    ),
-    stamp(
-      {
-        phase: 'screen_calibration_outcome',
-        value: {
-          attempts_used: 1,
-          retried: false,
-          cc_px_width: 320,
-          px_per_mm: 3.7795,
-          px_per_mm_in_bounds: true,
-        },
-      },
-      seqRef,
-      sessionMeta
-    ),
+    ...calibrationStubRows(seqRef, sessionMeta, calibrationMode),
     stamp({ phase: 'speaker_volume_instruction' }, seqRef, sessionMeta),
     stamp(
       {
@@ -599,7 +647,7 @@ export function simulateOne(opts) {
   const seqRef = makeSeqRef();
   const clockRef = makeClockRef();
   const rows = [];
-  rows.push(...emitSessionStubRows(seqRef, sessionMeta));
+  rows.push(...emitSessionStubRows(seqRef, sessionMeta, opts.calibration ?? 'ok'));
 
   /* Session-level row written after calibration (seed, build, calibration,
    * stimulus geometry), as the runner does before the main task. */
@@ -622,7 +670,17 @@ export function simulateOne(opts) {
           started_at_iso: new Date(0).toISOString(),
           user_agent: 'simulate-pilot/1.0',
         },
-        calibration
+        calibration,
+        {
+          /* Same shape the browser writes, so the row validates against the schema. */
+          clock_anchor: {
+            perf_now_ms: 0,
+            time_origin_ms: 0,
+            date_now_ms: 0,
+            iso: new Date(0).toISOString(),
+            jspsych_start_ms: null,
+          },
+        }
       ),
       seqRef,
       sessionMeta
@@ -698,6 +756,7 @@ async function main(argv) {
         pilotLabel: opts.pilotLabel,
         accuracy: opts.accuracy,
         responseRate: opts.responseRate,
+        calibration: opts.calibration,
       })
     );
   }

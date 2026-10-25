@@ -109,7 +109,46 @@ describe('pre-reg.json structural integrity', () => {
   it('sample-size plan recruits 60 with retained ≥ 40 floor and 10-batch top-ups', () => {
     expect(preReg.sampling_plan.recruitment_target_n).toBe(60);
     expect(preReg.sampling_plan.retained_n_minimum).toBe(40);
-    expect(preReg.sampling_plan.stopping_rule).toMatch(/batches of 10/i);
+    expect(preReg.sampling_plan.batch_size).toBe(10);
+    expect(preReg.sampling_plan.stopping_rule).toMatch(/batch of 10/i);
+  });
+
+  it('sampling plan has one coherent stopping rule: a hard maximum, no BF/p-value stopping, stated power basis', () => {
+    const plan = preReg.sampling_plan;
+    expect(plan.max_recruitment_n).toBe(100);
+    expect(plan.max_recruitment_n).toBeGreaterThan(plan.recruitment_target_n);
+    expect((plan.max_recruitment_n - plan.recruitment_target_n) % plan.batch_size).toBe(0);
+    expect(plan.stopping_rule).toMatch(/100 participants have completed/);
+    expect(plan.no_optional_stopping).toMatch(
+      /no p-value-based or Bayes-factor-based optional stopping/
+    );
+    expect(plan.prolific_setup.initial_places).toBe(plan.recruitment_target_n);
+    expect(plan.prolific_setup.top_up_places_per_batch).toBe(plan.batch_size);
+    expect(plan.prolific_setup.max_completions).toBe(plan.max_recruitment_n);
+    expect(plan.power_analysis.computed_n_basis).toMatch(/rho = 0/);
+    expect(plan.power_analysis.computed_n).toBeLessThanOrEqual(plan.retained_n_minimum);
+  });
+
+  it('the Prolific checklist states the same places, cap and budget as the pre-registration', () => {
+    const md = readFileSync(resolve(__dirname, '../prolific-study-description.md'), 'utf8');
+    expect(md).toMatch(/start with 60 places/);
+    expect(md).toMatch(/aim for 60 completed sessions/);
+    expect(md).toMatch(/fewer than 40 participants are retained/);
+    expect(md).toMatch(/batch of 10 places/);
+    expect(md).toMatch(/past 100 completed sessions/);
+    expect(md).toContain('$1,560');
+    expect(md).toContain('$2,600');
+  });
+
+  it('participant pay budget equals the stated pay times the completions', () => {
+    const comp = preReg.sampling_plan.compensation;
+    const pay = Number(comp.pay_amount.replace('$', ''));
+    expect(comp.participant_pay_budget_usd.at_60_completions).toBe(
+      pay * preReg.sampling_plan.recruitment_target_n
+    );
+    expect(comp.participant_pay_budget_usd.at_100_completions_maximum).toBe(
+      pay * preReg.sampling_plan.max_recruitment_n
+    );
   });
 
   it('design summary matches the locked config (12 trials per type per main block × 2 blocks = 24/type)', () => {

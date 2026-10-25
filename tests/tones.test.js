@@ -128,7 +128,7 @@ describe('tones: log-equal, non-musical frequency bank', () => {
   });
 
   it('every tone carries an ISO 226 70-phon equal-loudness gain in the expected sign pattern', () => {
-    /* Interpolated between 60- and 80-phon tabulated contours. The tone-bank record exposes a `gain_compensation_db`
+    /* ISO 226:2023 Formula (1) at 70 phons. The tone-bank record exposes a `gain_compensation_db`
      * field equal to the dB difference between the SPL needed at the
      * tone's frequency and the SPL needed at 1 kHz to elicit the same
      * loudness in phons. The bank's lowest tones should boost (positive
@@ -139,7 +139,7 @@ describe('tones: log-equal, non-musical frequency bank', () => {
     const bank = getToneBank();
     const lowest = bank[0];
     expect(lowest.gain_compensation_db).toBeGreaterThan(5); /* low end always boosts */
-    expect(lowest.gain_compensation_db).toBeLessThan(10);
+    expect(lowest.gain_compensation_db).toBeCloseTo(7.83, 1);
     /* Find the tone with the most negative gain — should land near
      * 2.5–3 kHz (ear's sensitivity peak). */
     const minGainTone = bank.reduce((acc, t) =>

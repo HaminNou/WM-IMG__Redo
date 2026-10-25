@@ -15,6 +15,11 @@
  *   block_position      0-based position within the block, in presentation order
  *   pool_index          index in the condition's 24-trial pool (the value that
  *                       trial_index_in_block carries)
+ *   pattern_reminder    true when this trial carries the 4 s pattern reminder
+ *                       (`pattern-reminders.js`); false otherwise
+ *   trials_since_pattern_reminder
+ *                       imagery trials: trials since the last reminder in the
+ *                       block (0 on a reminded trial); memory-only trials: null
  */
 export const CONDITIONS = Object.freeze(['d_only', 't_only', 'i_only', 'i_d', 'i_t']);
 
@@ -28,6 +33,8 @@ export function buildTrialMeta({
   block_position,
   presentation_index = null,
   pool_index,
+  pattern_reminder = false,
+  trials_since_pattern_reminder = null,
 }) {
   if (!CONDITIONS.includes(condition)) {
     throw new Error(`buildTrialMeta: unknown condition '${condition}'`);
@@ -44,6 +51,8 @@ export function buildTrialMeta({
     presentation_index: isPractice ? null : (presentation_index ?? block_position + 1),
     block_position,
     pool_index,
+    pattern_reminder,
+    trials_since_pattern_reminder,
   });
 }
 

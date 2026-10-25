@@ -7,6 +7,7 @@ import { getSessionPRNG } from '../prng.js';
 import { generateTrialTypeSchedule } from './trial-type.js';
 import { arrangeTrialOrder } from './rotation-balance.js';
 import { buildTrialMeta } from './trial-meta.js';
+import { planPatternReminders } from './pattern-reminders.js';
 
 /**
  * @param {object} opts
@@ -16,8 +17,11 @@ import { buildTrialMeta } from './trial-meta.js';
  * @param {number} [opts.runLengthCap]
  * @param {{type: string, length: number}} [opts.previousTail]
  * @param {number} [opts.presentationOffset]       main-task trials presented before this block
+ * @param {number} [opts.patternPhaseFrequency]  window length of the reminder planner (default config)
+ * @param {object} [opts.reminderCounts]          reminders already given per imagery condition earlier
+ *                                                in the session (Main B receives Main A's)
  * @param {object} [opts.prng]
- * @returns {{schedule: string[], trialParams: object[]}}
+ * @returns {{schedule: string[], trialParams: object[], reminderCounts: object}}
  */
 export function planBlockTrials({
   blockLabel,
@@ -26,6 +30,8 @@ export function planBlockTrials({
   runLengthCap,
   previousTail,
   presentationOffset,
+  patternPhaseFrequency,
+  reminderCounts,
   prng,
 }) {
   const rng = prng ?? getSessionPRNG();
@@ -51,6 +57,15 @@ export function planBlockTrials({
   });
   if (ordered.length >= 20) ordered = arrangeTrialOrder(ordered, rng);
 
+  /* Which trials carry the pattern reminder: a function of the type sequence
+   * only (see pattern-reminders.js), so it is part of the pure plan and the
+   * pilot simulator sees the same decision as the runtime. */
+  const reminders = planPatternReminders({
+    schedule,
+    frequency: patternPhaseFrequency,
+    counts: reminderCounts,
+  });
+
   const trialParams = ordered.map((raw, i) => {
     const trial_meta = buildTrialMeta({
       condition: schedule[i],
@@ -58,10 +73,12 @@ export function planBlockTrials({
       block_position: i,
       presentation_index: presentationOffset === undefined ? null : presentationOffset + i + 1,
       pool_index: raw.trial_index_in_block,
+      pattern_reminder: reminders.reminded[i],
+      trials_since_pattern_reminder: reminders.since[i],
     });
     return Object.freeze({ ...raw, trial_meta });
   });
-  return { schedule, trialParams };
+  return { schedule, trialParams, reminderCounts: reminders.counts };
 }
 
 export function trailingRun(schedule) {

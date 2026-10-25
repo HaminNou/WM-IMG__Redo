@@ -46,7 +46,7 @@ const POSTURE_HTML = slideTextPage({
     <ul style="margin: 0.5rem 0 0.75rem 1.25rem; line-height: 1.45;">
       <li>Sit so that your eyes are <strong>about an arm's length
       (≈ 60 cm)</strong> away from the monitor.</li>
-      <li>Centre yourself in front of the screen: your eyes should be
+      <li>Center yourself in front of the screen: your eyes should be
       <strong>directly in front of the middle of the monitor</strong>,
       not off to one side.</li>
       <li>Make sure the screen is roughly at <strong>eye level</strong> –
@@ -58,7 +58,7 @@ const POSTURE_HTML = slideTextPage({
     <p>When you are settled in this position, click the button below to
     continue.</p>
   `,
-  narration: `Before we begin the tasks, let's get you set up. This study works best when you are seated comfortably and stay in roughly the same position for the rest of the session. Please take a moment to set yourself up. Sit so that your eyes are about an arm's length, roughly 60 centimetres, away from the monitor. Centre yourself in front of the screen: your eyes should be directly in front of the middle of the monitor, not off to one side. Make sure the screen is roughly at eye level – adjust your chair or the monitor if needed. And try to stay in this position for the rest of the study – moving your head closer or farther between trials can change how the task looks, and how well you can do it. When you are settled in this position, click the button below to continue.`,
+  narration: `Before we begin the tasks, let's get you set up. This study works best when you are seated comfortably and stay in roughly the same position for the rest of the session. Please take a moment to set yourself up. Sit so that your eyes are about an arm's length, roughly 60 centimeters, away from the monitor. Center yourself in front of the screen: your eyes should be directly in front of the middle of the monitor, not off to one side. Make sure the screen is roughly at eye level – adjust your chair or the monitor if needed. And try to stay in this position for the rest of the study – moving your head closer or farther between trials can change how the task looks, and how well you can do it. When you are settled in this position, click the button below to continue.`,
 });
 
 const HANDS_HTML = slideTextPage({

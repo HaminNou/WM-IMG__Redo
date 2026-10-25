@@ -175,7 +175,13 @@ function iOnlyStarRow({
 
 describe('parseExportArgs', () => {
   it('returns defaults for empty argv', () => {
-    expect(parseExportArgs([])).toEqual({ inputs: [], outputDir: null, jsonManifest: false });
+    expect(parseExportArgs([])).toEqual({
+      inputs: [],
+      outputDir: null,
+      jsonManifest: false,
+      excelBom: false,
+      neutraliseFormulas: false,
+    });
   });
 
   it('separates --out and inputs', () => {
@@ -184,6 +190,8 @@ describe('parseExportArgs', () => {
         inputs: ['a.json', 'b.json'],
         outputDir: 'out/',
         jsonManifest: false,
+        excelBom: false,
+        neutraliseFormulas: false,
       }
     );
   });
@@ -195,7 +203,23 @@ describe('parseExportArgs', () => {
       inputs: ['a.json'],
       outputDir: 'o',
       jsonManifest: true,
+      excelBom: false,
+      neutraliseFormulas: false,
     });
+  });
+
+  it('parses --excel-bom and --neutralise-formulas (both default off)', () => {
+    const o = parseExportArgs([
+      'node',
+      'csv-export.js',
+      '--out',
+      'o',
+      '--excel-bom',
+      '--neutralise-formulas',
+      'a.json',
+    ]);
+    expect(o.excelBom).toBe(true);
+    expect(o.neutraliseFormulas).toBe(true);
   });
 
   it('throws on unknown flags', () => {
@@ -1240,6 +1264,8 @@ describe('column lists', () => {
         "Trial",
         "Background_Shade",
         "Rotation_Deg",
+        "Pattern_Reminder",
+        "Trials_Since_Pattern_Reminder",
         "Dot_1_OrderN",
         "Dot_1_Cell",
         "Dot_1_CellTY",

@@ -122,6 +122,7 @@ export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
     countsByType: countsOf(pools.halfB),
     presentationOffset: mainA.schedule.length,
     previousTail: trailingRun(mainA.schedule),
+    reminderCounts: mainA.reminderCounts,
     prng: rng,
   });
   return { ...pools, mainA, mainB };

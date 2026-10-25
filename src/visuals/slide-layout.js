@@ -52,6 +52,7 @@
  * so the per-deck content structure stays close to where its copy lives.
  */
 import { config } from '../config.js';
+import { questionMarkPath, QMARK_STROKE_MM } from './fixation-mark.js';
 
 /* Single source of truth for the wrapper's vertical extent. The exported
  * style strings reference this so a change propagates everywhere at once.
@@ -246,7 +247,6 @@ const SLIDE_ARROW_PX = 100; /* config.imagery.rotation_arrow_size_px */
  * a numeric preview. */
 const SLIDE_ARROW_DEFAULT_TILT_DEG = 30;
 const SLIDE_TONE_GLYPH_SIZE_MM = 12;
-const SLIDE_QMARK_GLYPH_SIZE_MM = 12;
 
 /* Pattern overlay — the 13 gray-pattern cells, read from
  * `config.pattern.gray_pattern_cells` (config.js has no dependencies, so this
@@ -298,9 +298,9 @@ const SLIDE_TONE_GLYPH_COLOUR = 'rgba(0, 0, 0, 0.85)';
  * during the live trial (see `frame.js::setFixation`). It is used on
  * probe-phase instruction slides ("After the dots, we will test your
  * memory…") so the participant sees the same centre marker on the
- * teaching slide that they will see when the test phase starts. Like
- * 'tone', it occupies the centre and therefore hides the dim centre
- * dot — mirroring the centre-dot/overlay swap in `frame.js`.
+ * teaching slide that they will see when the test phase starts. The cue
+ * is the shared path glyph from `fixation-mark.js`; its period is the
+ * bull's-eye centre dot, which therefore stays drawn (as in `frame.js`).
  *
  * 'pattern' renders the 13 gray-pattern cells inside the bull's-eye so the
  * imagery (Task 3) "welcome" slide can show the participant exactly what
@@ -309,7 +309,9 @@ const SLIDE_TONE_GLYPH_COLOUR = 'rgba(0, 0, 0, 0.85)';
  * does not stand upright). */
 function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG } = {}) {
   const want = new Set(kinds);
-  const centreOccupied = want.has('tone') || want.has('qmark');
+  /* Only the tone glyph occupies the centre. The '?' cue keeps the bull's-eye
+   * dot visible (it is the '?' period), exactly as in the live frames. */
+  const centreOccupied = want.has('tone');
   const showPattern = want.has('pattern');
   const ring = `<circle cx="${SLIDE_GRID_MID_MM}" cy="${SLIDE_GRID_MID_MM}" r="${SLIDE_RING_RADIUS_MM}" fill="none" stroke="${SLIDE_RING_STROKE_COLOUR}" stroke-width="0.5" />`;
   /* Pattern hides the fixation dot too — when the pattern is on display the
@@ -342,7 +344,7 @@ function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG 
     ? `<text x="${SLIDE_GRID_MID_MM}" y="${SLIDE_GRID_MID_MM}" text-anchor="middle" dominant-baseline="central" fill="${SLIDE_TONE_GLYPH_COLOUR}" font-size="${SLIDE_TONE_GLYPH_SIZE_MM}" font-family="Arial, sans-serif" font-weight="bold">♪</text>`
     : '';
   const qmark = want.has('qmark')
-    ? `<text x="${SLIDE_GRID_MID_MM}" y="${SLIDE_GRID_MID_MM}" text-anchor="middle" dominant-baseline="central" fill="${SLIDE_TONE_GLYPH_COLOUR}" font-size="${SLIDE_QMARK_GLYPH_SIZE_MM}" font-family="Arial, sans-serif" font-weight="bold">?</text>`
+    ? `<path d="${questionMarkPath(SLIDE_GRID_MID_MM, SLIDE_GRID_MID_MM)}" fill="none" stroke="${SLIDE_TONE_GLYPH_COLOUR}" stroke-width="${QMARK_STROKE_MM}" stroke-linecap="round" stroke-linejoin="round" />`
     : '';
   const svg = `
     <svg viewBox="${-SLIDE_PAD_MM} ${-SLIDE_PAD_MM} ${SLIDE_VIEWBOX_MM} ${SLIDE_VIEWBOX_MM}"

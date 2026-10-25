@@ -1,44 +1,68 @@
 /**
  * Tests for src/audio/equal-loudness.js — the 70-phon compensation applied
- * to every tone, interpolated from the ISO 226:2003 Annex A 60- and 80-phon
- * contours (Suzuki & Takeshima 2004, JASA 116(2), Table I).
+ * to every tone, evaluated from ISO 226:2023 Formula (1) with the Table 1
+ * parameters (αf, LU, Tf).
  */
 import { describe, it, expect } from 'vitest';
-import { equalLoudnessGainDb70Phon } from '../src/audio/equal-loudness.js';
+import { equalLoudnessGainDb70Phon, iso226SplForPhon } from '../src/audio/equal-loudness.js';
 
-/* Annex A SPL (dB) at the anchor frequency for the 60- and 80-phon contours. */
-const ANCHORS = {
-  200: [67.5, 84.3],
-  250: [64.9, 82.0],
-  1000: [60.0, 80.0],
-  2500: [55.7, 74.5],
-  3150: [55.7, 74.8],
-  4000: [59.5, 79.1],
-};
-
-describe('equalLoudnessGainDb70Phon', () => {
-  it('equals the mean of the 60- and 80-phon table corrections at anchor frequencies', () => {
-    for (const [freq, [spl60, spl80]] of Object.entries(ANCHORS)) {
-      const expected = (spl60 - 60 + (spl80 - 80)) / 2;
-      expect(equalLoudnessGainDb70Phon(Number(freq))).toBeCloseTo(expected, 9);
+describe('iso226SplForPhon (ISO 226:2023 Formula (1))', () => {
+  it('returns the loudness level itself at 1 kHz (definitional)', () => {
+    for (const phon of [40, 60, 70, 80, 90]) {
+      expect(iso226SplForPhon(1000, phon)).toBeCloseTo(phon, 9);
     }
   });
 
+  it('matches spot values of the 2023 60-phon contour (guards the Table 1 parameters)', () => {
+    const expected = {
+      20: 109.37,
+      100: 78.5,
+      200: 69.73,
+      500: 62.06,
+      2000: 60.0,
+      3150: 56.36,
+      4000: 57.65,
+      8000: 71.5,
+    };
+    for (const [freq, spl] of Object.entries(expected)) {
+      expect(iso226SplForPhon(Number(freq), 60)).toBeCloseTo(spl, 1);
+    }
+  });
+
+  it('interpolates linearly in log-frequency between centre frequencies', () => {
+    const mid = Math.sqrt(200 * 250);
+    expect(iso226SplForPhon(mid, 70)).toBeCloseTo(
+      (iso226SplForPhon(200, 70) + iso226SplForPhon(250, 70)) / 2,
+      9
+    );
+  });
+});
+
+describe('equalLoudnessGainDb70Phon', () => {
   it('returns exactly 0 dB at the 1 kHz reference', () => {
     expect(equalLoudnessGainDb70Phon(1000)).toBe(0);
   });
 
-  it('boosts the low end and cuts near the 2-4 kHz sensitivity peak', () => {
-    expect(equalLoudnessGainDb70Phon(200)).toBeGreaterThan(4);
-    expect(equalLoudnessGainDb70Phon(200)).toBeLessThan(8);
-    expect(equalLoudnessGainDb70Phon(2500)).toBeLessThan(-4);
+  it('boosts the low end (+7.83 dB at 200 Hz) and cuts near the 3 kHz peak', () => {
+    expect(equalLoudnessGainDb70Phon(200)).toBeCloseTo(7.83, 1);
+    expect(equalLoudnessGainDb70Phon(500)).toBeCloseTo(1.47, 1);
+    expect(equalLoudnessGainDb70Phon(3150)).toBeCloseTo(-3.24, 1);
   });
 
-  it('interpolates linearly in log-frequency between anchors', () => {
-    const mid = Math.sqrt(200 * 250);
-    const g200 = equalLoudnessGainDb70Phon(200);
-    const g250 = equalLoudnessGainDb70Phon(250);
-    expect(equalLoudnessGainDb70Phon(mid)).toBeCloseTo((g200 + g250) / 2, 9);
+  it('the bank minimum is about −3.04 dB, near 3 kHz', () => {
+    let min = Infinity;
+    let at = 0;
+    for (let i = 0; i < 24; i++) {
+      const f = 200 * (3900 / 200) ** (i / 23);
+      const g = equalLoudnessGainDb70Phon(f);
+      if (g < min) {
+        min = g;
+        at = f;
+      }
+    }
+    expect(min).toBeCloseTo(-3.04, 1);
+    expect(at).toBeGreaterThan(2800);
+    expect(at).toBeLessThan(3200);
   });
 
   it('worst-case boost at the default 0.25 peak stays below the 0.95 clipping margin', () => {
@@ -47,7 +71,7 @@ describe('equalLoudnessGainDb70Phon', () => {
       ...samplePoints.map((f) => 0.25 * 10 ** (equalLoudnessGainDb70Phon(f) / 20))
     );
     expect(maxPeak).toBeLessThan(0.95);
-    expect(maxPeak).toBeGreaterThan(0.4);
+    expect(maxPeak).toBeCloseTo(0.62, 1);
   });
 
   it('throws a RangeError outside the ISO 226 domain [20, 12500] Hz', () => {

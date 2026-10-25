@@ -47,12 +47,37 @@ export function encodingRecord(params) {
   };
 }
 
+/**
+ * Rotation of the grid frame for every node that follows encoding
+ * (retention and the three recognition probes). One rule for all conditions:
+ * the angle the trial's encoding frame was drawn at stays on the frame.
+ *
+ *   I+D, I+T  trial angle (`rotation_deg`); a dot probe is therefore drawn on
+ *             the rotated cell it was encoded on, and a tone probe records the
+ *             same frame angle although it has no screen position
+ *   D-only    its display angle (`display_rotation_deg`)
+ *   T-only    upright (0)
+ *
+ * I-only has no retention or probes. Imagery frames are never left upright
+ * while the encoding frame was rotated.
+ */
+export function postEncodingRotationDeg(params) {
+  if (typeof params?.rotation_deg === 'number') return params.rotation_deg;
+  if (typeof params?.display_rotation_deg === 'number') return params.display_rotation_deg;
+  return 0;
+}
+
+/** Rotation of the frame a recognition probe was drawn in (dot and tone probes alike). */
+export function probeFrameFields(frame) {
+  return { probe_frame_rotation_deg: frame?.rotation_deg ?? 0 };
+}
+
 /** Where a recognition probe was drawn: the frame it was drawn in decides. */
 export function probeRenderFields(probe, frame) {
   const rotation = frame?.rotation_deg ?? 0;
   const pos = screenPositionMm(probe.cell, rotation);
   return {
-    probe_frame_rotation_deg: rotation,
+    ...probeFrameFields(frame),
     probe_x_mm: r3(pos.x_mm),
     probe_y_mm: r3(pos.y_mm),
     probe_radius_mm: r3(cellGeometry(probe.cell).radius_mm),

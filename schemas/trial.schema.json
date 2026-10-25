@@ -441,6 +441,15 @@
       "maximum": 23,
       "description": "Same value as `trial_index_in_block` (index in the condition's 24-trial pool); stamped under an unambiguous name."
     },
+    "pattern_reminder": {
+      "type": "boolean",
+      "description": "True when this trial carries the 4 s pattern reminder (a `pattern_phase` row exists for it). Planned from the trial-type sequence by src/scheduler/pattern-reminders.js; only imagery-bearing trials (i_only, i_d, i_t) can carry it."
+    },
+    "trials_since_pattern_reminder": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "Imagery-bearing trials: number of trials since the last pattern reminder in the block (0 on a reminded trial; at most pattern_phase_frequency_trials + 1). Null on memory-only trials (d_only, t_only)."
+    },
     "is_practice": {
       "type": "boolean",
       "description": "True for practice trials."

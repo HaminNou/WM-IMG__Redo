@@ -2,7 +2,7 @@
  * Pilot-mode runtime tag.
  *
  * Pilot sessions (public Prolific pilot, n ≈ 10) are flagged so that
- * (a) the analyst can later separate pilot data from the main batch (n = 60)
+ * (a) the analyst can later separate pilot data from the main batches (60 completions, plus top-up batches of 10 up to 100; pre-reg.json -> sampling_plan)
  * even if both share the same `build_id`, and (b) we don't accidentally fold
  * pilot rows into the registered confirmatory analyses.
  *

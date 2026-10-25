@@ -23,7 +23,8 @@
  * Each trial carries:
  *   - 3 stars: on/off labels from the block-level schedule, assigned to S-slots
  *   - 3 dummies: open-square outlines at non-star non-centre cells
- *   - 1 rotation angle, sampled uniformly from -90° to +90°
+ *   - 1 rotation angle, drawn from six 30° strata between -90° and +90° (4 per
+ *     stratum per 24 trials, no angle repeated, 0° not used; see rotation-balance.js)
  *
  * Note: this generator does NOT emit pattern-phase events — pattern
  * presentation is a block-level concern (every 8 trials),

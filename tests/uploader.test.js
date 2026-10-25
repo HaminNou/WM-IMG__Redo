@@ -53,6 +53,7 @@ import {
   setUploadCursor,
   getAllTrialRows,
   getRunId,
+  getPendingRows,
 } from '../src/storage.js';
 
 function fakeSession(overrides = {}) {
@@ -863,7 +864,7 @@ describe('uploadPendingData', () => {
     /* First 7 bucket-POSTs succeed; the 8th (music_questionnaire) fails
      * permanently after retries. With retryMax=5 (default), one bucket can
      * fire up to 6 fetches before giving up. */
-    let bucketCallTracker = [];
+    const bucketCallTracker = [];
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
       const body = JSON.parse(opts.body);
       bucketCallTracker.push(body.bucket_id);
@@ -1443,6 +1444,38 @@ describe('rows of earlier runs', () => {
       sleepImpl: instantSleep,
     });
     expect(sentRows(bodies)).toHaveLength(4);
+  });
+
+  it('rows of an earlier run stay pending after the current run has uploaded, so recovery can still send them', async () => {
+    _resetCheckpointForTests();
+    await seedTwoRuns();
+    const first = okFetch();
+    const done = await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      fetchImpl: first.fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(done.status).toBe('uploaded');
+    /* The recovery page lists what is still pending across every run. */
+    const pending = await getPendingRows();
+    expect(pending.map((r) => r.run_id)).toEqual(['old-run', 'old-run']);
+    const recovery = okFetch();
+    const result = await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'https://pipe.jspsych.org/api/data/',
+      provider: 'datapipe',
+      ...ID,
+      allRuns: true,
+      fetchImpl: recovery.fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(result.status).toBe('uploaded');
+    expect(sentRows(recovery.bodies).map((r) => r.run_id)).toEqual(['old-run', 'old-run']);
+    /* Once sent, nothing is pending in any run. */
+    expect(await getPendingRows()).toEqual([]);
   });
 
   it('checkpoints send only the current run', async () => {

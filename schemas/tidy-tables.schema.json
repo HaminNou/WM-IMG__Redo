@@ -103,6 +103,14 @@
           "type": ["integer", "null"],
           "description": "Trials since the last pattern reminder (0 when this trial had one); empty before the first."
         },
+        "pattern_reminder": {
+          "type": ["boolean", "null"],
+          "description": "Scheduler plan: True if this trial was planned to carry the pattern reminder (only imagery trials can). Compare pattern_phase_before_trial, which records what was shown."
+        },
+        "trials_since_pattern_reminder": {
+          "type": ["integer", "null"],
+          "description": "Scheduler plan: trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped."
+        },
         "rest_before_trial": {
           "type": ["boolean", "null"],
           "description": "True if a rest screen came directly before this trial."

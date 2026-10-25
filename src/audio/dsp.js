@@ -137,12 +137,27 @@ export function stopAllScheduledAudio() {
   scheduledNodes.clear();
 }
 
+/* Raised-cosine onset/offset ramps, built from RAMP_STEPS short linear
+ * segments each. With 32 segments the envelope departs from the exact
+ * raised cosine by < 0.1 % of the peak (below −60 dB), and only
+ * `setValueAtTime` / `linearRampToValueAtTime` are needed, which every
+ * browser implements the same way. (A single linear ramp is NOT a cosine
+ * ramp: it has a corner at each end and more spectral splatter.) */
+const RAMP_STEPS = 32;
+
 function applyCosineRamp(gainNode, ctx, startTime, durationSec, rampSec, peak) {
   const g = gainNode.gain;
   g.setValueAtTime(0, startTime);
-  g.linearRampToValueAtTime(peak, startTime + rampSec);
-  g.setValueAtTime(peak, startTime + durationSec - rampSec);
-  g.linearRampToValueAtTime(0, startTime + durationSec);
+  for (let k = 1; k <= RAMP_STEPS; k++) {
+    const v = peak * 0.5 * (1 - Math.cos((Math.PI * k) / RAMP_STEPS));
+    g.linearRampToValueAtTime(v, startTime + (rampSec * k) / RAMP_STEPS);
+  }
+  const fallStart = startTime + durationSec - rampSec;
+  g.setValueAtTime(peak, fallStart);
+  for (let k = 1; k <= RAMP_STEPS; k++) {
+    const v = peak * 0.5 * (1 + Math.cos((Math.PI * k) / RAMP_STEPS));
+    g.linearRampToValueAtTime(v, fallStart + (rampSec * k) / RAMP_STEPS);
+  }
 }
 
 /**
@@ -150,9 +165,8 @@ function applyCosineRamp(gainNode, ctx, startTime, durationSec, rampSec, peak) {
  *
  * `gainDb` (optional) applies an extra ±dB scaling on top of `peak` —
  * `peak * 10^(gainDb / 20)`. The 24-tone bank uses this to apply
- * ISO 226:2003 70-phon equal-loudness compensation per tone (interpolated
- * between the 60- and 80-phon tabulated contours; see
- * `src/audio/equal-loudness.js`); `playToneByIndex` in `tones.js` looks
+ * ISO 226:2023 70-phon equal-loudness compensation per tone (Formula (1)
+ * evaluated at 70 phons; see `src/audio/equal-loudness.js`); `playToneByIndex` in `tones.js` looks
  * the per-tone value up and forwards it here. Other callers (e.g. the
  * volume-calibration tone) leave `gainDb` undefined and get the
  * uncompensated default.

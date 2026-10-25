@@ -46,7 +46,7 @@ export const ATTENTION_CHECK_ITEMS = Object.freeze([
   Object.freeze({
     id: 'ac3_arrow_mapping',
     prompt:
-      'When a star points right, you press the right-arrow key. To show you understood, type the word <strong>right</strong> into the box below.',
+      'In this study, the right-arrow key means “Yes” and “On-pattern”. To show you understood, type the word <strong>right</strong> into the box below.',
     expected_answer: 'right',
   }),
 ]);

@@ -4,15 +4,35 @@ import { execFileSync } from 'node:child_process';
 
 /* Commit and build time written into every session_info row. Both fall back
  * to 'dev' when git is not available (for example a source archive). */
+function gitOutput(args) {
+  return execFileSync('git', args, {
+    cwd: __dirname,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+    .toString()
+    .trim();
+}
+
+/* A build from a tree with uncommitted changes to anything that ships gets
+ * `-dirty` appended, so the commit in the data never claims code that the
+ * commit does not contain. */
 function gitCommit() {
   if (process.env.BUILD_COMMIT) return process.env.BUILD_COMMIT;
   try {
-    return execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
-      cwd: __dirname,
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-      .toString()
-      .trim();
+    const sha = gitOutput(['rev-parse', '--short=12', 'HEAD']);
+    const changed = gitOutput([
+      'status',
+      '--porcelain',
+      '--',
+      'src',
+      'public',
+      'index.html',
+      'recover.html',
+      'package.json',
+      'package-lock.json',
+      'vite.config.js',
+    ]);
+    return changed ? `${sha}-dirty` : sha;
   } catch {
     return 'dev';
   }

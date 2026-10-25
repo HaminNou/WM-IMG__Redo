@@ -128,8 +128,9 @@ export function iDInstructionNode() {
         <strong>entire</strong> trial. You may drop it only when the
         central <strong>question mark (?)</strong> appears – that is
         when the dot tests begin.</p>
+        <p>Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.</p>
       `,
-      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the dot tests begin.`,
+      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the dot tests begin. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.`,
       exemplar: ['pattern'],
     }),
   ];
@@ -208,10 +209,11 @@ export function iTInstructionNode() {
         <strong>entire</strong> trial. You may drop it only when the
         central <strong>question mark (?)</strong> appears – that is
         when the tone tests begin.</p>
+        <p>Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.</p>
         <p>Please make sure your audio volume is still at the level you
         set earlier.</p>
       `,
-      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the tone tests begin. Please make sure your audio volume is still at the level you set earlier.`,
+      narration: `Very important: keep the picture of the rotated pattern in mind during the entire trial. You may drop it only when the central question mark appears – that is when the tone tests begin. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial. Please make sure your audio volume is still at the level you set earlier.`,
       exemplar: ['pattern'],
     }),
   ];

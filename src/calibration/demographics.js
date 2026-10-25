@@ -30,7 +30,7 @@ const FIELD_STYLE = `
     }
     .demog-section-title {
       font-size: 0.8rem; font-weight: 400; letter-spacing: 0.04em;
-      text-transform: uppercase; color: rgba(0,0,0,0.5);
+      text-transform: uppercase; color: rgba(0,0,0,0.65);
       margin: 0 0 0.75rem;
     }
     .demog-form .field {
@@ -54,7 +54,7 @@ const FIELD_STYLE = `
       font-size: 0.9rem; color: rgba(0,0,0,0.7);
     }
     .demog-form .field-hint {
-      display: block; font-size: 0.82rem; color: rgba(0,0,0,0.5);
+      display: block; font-size: 0.82rem; color: rgba(0,0,0,0.65);
       margin-top: 0.2rem; line-height: 1.35;
     }
   </style>

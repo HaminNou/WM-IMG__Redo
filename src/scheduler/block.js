@@ -18,15 +18,16 @@
  *   3. Walk the schedule slot-by-slot, popping the next trial of the chosen
  *      type from its queue and translating it into a sequence of jsPsych
  *      nodes via the matching per-condition trial composer.
- *   4. Inject `patternPhaseNode` at trial indices 0, F, 2F, … where
- *      F = `config.pattern.pattern_phase_frequency_trials` (= 8) — but
- *      ONLY if the trial at that boundary is imagery-bearing
- *      (i_only / i_d / i_t). When the boundary lands on a memory-only
- *      trial (d_only / t_only) the injection is dropped, because the
- *      pattern phase exists to refresh the imagery-pattern image and
- *      memory-only trials don't need it.
- *      Single-type practice for d_only or t_only therefore receives no
- *      pattern phase at all.
+ *   4. Inject `patternPhaseNode` into the imagery-bearing trials (i_only /
+ *      i_d / i_t) that the reminder planner marked
+ *      (`trial_meta.pattern_reminder`, see `pattern-reminders.js`): one per
+ *      window of F = `config.pattern.pattern_phase_frequency_trials` (= 8)
+ *      trials, delivered to an imagery trial inside the window and balanced
+ *      across the three imagery conditions, with no imagery trial more than
+ *      F + 1 trials after the last reminder. The old rule (slot 0, F, 2F, …
+ *      and dropped on memory-only trials) left random-order sessions with
+ *      4–14 reminders and gaps of up to 60 trials.
+ *      Single-type practice for d_only or t_only receives no pattern phase.
  *
  *      Gate-first ordering: when injected, the
  *      pattern-phase node is spliced into the trial composer's node list
@@ -48,12 +49,12 @@
  * The caller (the runner) splices `nodes` into the global timeline.
  */
 import { getSessionPRNG } from '../prng.js';
-import { config } from '../config.js';
 
 import { generateMemoryBlock } from './memory-block.js';
 import { generateImageryBlock } from './imagery-block.js';
 import { generateDualBlock } from './dual-block.js';
 import { planBlockTrials } from './block-plan.js';
+import { IMAGERY_BEARING_TYPES } from './pattern-reminders.js';
 
 import { dOnlyTrial } from '../conditions/d_only.js';
 import { tOnlyTrial } from '../conditions/t_only.js';
@@ -64,29 +65,9 @@ import { patternPhaseNode } from '../conditions/pattern-phase.js';
 
 const TRIAL_TYPES = Object.freeze(['d_only', 't_only', 'i_only', 'i_d', 'i_t']);
 
-/* Imagery-bearing trial types — the only types that ever require a fresh
- * mental image of the gray pattern. The pattern-phase node is the
- * 4 s pre-trial reminder of that pattern; rendering it before a D-only or
- * T-only trial would be meaningless to the participant (those trials never
- * involve a star judgement and so have no need for the pattern).
- *
- * Rule: the pattern-phase cadence still uses
- * `pattern_phase_frequency_trials` (default 8), but a scheduled injection
- * is suppressed whenever the trial at that boundary slot is memory-only.
- * Practical consequences:
- *   - In single-type practice for D-only / T-only, NO pattern phase ever
- *     appears (no imagery trial in the block to anchor the injection).
- *   - In single-type practice for I-only / I+D / I+T, the pattern phase
- *     still anchors slot 0 (and every Nth slot if the block is long
- *     enough).
- *   - In mixed blocks (main_a / main_b / practiceBlock), pattern phases
- *     still arrive on the 0/F/2F cadence, but only if the trial at the
- *     boundary slot is imagery-bearing. When the boundary lands on a
- *     memory-only trial, the injection is dropped — participants don't
- *     see a pattern they don't need, and the cadence resumes at the next
- *     boundary that does land on an imagery trial.
- */
-const IMAGERY_BEARING_TYPES = Object.freeze(new Set(['i_only', 'i_d', 'i_t']));
+/* Imagery-bearing trial types (`IMAGERY_BEARING_TYPES`, from
+ * pattern-reminders.js) are the only ones that ever need a fresh mental image
+ * of the gray pattern; the planner never marks a d_only / t_only trial. */
 
 const COMPOSERS = Object.freeze({
   d_only: dOnlyTrial,
@@ -113,7 +94,7 @@ const COMPOSERS = Object.freeze({
  * @param {string} [opts.sequencePoolLabelPrefix]     prefix for per-condition sequence-pool labels
  *                                                    (so practice and main don't collide). Ignored
  *                                                    when `trialParamsByType` is provided.
- * @param {number} [opts.patternPhaseFrequency]       trial-count gap between pattern phases; defaults to config
+ * @param {number} [opts.patternPhaseFrequency]       window length of the reminder planner (one reminder per window); defaults to config
  * @param {number} [opts.presentationOffset]          number of main-task trials already presented, so
  *                                                    `presentation_index` runs 1..120 over both blocks
  *                                                    (omit for practice)
@@ -176,9 +157,13 @@ export function assembleBlock({
     }
   }
   const rng = prng ?? getSessionPRNG();
-  const freq = patternPhaseFrequency ?? config.pattern.pattern_phase_frequency_trials;
-  if (!Number.isInteger(freq) || freq < 1) {
-    throw new Error(`assembleBlock: patternPhaseFrequency must be ≥ 1, got ${freq}`);
+  if (
+    patternPhaseFrequency !== undefined &&
+    (!Number.isInteger(patternPhaseFrequency) || patternPhaseFrequency < 1)
+  ) {
+    throw new Error(
+      `assembleBlock: patternPhaseFrequency must be ≥ 1, got ${patternPhaseFrequency}`
+    );
   }
   const poolPrefix = sequencePoolLabelPrefix ?? blockLabel;
 
@@ -203,16 +188,17 @@ export function assembleBlock({
       runLengthCap,
       previousTail,
       presentationOffset,
+      patternPhaseFrequency,
       prng: rng,
     });
   }
   const { schedule } = plan;
 
   /* Step 3 + 4 — compose the nodes of each trial in order, injecting a
-   * pattern-phase at cadence boundaries that land on an imagery-bearing
-   * trial. See the IMAGERY_BEARING_TYPES comment above for the why, and the
-   * file header for the gate-first splice rule (pattern-phase mounts AFTER
-   * the trial-start gate, not before it). */
+   * pattern-phase into the trials the reminder planner marked
+   * (`trial_meta.pattern_reminder`). See the file header for the why and for
+   * the gate-first splice rule (pattern-phase mounts AFTER the trial-start
+   * gate, not before it). */
   const trialParams = [];
   const nodes = [];
   for (let i = 0; i < schedule.length; i++) {
@@ -221,7 +207,7 @@ export function assembleBlock({
     const trialMeta = params.trial_meta;
     trialParams.push(params);
     const composedNodes = COMPOSERS[type](params);
-    if (i % freq === 0 && IMAGERY_BEARING_TYPES.has(type)) {
+    if (trialMeta.pattern_reminder === true && IMAGERY_BEARING_TYPES.has(type)) {
       /* Splice the pattern-phase node IN at index 1 — i.e. between the
        * trial-start gate (composer's index 0) and the rest of the trial
        * body. The participant therefore: arms the trial via the gate →

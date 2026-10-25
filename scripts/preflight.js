@@ -93,6 +93,7 @@ export function findPlaceholderTokens(text) {
  * @param {boolean} opts.strictDeployment  if true, deployment gaps are errors; else warnings
  * @param {Array<{source: string, text: string}>} [opts.participantText]  participant-facing texts to scan for placeholders
  * @param {readonly string[]} [opts.previouslyUsedIds]  ids that must not be reused
+ * @param {readonly string[]} [opts.uncommittedPaths]  paths with uncommitted changes among the files that ship
  * @returns {Array<{severity: 'error'|'warning', code: string, message: string}>}
  */
 export function evaluatePreflight({
@@ -101,8 +102,18 @@ export function evaluatePreflight({
   strictDeployment,
   participantText = [],
   previouslyUsedIds = PREVIOUSLY_USED_IDS,
+  uncommittedPaths = [],
 }) {
   const issues = [];
+  if (uncommittedPaths.length > 0) {
+    const shown = uncommittedPaths.slice(0, 5).join(', ');
+    const more = uncommittedPaths.length > 5 ? ` (+${uncommittedPaths.length - 5} more)` : '';
+    issues.push({
+      severity: strictDeployment ? 'error' : 'warning',
+      code: 'UNCOMMITTED_CHANGES',
+      message: `Uncommitted changes in files that ship: ${shown}${more}. The build is stamped "-dirty" and its commit does not contain this code; commit first so build_commit identifies what participants ran.`,
+    });
+  }
   if (config.build_id !== preReg.pre_reg_lock_build_id) {
     issues.push({
       severity: 'error',
@@ -259,6 +270,33 @@ async function loadParticipantText(config) {
   return texts;
 }
 
+/* Files that ship; keep in sync with `gitCommit()` in vite.config.js. */
+const SHIPPED_PATHS = [
+  'src',
+  'public',
+  'index.html',
+  'recover.html',
+  'package.json',
+  'package-lock.json',
+  'vite.config.js',
+];
+
+/** Paths with uncommitted changes among the shipped files; [] when git is unavailable. */
+export function uncommittedShippedPaths() {
+  try {
+    const out = execSync(`git status --porcelain -- ${SHIPPED_PATHS.join(' ')}`, {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString();
+    return out
+      .split('\n')
+      .map((l) => l.slice(3).trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 function loadPreReg() {
   return JSON.parse(readFileSync(PRE_REG_PATH, 'utf-8'));
 }
@@ -297,6 +335,7 @@ async function main(argv) {
     preReg,
     strictDeployment: opts.strictDeployment,
     participantText,
+    uncommittedPaths: uncommittedShippedPaths(),
   });
   const issueSummary = formatIssues(issues);
 

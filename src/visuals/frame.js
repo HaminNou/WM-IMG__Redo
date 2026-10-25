@@ -43,14 +43,15 @@
  * Default fixation colour matches the centre dot / question-mark
  * contrast rather than the outer ring stroke.
  *
- * Centre-dot ↔ fixation-overlay swap: the bull's-eye centre dot is hidden whenever
- * the fixation overlay carries non-empty text (e.g. '?') and re-shown when
- * the overlay is cleared. The two glyphs occupy the same screen position
- * but read very differently — keeping both visible at once made the centre
- * dot blur into the descender of the '?' so participants reported "the
- * dot is still there" rather than "the question mark just appeared".
+ * Fixation target: the bull's-eye (outer ring + centre dot) is visible in every
+ * phase of every condition. The '?' cue is a path-drawn glyph (see
+ * `fixation-mark.js`) whose period is the centre dot itself, so `setFixation(
+ * frame, '?')` never hides the dot — it recolours the dot together with the
+ * '?' (feedback green/red) and restores both on `setFixation(frame, '')`.
+ * Any other overlay text (none in live trials) still swaps with the dot.
  */
 import { svgEl } from './svg.js';
+import { questionMarkPath, QMARK_STROKE_MM } from './fixation-mark.js';
 import { config } from '../config.js';
 import { gridSizeMm, cellTopLeftMm } from '../grid.js';
 import {
@@ -214,6 +215,21 @@ export function createGridFrame({ rotation_deg = 0, fixation = '', background_sh
   });
   fixationEl.textContent = fixation;
 
+  /* '?' cue: hook + stem only; the period is the bull's-eye centre dot. Same
+   * upright layer as the text overlay (outside the rotor). Hidden until
+   * `setFixation(frame, '?')`. */
+  const questionMarkEl = svgEl('path', {
+    d: questionMarkPath(mid, mid),
+    fill: 'none',
+    stroke: fixationColour,
+    'stroke-width': QMARK_STROKE_MM,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'shape-rendering': 'geometricPrecision',
+    visibility: 'hidden',
+    class: 'grid-fixation-qmark',
+  });
+
   rotor.appendChild(cellsLayer);
   rotor.appendChild(patternLayer);
   svg.appendChild(bullseyeLayer);
@@ -223,6 +239,7 @@ export function createGridFrame({ rotation_deg = 0, fixation = '', background_sh
    * (computed by `rotatedCellCentreMm`) while the glyph itself stays upright. */
   svg.appendChild(stimuliLayer);
   svg.appendChild(fixationEl);
+  svg.appendChild(questionMarkEl);
   wrapper.appendChild(svg);
 
   const frame = {
@@ -242,12 +259,11 @@ export function createGridFrame({ rotation_deg = 0, fixation = '', background_sh
     stimuliLayer,
     cellsLayer,
     fixationEl,
+    questionMarkEl,
   };
 
-  /* Sync the centre dot's visibility to the initial fixation text — if a
-   * frame is created with `fixation: '?'` the dot must be hidden from the
-   * very first paint, not toggled on the next setFixation call. */
-  syncCenterDotVisibility(frame);
+  /* Apply the initial fixation state from the very first paint. */
+  applyFixation(frame, fixation);
 
   return frame;
 }
@@ -259,36 +275,37 @@ export function setRotation(frame, rotation_deg) {
 }
 
 /**
- * Show or clear the fixation text overlay ('?', '♪', etc.).
+ * Set the centre cue: '' (bull's-eye only) or '?' (question-mark cue).
  *
- * Centre-dot ↔ overlay swap: while the overlay carries non-empty text the
- * bull's-eye centre dot is hidden via `visibility:hidden`, so the two
- * glyphs never coexist at the same screen position. Clearing the overlay
- * (text === '') restores the centre dot. See the file-header note for
- * rationale.
- *
- * Default fill is FIXATION_MARK_COLOUR. Pass `{ color }` to recolour the
- * overlay (e.g. green/red feedback on T-only / I+T probes, where the
- * on-grid stimulus is the '?' glyph itself); callers must call this again
- * with no `color` argument to return to the default fill.
+ * The bull's-eye ring and centre dot stay visible in both states; for '?'
+ * the dot doubles as the glyph's period. Pass `{ color }` to recolour the
+ * cue (green/red probe feedback) — it recolours the '?' strokes AND the
+ * dot; calling again without `color` restores the default fill. Any other
+ * text is drawn as a legacy text overlay that hides the dot while shown.
  */
 export function setFixation(frame, text, { color } = {}) {
-  const t = text === null || text === undefined ? '' : String(text);
-  frame.fixationEl.textContent = t;
-  frame.fixationEl.setAttribute('fill', color ?? frame.fixation_colour ?? FIXATION_MARK_COLOUR);
-  syncCenterDotVisibility(frame);
+  applyFixation(frame, text, color);
 }
 
-/**
- * Hide the bull's-eye centre dot while the fixation overlay carries any
- * non-empty text; restore it otherwise. The DOM node stays mounted so
- * geometry / hit-testing of the bull's-eye layer is preserved — only the
- * dot's `visibility` attribute toggles.
- */
-function syncCenterDotVisibility(frame) {
-  if (!frame?.centerDot || !frame?.fixationEl) return;
-  const overlayHasText = (frame.fixationEl.textContent ?? '').length > 0;
-  frame.centerDot.setAttribute('visibility', overlayHasText ? 'hidden' : 'visible');
+function applyFixation(frame, text, color) {
+  const t = text === null || text === undefined ? '' : String(text);
+  const fill = color ?? frame.fixation_colour ?? FIXATION_MARK_COLOUR;
+  const isQuestionMark = t === '?';
+  frame.fixationEl.textContent = t;
+  frame.fixationEl.setAttribute('fill', fill);
+  /* The '?' text node stays in the DOM (semantics, tests) but is never
+   * painted: the path glyph is what the participant sees. */
+  frame.fixationEl.setAttribute('visibility', isQuestionMark ? 'hidden' : 'visible');
+  frame.questionMarkEl.setAttribute('stroke', fill);
+  frame.questionMarkEl.setAttribute('visibility', isQuestionMark ? 'visible' : 'hidden');
+  /* Dot: always visible, except behind legacy overlay text. As the '?'
+   * period it takes the cue colour. */
+  const legacyOverlay = t.length > 0 && !isQuestionMark;
+  frame.centerDot.setAttribute('visibility', legacyOverlay ? 'hidden' : 'visible');
+  frame.centerDot.setAttribute(
+    'fill',
+    isQuestionMark ? fill : (frame.fixation_colour ?? FIXATION_MARK_COLOUR)
+  );
 }
 
 export function clearStimuli(frame) {

@@ -158,15 +158,41 @@ export async function getTrialRowsAfter(seq) {
   return require_active().getTrialRowsAfter(seq);
 }
 
-export async function getUploadCursor() {
-  /* `?? 0` must be applied to the resolved value, not the Promise itself —
-   * otherwise an unset cursor leaks `undefined` to callers. */
+/* One upload cursor per run: `{ [run_id]: highest seq confirmed uploaded }`.
+ * Rows are numbered across every run in this browser, so a single cursor that
+ * a later run advances would hide the unsent rows of an earlier run (a crash
+ * or reload before its last checkpoint) from the recovery page. */
+async function readCursors() {
   const v = await require_active().getMeta(META_KEYS.uploadCursor);
-  return v ?? 0;
+  if (v && typeof v === 'object') return v;
+  /* A bare number is the cursor of the run that wrote it. */
+  return typeof v === 'number' ? { [RUN_ID]: v } : {};
 }
 
-export async function setUploadCursor(seq) {
-  return require_active().setMeta(META_KEYS.uploadCursor, seq);
+/**
+ * Highest seq of `runId` (default: this page load) confirmed uploaded; 0 if none.
+ *
+ * @param {string} [runId]
+ */
+export async function getUploadCursor(runId = RUN_ID) {
+  /* `?? 0` must be applied to the resolved value, not the Promise itself —
+   * otherwise an unset cursor leaks `undefined` to callers. */
+  return (await readCursors())[runId] ?? 0;
+}
+
+/**
+ * @param {number} seq
+ * @param {string} [runId]  default: this page load
+ */
+export async function setUploadCursor(seq, runId = RUN_ID) {
+  const cursors = await readCursors();
+  return require_active().setMeta(META_KEYS.uploadCursor, { ...cursors, [runId]: seq });
+}
+
+/** Rows of every run that are not yet confirmed uploaded (`seq` past that run's cursor). */
+export async function getPendingRows() {
+  const [rows, cursors] = await Promise.all([require_active().getAllTrialRows(), readCursors()]);
+  return rows.filter((r) => r.seq > (cursors[r.run_id] ?? 0));
 }
 
 export async function setCompletionUrl(url) {

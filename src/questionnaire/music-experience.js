@@ -71,7 +71,7 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
   Object.freeze({
     id: 'me_q02',
     gold_msi: 'MT02',
-    text: 'At the peak of my interest, I practised my primary instrument for ___ hours per day.',
+    text: 'At the peak of my interest, I practiced my primary instrument for ___ hours per day.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
       Object.freeze({ value: '0.5', label: '0.5', score: 2 }),

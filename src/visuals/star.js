@@ -1,7 +1,8 @@
 /**
  * Imagery-probe star.
  *
- * 5-pointed star, white, 20 mm bounding diameter. The participant judges
+ * 5-pointed star, `config.imagery.star_size_mm` (5 mm) bounding diameter, in the
+ * frame's stimulus colour. The participant judges
  * whether the star sits on or off the (rotated) gray pattern.
  *
  * Math: 10 vertices alternating outer (R = star_size_mm/2) and inner radius

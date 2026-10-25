@@ -2,13 +2,14 @@
  * SVG construction helpers shared by every visual primitive.
  *
  * Why SVG and not absolutely-positioned divs:
- *   - Whole-grid rotation (−90°, −45°, 0°, +45°, +90°) is one
+ *   - Whole-grid rotation (any angle from
+ *     config.grid.rotation_min_deg to rotation_max_deg) is one
  *     transform on a `<g>` instead of per-element CSS transforms that fight
  *     each other.
  *   - Stars are 10-point polygons; SVG renders them at any size without
  *     pixel-grid artefacts.
  *   - Vector primitives scale exactly with our `--mm` calibration via the
- *     viewBox, so a 20 mm dot is 20 mm on every screen that completed screen calibration.
+ *     viewBox, so a 5 mm dot is 5 mm on every screen that completed screen calibration.
  */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

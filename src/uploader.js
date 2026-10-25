@@ -60,6 +60,7 @@ import { config } from './config.js';
 import {
   getAllTrialRows,
   getTrialRowsAfter,
+  getPendingRows,
   getUploadCursor,
   setUploadCursor,
   getRunId,
@@ -723,8 +724,11 @@ export async function uploadPendingData({
     };
   }
   const cursor = await getUploadCursor();
-  const stored = await getTrialRowsAfter(cursor);
-  const pendingRows = allRuns ? stored : currentRunRows(stored);
+  /* The recovery page (`allRuns`) sends whatever is pending in any run; each
+   * run has its own cursor. */
+  const pendingRows = allRuns
+    ? await getPendingRows()
+    : currentRunRows(await getTrialRowsAfter(cursor));
   if (pendingRows.length === 0) {
     finalUploadComplete = true;
     return {
@@ -799,7 +803,17 @@ export async function uploadPendingData({
     }
   }
 
-  await setUploadCursor(maxUploadedSeq);
+  if (allRuns) {
+    const maxByRun = new Map();
+    for (const r of pendingRows) {
+      if (Number.isFinite(r.seq) && r.seq > (maxByRun.get(r.run_id) ?? 0)) {
+        maxByRun.set(r.run_id, r.seq);
+      }
+    }
+    for (const [run, seq] of maxByRun) await setUploadCursor(seq, run);
+  } else {
+    await setUploadCursor(maxUploadedSeq);
+  }
   finalUploadComplete = true;
 
   return {

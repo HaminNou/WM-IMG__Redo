@@ -82,9 +82,9 @@ export function dOnlyInstructionNode() {
           Press <strong>No</strong> (<kbd>&larr;</kbd> LEFT arrow) if it
           was not.
         </p>
-        <p>Keep your eyes on the centre of the circle throughout.</p>
+        <p>Keep your eyes on the center of the circle throughout.</p>
       `,
-      narration: `After the dots, we test your memory ${setSize} times. Each time, a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown in that location. Press No, the left arrow, if it was not. Keep your eyes on the centre of the circle throughout.`,
+      narration: `After the dots, we test your memory ${setSize} times. Each time, a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown in that location. Press No, the left arrow, if it was not. Keep your eyes on the center of the circle throughout.`,
       exemplar: ['qmark'],
     }),
     slideStimulusPage({
@@ -135,9 +135,9 @@ export function tOnlyInstructionNode() {
           Press <strong>No</strong> (<kbd>&larr;</kbd> LEFT arrow) if
           you did not.
         </p>
-        <p>Keep your eyes on the centre of the circle and listen.</p>
+        <p>Keep your eyes on the center of the circle and listen.</p>
       `,
-      narration: `Then we play ${setSize} more tones, one at a time. For each one: Press Yes, the right arrow, if you heard this tone before. Press No, the left arrow, if you did not. Keep your eyes on the centre of the circle and listen.`,
+      narration: `Then we play ${setSize} more tones, one at a time. For each one: Press Yes, the right arrow, if you heard this tone before. Press No, the left arrow, if you did not. Keep your eyes on the center of the circle and listen.`,
       exemplar: ['qmark'],
     }),
     slideStimulusPage({

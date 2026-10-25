@@ -1,5 +1,5 @@
 {
-  "_doc": "Pre-registration record for the study protocol. The `pre_reg_lock_*` fields identify the build and schema version that this document describes; `tests/pre-reg.test.js` pins the live `src/config.js` to the `config_locked` block below so that the deployed build cannot drift from the document, and checks the thresholds in `collection_time_screen_outs` against the constants in the source. After the document is filed with a registry, any change to `config_locked` or `collection_time_screen_outs` constitutes an amendment.\n\nThe runtime config must canonicalise byte-identically to `config_locked` below; `tests/pre-reg.test.js` enforces this. Values in square brackets are placeholders that are filled in before launch (`scripts/preflight.js --strict-deployment` fails while any remain in participant-facing text).",
+  "_doc": "Pre-registration record for the study protocol. The `pre_reg_lock_*` fields identify the build and schema version that this document describes; `tests/pre-reg.test.js` pins the live `src/config.js` to the `config_locked` block below so that the deployed build cannot drift from the document, and checks the thresholds in `collection_time_screen_outs` against the constants in the source. After the document is filed with a registry, any change to `config_locked` or `collection_time_screen_outs` constitutes an amendment.\n\nThe runtime config must canonicalise byte-identically to `config_locked` below; `tests/pre-reg.test.js` enforces this. Values in square brackets are placeholders that are filled in before launch (`scripts/preflight.js --strict-deployment` fails while any remain in participant-facing text).\n\nDesign revision 2026-10-24 (sampling plan). The stopping rule is now stated as one procedure: 60 completions, then top-up batches of 10 until 40 participants are retained after the three participant-level exclusion rules, with a hard maximum of 100 completions (new). The rule uses no p-values or Bayes factors. The basis of computed_n = 38 is now stated (one-df interaction, f = .25, rho = 0) and the power of the planned one-tailed t-tests at N = 40 (about .80 at d = 0.4) is recorded. Placeholders for other filters, pay amount and pay rate are filled. The study design is otherwise unchanged. This file has not been filed, so the revision is recorded here for transparency, not as an amendment.\n\nDesign revision 2026-10-24 (pattern reminders). The 4 s reminder of the gray pattern used to be due on every 8th trial of a block and was dropped whenever that trial was memory-only; with the random trial order a session got 9.6 reminders on average (4 to 14) and an imagery trial could follow the last reminder by up to 60 trials. The schedule is now planned from the trial-type sequence (src/scheduler/pattern-reminders.js): each block is cut into windows of 8 trials (pattern_phase_frequency_trials, unchanged); each window with an imagery-bearing trial (I-only, I+D or I+T) gets one reminder on one of its imagery trials; the first imagery trial of every block is always reminded; within a window the reminder goes to the imagery condition that has had the fewest reminders so far (ties: earliest), so the three conditions get near-equal exposure; and no imagery trial starts more than 9 trials (frequency + 1) after the last reminder. Memory-only trials never carry a reminder. The plan is a function of the seeded schedule (no extra randomness) and every row of a trial records pattern_reminder and trials_since_pattern_reminder. Over 500 simulated sessions this gives 15.97 reminders per session on average (15 to 16; 16 in 96 % of sessions), a longest wait of 9 trials, and per-condition counts that differ by 1.15 on average (fixed-grid alternatives: 3.6). The reminders add about 25 s per session compared with the old rule. The reminder duration, the pattern and the design are otherwise unchanged. Comparison of alternatives: scripts/pattern-reminder-montecarlo.js.",
   "pre_reg_lock_iso": "2026-05-05",
   "pre_reg_lock_build_id": "v1",
   "pre_reg_lock_schema_version": "1.2.0",
@@ -67,14 +67,37 @@
   "sampling_plan": {
     "recruitment_target_n": 60,
     "retained_n_minimum": 40,
+    "batch_size": 10,
+    "max_recruitment_n": 100,
+    "recruitment_counts": "Completed sessions: participants who finish the whole session and submit the study completion code. Screen-outs (they receive the screen-out completion code), returns and time-outs do not count; their Prolific places are replaced by raising the study's place count.",
+    "retained_definition": "A completed session that is not excluded by any of the three participant-level analysis rules in exclusion_rules: screen_calibration_inconsistent, instructional_attention_checks, single_task_floor. The trial-level rules (display_guard_flags, rt_cutoff) drop trials, not participants, and do not enter the retained count.",
     "platform": "Prolific",
-    "stopping_rule": "If retained N < 40 after exclusions, recruit additional batches of 10 until retained N >= 40.",
+    "stopping_rule": "Recruit until 60 participants have completed the session. Apply the three participant-level exclusion rules to every completed session and count the retained participants. If retained N >= 40, stop recruiting. If retained N < 40, recruit one more batch of 10 completions, re-apply the rules to all sessions and recount; repeat until retained N >= 40 or 100 participants have completed the session, whichever comes first. All retained participants from every batch are analysed (nobody is dropped to equalise N). If 100 completions are reached with retained N < 40, recruitment stops and the confirmatory results are reported as underpowered.",
+    "no_optional_stopping": "Whether another batch is recruited depends only on the retained count, which is computed from the participant-level exclusion rules. It never uses p-values, Bayes factors, effect sizes or any contrast between conditions, so no p-value-based or Bayes-factor-based optional stopping is used. The single_task_floor rule uses accuracy in the two single-task conditions only.",
+    "prolific_setup": {
+      "initial_places": 60,
+      "top_up_places_per_batch": 10,
+      "max_completions": 100,
+      "note": "Places taken by screen-outs are replaced so that completions, not submissions, reach the target. The hard maximum is a budget cap, not a power-based quantity."
+    },
+    "batch_decision_tool": "scripts/pilot-summary.js reports completed, retained and the next step (collect, recruit a batch, stop, or stop at the maximum) from the sampling_plan numbers in this file.",
     "power_analysis": {
       "effect_target": "Modality × Load interaction, f = 0.25 (medium)",
       "power": 0.85,
       "alpha": 0.05,
       "tool": "G*Power",
       "computed_n": 38,
+      "computed_n_basis": "Smallest N with power >= .85 for the one-df Modality x Load interaction of the 2 x 2 within-subjects design (m = 4 repeated measurements): Cohen's f = .25, alpha = .05, noncentrality lambda = f^2 * N * m / (1 - rho) with rho = 0 (no correlation among the repeated measures; conservative), df = (1, N - 1). G*Power's default rho = .5 would give N = 20 and rho = .3 would give N = 28. Reproduced by pre-reg/power-analysis.py.",
+      "confirmatory_t_tests": {
+        "tests": "H1, H2 and the two tests of H4: one-tailed paired t, alpha = .05, smallest effect of interest d = 0.4",
+        "power_at_retained_minimum_40": 0.799,
+        "smallest_n_for_power_0.80": 41,
+        "smallest_n_for_power_0.85": 47,
+        "power_at_n_60": 0.922,
+        "h4_joint_power_at_n_40_approx": 0.64,
+        "note": "The retained minimum of 40 gives about .80 power for each directional test at d = 0.4, not .85; the interaction in computed_n is the test powered at .85. The joint power of the two H4 tests is the product of two such powers if they are independent."
+      },
+      "expected_retained_at_60_completions": "39 to 45 (60 x (1 - .35) to 60 x (1 - .25))",
       "headroom_factor_for_exclusions": 1.58,
       "exclusion_rate_estimate_low": 0.25,
       "exclusion_rate_estimate_high": 0.35
@@ -87,12 +110,17 @@
         "Language: fluent in English",
         "Device: a desktop or laptop computer, used with headphones"
       ],
-      "other_filters": "[OTHER_FILTERS]",
+      "other_filters": "None beyond the Prolific prescreeners listed above.",
       "note": "Eligibility is determined only by the Prolific prescreeners above; the study does not test age, hearing or vision."
     },
     "compensation": {
-      "pay_amount": "[PAY_AMOUNT]",
-      "pay_rate_per_hour": "[PAY_RATE_PER_HOUR]",
+      "pay_amount": "$26",
+      "pay_rate_per_hour": "about $14 ($26 for an estimated 110 minutes is $14.18 per hour)",
+      "participant_pay_budget_usd": {
+        "at_60_completions": 1560,
+        "at_100_completions_maximum": 2600,
+        "excludes": "Prolific service fees and the $0.14 screen-out payments"
+      },
       "estimated_session_minutes": 110,
       "payment_for_screened_out_time": "$0.14 if the session ends at the device or sound check; later exits are paid in proportion to time",
       "single_submission_only": true
@@ -253,8 +281,18 @@
     },
     {
       "id": "deterministic_seed",
-      "claim": "Every counterbalance step consumes from a single Mulberry32 PRNG seeded from a hash of PROLIFIC_PID. Two participants with different PIDs get different schedules; the same PID always produces the same schedule.",
-      "tested_in": "tests/main-blocks.test.js (reproducibility from same seed; divergence under different seeds)"
+      "claim": "Every counterbalance step consumes from a single Mulberry32 PRNG seeded from a hash of the string PROLIFIC_PID|STUDY_ID|SESSION_ID (a random preview string when the URL has no Prolific parameters). The seed string and its 32-bit hash are stored in the data (`prng_seed_string`, `prng_seed_uint32`), so the schedule of a session can be rebuilt from its seed. Different participants get different schedules; the same URL parameters (a reload of the same session) give the same schedule; a new Prolific session of the same participant gets a new one.",
+      "tested_in": "tests/main-blocks.test.js (reproducibility from same seed; divergence under different seeds) + tests/design-montecarlo.test.js"
+    },
+    {
+      "id": "tone_spacing",
+      "claim": "In every T_only and I_T trial the three encoded tones are at least 3 ranks apart in the 24-tone bank (rank = bank index + 1; neighbour ratio ≈ 1.139, so 3 ranks ≈ 1.48×), and every foil probe tone is at least 3 ranks from every encoded tone of that trial; targets are the encoded tones. The rule applies only to tones: D_only and I_D choose dot cells without any spatial-distance rule, so a foil dot may fall in a cell next to an encoded dot.",
+      "tested_in": "tests/tone-spacing.test.js + tests/design-montecarlo.test.js"
+    },
+    {
+      "id": "background_shade",
+      "claim": "Every 24-trial condition has exactly 12 white-background and 12 light-gray-background trials, and each 12-trial half (Main A, Main B) of every condition has exactly 6 of each; over presentation order no more than 6 consecutive trials share a background.",
+      "tested_in": "tests/background-shade.test.js + tests/schedule-balance.test.js + tests/design-montecarlo.test.js"
     }
   ],
   "data_record": {

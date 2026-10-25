@@ -14,7 +14,8 @@
  *   - 3 recognition probes (post-retention) drawn from the canonical types
  *     {T_on, T_off, F_on, F_off}; in I+D the probe is a dot, in I+T a tone.
  *     Probe-type balance is enforced across the block, not within every trial.
- *   - 1 rotation angle, sampled uniformly from -90° to +90°.
+ *   - 1 rotation angle, drawn from six 30° strata between -90° and +90° (4 per
+ *     stratum per 24 trials, no angle repeated, 0° not used; see rotation-balance.js).
  *
  * Two counterbalances are enforced exactly across a 24-trial block:
  *

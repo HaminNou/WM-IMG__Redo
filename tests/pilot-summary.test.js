@@ -24,6 +24,9 @@ import {
   summariseAttentionChecks,
   estimateSessionDurationMin,
   aggregate,
+  summariseExclusions,
+  samplingDecision,
+  SAMPLING_PLAN,
 } from '../scripts/pilot-summary.js';
 
 function fakeDownloadDump(overrides = {}) {
@@ -343,5 +346,134 @@ describe('aggregate', () => {
     const summaries = [fakeSummary(), fakeSummary(), fakeSummary()];
     const out = aggregate(summaries, { expectPilot: true });
     expect(out.issues).toEqual([]);
+  });
+});
+
+describe('sampling plan (pre-reg.json -> sampling_plan)', () => {
+  it('reads target 60, retained minimum 40, batch 10, maximum 100 from the pre-registration', () => {
+    expect(SAMPLING_PLAN).toEqual({ target: 60, retainedMinimum: 40, batchSize: 10, maximum: 100 });
+  });
+
+  it('keeps collecting until 60 sessions are completed', () => {
+    expect(samplingDecision(45, 40)).toEqual({ action: 'collect', recruit: 15 });
+    expect(samplingDecision(0, 0)).toEqual({ action: 'collect', recruit: 60 });
+  });
+
+  it('stops once 60 are completed and 40 are retained', () => {
+    expect(samplingDecision(60, 40)).toEqual({ action: 'stop', recruit: 0 });
+    expect(samplingDecision(70, 52)).toEqual({ action: 'stop', recruit: 0 });
+  });
+
+  it('recruits one batch of 10 when fewer than 40 are retained', () => {
+    expect(samplingDecision(60, 39)).toEqual({ action: 'recruit_batch', recruit: 10 });
+    expect(samplingDecision(80, 39)).toEqual({ action: 'recruit_batch', recruit: 10 });
+    expect(samplingDecision(90, 12)).toEqual({ action: 'recruit_batch', recruit: 10 });
+  });
+
+  it('stops at the maximum with too few retained (underpowered), never recruiting past 100', () => {
+    expect(samplingDecision(100, 39)).toEqual({ action: 'stop_at_maximum', recruit: 0 });
+    expect(samplingDecision(104, 30)).toEqual({ action: 'stop_at_maximum', recruit: 0 });
+    expect(samplingDecision(95, 30, { ...SAMPLING_PLAN, batchSize: 10 }).recruit).toBe(5);
+  });
+
+  it('uses no hypothesis-test input: the decision depends only on two counts', () => {
+    expect(samplingDecision.length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('summariseExclusions (participant-level rules)', () => {
+  const main = (phase, correct, n) =>
+    Array.from({ length: n }, (_, i) => ({
+      phase,
+      block_label: 'main_a',
+      probe_correct: i < correct,
+    }));
+  const base = () => [
+    { phase: 'screen_calibration_outcome', accepted: true, status: 'ok' },
+    ...main('d_only_probe', 30, 36),
+    ...main('t_only_probe', 30, 36),
+    { phase: 'completion_redirect' },
+  ];
+
+  it('retains a completed, clean session', () => {
+    const e = summariseExclusions(base());
+    expect(e.completed).toBe(true);
+    expect(e.excluded).toBe(false);
+    expect(e.retained).toBe(true);
+  });
+
+  it('excludes an inconsistent-but-accepted screen calibration', () => {
+    const rows = base();
+    rows[0] = {
+      phase: 'screen_calibration_outcome',
+      accepted: true,
+      status: 'inconsistent_accepted',
+    };
+    const e = summariseExclusions(rows);
+    expect(e.reasons).toEqual(['screen_calibration_inconsistent']);
+    expect(e.retained).toBe(false);
+  });
+
+  it('excludes when single-task accuracy is at or below .55 in either single-task condition', () => {
+    const atFloor = base().map((r) => r);
+    const rows = [
+      ...atFloor.filter((r) => r.phase !== 'd_only_probe'),
+      ...main('d_only_probe', 20, 40) /* exactly .50 */,
+    ];
+    expect(summariseExclusions(rows).reasons).toContain('single_task_floor');
+    const edge = [
+      ...base().filter((r) => r.phase !== 't_only_probe'),
+      ...main('t_only_probe', 11, 20) /* exactly .55 -> excluded (<=) */,
+    ];
+    expect(summariseExclusions(edge).reasons).toContain('single_task_floor');
+    const above = [
+      ...base().filter((r) => r.phase !== 't_only_probe'),
+      ...main('t_only_probe', 12, 20) /* .60 */,
+    ];
+    expect(summariseExclusions(above).reasons).not.toContain('single_task_floor');
+  });
+
+  it('excludes more than one failed attention check, not exactly one', () => {
+    const fails = (n) =>
+      Array.from({ length: 3 }, (_, i) => ({
+        phase: 'attention_check',
+        attention_check_passed: i >= n,
+      }));
+    expect(summariseExclusions([...base(), ...fails(1)]).reasons).toEqual([]);
+    expect(summariseExclusions([...base(), ...fails(2)]).reasons).toEqual([
+      'instructional_attention_checks',
+    ]);
+  });
+
+  it('does not count a screen-out or an unfinished session as completed', () => {
+    expect(
+      summariseExclusions([...base(), { phase: 'exit', exit_reason: 'audio_check_fail' }]).completed
+    ).toBe(false);
+    const unfinished = base().filter((r) => r.phase !== 'completion_redirect');
+    expect(summariseExclusions(unfinished).completed).toBe(false);
+    expect(summariseExclusions(unfinished).retained).toBe(false);
+  });
+
+  it('aggregate counts completed, retained and the exclusion rate among completed sessions', () => {
+    const mk = (retained, completed = true) => ({
+      build_id: 'v1',
+      schema_version: '1.1.3',
+      is_pilot_run: false,
+      session_duration_min: 100,
+      attention: { total: 3, passed: 3, failed: 0, threshold: 1, excluded: false },
+      completed,
+      retained,
+    });
+    const perParticipant = [
+      ...Array.from({ length: 38 }, () => mk(true)),
+      ...Array.from({ length: 22 }, () => mk(false)),
+      mk(false, false),
+    ];
+    const out = aggregate(perParticipant);
+    expect(out.n_completed).toBe(60);
+    expect(out.n_retained).toBe(38);
+    expect(out.n_excluded_any).toBe(22);
+    expect(out.exclusion_rate_any).toBeCloseTo(22 / 60, 10);
+    expect(out.sampling_decision).toEqual({ action: 'recruit_batch', recruit: 10 });
   });
 });

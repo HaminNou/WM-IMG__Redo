@@ -2,10 +2,10 @@ import { config } from './config.js';
 import {
   initStorage,
   getAllTrialRows,
+  getPendingRows,
   getSessionId,
   getSessionStartedAt,
   getSessionObject,
-  getUploadCursor,
 } from './storage.js';
 import { uploadPendingData, partitionRowsIntoBuckets } from './uploader.js';
 
@@ -62,12 +62,12 @@ async function main() {
 
   const sessionId = await getSessionId();
   const startedAt = await getSessionStartedAt();
-  const cursor = await getUploadCursor();
   const storedSession = await getSessionObject();
 
-  const partitioned = partitionRowsIntoBuckets(rows);
-  const nonEmpty = partitioned.filter((p) => p.rows.length > 0);
-  const pendingRows = rows.filter((r) => r.seq > cursor);
+  /* Pending is judged per run: a later run that finished uploading must not
+   * hide the unsent rows of an earlier one. */
+  const pendingRows = await getPendingRows();
+  const nonEmpty = partitionRowsIntoBuckets(pendingRows).filter((p) => p.rows.length > 0);
 
   if (pendingRows.length === 0) {
     render(`

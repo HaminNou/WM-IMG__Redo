@@ -372,6 +372,34 @@ describe('rotation fields on the rows', () => {
     expect(rotations).toEqual([0, ...Array(5).fill(params.display_rotation_deg), 0]);
   }, 60000);
 
+  it.each(['i_d', 'i_t'])(
+    '%s keeps the trial rotation on retention and on every probe frame, dot or tone',
+    async (cond) => {
+      const params = pickTrial(cond, 'M');
+      expect(params.rotation_deg).not.toBe(0);
+      const spy = vi.spyOn(frameModule, 'createGridFrame');
+      const { rows } = await runTrial(cond, params);
+      const rotations = spy.mock.calls.map(([opts]) => opts.rotation_deg);
+      spy.mockRestore();
+      /* Gate, arrow cue, imagination and encoding mount upright (the encoding frame is then
+       * animated to the trial angle); retention and the three probes use the trial angle; ITI upright. */
+      expect(rotations).toEqual([0, 0, 0, 0, ...Array(4).fill(params.rotation_deg), 0]);
+      const probes = probeRows(rows);
+      expect(probes).toHaveLength(3);
+      for (const r of probes) {
+        expect(r.frame_rotation_deg).toBe(params.rotation_deg);
+        expect(r.probe_frame_rotation_deg).toBe(params.rotation_deg);
+      }
+    },
+    60000
+  );
+
+  it('t_only draws retention and probes upright and records probe_frame_rotation_deg = 0', async () => {
+    const params = pickTrial('t_only', 'M');
+    const { rows } = await runTrial('t_only', params);
+    for (const r of probeRows(rows)) expect(r.probe_frame_rotation_deg).toBe(0);
+  }, 60000);
+
   it.each(['i_only', 'i_d', 'i_t'])(
     '%s records the trial rotation as the star frame rotation and null display rotation',
     async (cond) => {
@@ -487,7 +515,7 @@ describe.each(Object.keys(CONDITIONS))(
         const expected =
           cond === 'd_only'
             ? params.display_rotation_deg
-            : cond === 'i_d'
+            : cond === 'i_d' || cond === 'i_t'
               ? params.rotation_deg
               : 0;
         expect(r.frame_rotation_deg).toBe(expected);
@@ -557,4 +585,68 @@ describe.each(['t_only', 'i_t'])('%s: a tone that cannot be played', (cond) => {
       expect(r.audio_output_latency_ms).toBe(0);
     }
   }, 60000);
+});
+
+describe('row schema is the same across conditions except for the manipulated load', () => {
+  /** Union of the keys of every row of each phase of one trial, phase prefix removed. */
+  async function keySets(cond) {
+    const params = pickTrial(cond, 'M');
+    const { rows } = await runTrial(cond, params);
+    const out = {};
+    for (const r of rows) {
+      const ph = phaseOf(r).replace(`${cond}_`, '');
+      out[ph] = [...new Set([...(out[ph] ?? []), ...Object.keys(r)])].sort();
+    }
+    return out;
+  }
+  const diff = (a, b) => ({
+    onlyA: a.filter((k) => !b.includes(k)),
+    onlyB: b.filter((k) => !a.includes(k)),
+  });
+  const DOT_ONLY_PROBE = ['probe_radius_mm', 'probe_x_mm', 'probe_y_mm'];
+  const TONE_ONLY_PROBE = [
+    'audio_context',
+    'audio_context_time_at_onset_ms',
+    'audio_output_latency_ms',
+    'audio_perf_at_onset_ms',
+    'probed_tone_freq_hz',
+    'probed_tone_index',
+    'tone_error',
+  ];
+
+  it('I+T rows equal I+D rows phase by phase; probes differ only in dot vs tone fields', async () => {
+    const [iD, iT] = [await keySets('i_d'), await keySets('i_t')];
+    expect(Object.keys(iT).sort()).toEqual(Object.keys(iD).sort());
+    for (const ph of Object.keys(iD)) {
+      const d = diff(iD[ph], iT[ph]);
+      if (ph === 'probe') {
+        expect(d.onlyA).toEqual(DOT_ONLY_PROBE);
+        expect(d.onlyB).toEqual(TONE_ONLY_PROBE);
+      } else {
+        expect(d, `phase ${ph}`).toEqual({ onlyA: [], onlyB: [] });
+      }
+    }
+  }, 120000);
+
+  it('I+T rows equal I-only rows except that the encoding row holds memory items, not dummies', async () => {
+    const [iOnly, iT] = [await keySets('i_only'), await keySets('i_t')];
+    for (const ph of ['trial_start', 'arrow_cue', 'imagination', 'encoding', 'iti', 'star']) {
+      const d = diff(iOnly[ph], iT[ph]);
+      if (ph === 'encoding') expect(d).toEqual({ onlyA: ['dummies'], onlyB: ['memory_items'] });
+      else expect(d, `phase ${ph}`).toEqual({ onlyA: [], onlyB: [] });
+    }
+  }, 120000);
+
+  it('memory-only and dual-task conditions of the same modality share retention, probe and ITI rows', async () => {
+    const [dOnly, iD, tOnly, iT] = [
+      await keySets('d_only'),
+      await keySets('i_d'),
+      await keySets('t_only'),
+      await keySets('i_t'),
+    ];
+    for (const ph of ['retention', 'probe', 'iti']) {
+      expect(diff(dOnly[ph], iD[ph]), `dot ${ph}`).toEqual({ onlyA: [], onlyB: [] });
+      expect(diff(tOnly[ph], iT[ph]), `tone ${ph}`).toEqual({ onlyA: [], onlyB: [] });
+    }
+  }, 120000);
 });

@@ -23,6 +23,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { assembleBlock } from '../src/scheduler/block.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
 import { setSessionPRNG } from '../src/prng.js';
+import { planPatternReminders } from '../src/scheduler/pattern-reminders.js';
 import { config } from '../src/config.js';
 
 const ALL_TYPES = ['d_only', 't_only', 'i_only', 'i_d', 'i_t'];
@@ -100,25 +101,21 @@ describe('assembleBlock: 5-trial mini-block (one of each type)', () => {
     }
   });
 
-  it('contains a pattern-phase node only when slot 0 is imagery-bearing', () => {
+  it('contains exactly one pattern-phase node, on the first imagery-bearing trial', () => {
     const out = assembleBlock({
       blockLabel: 'mini',
       countsByType: { d_only: 1, t_only: 1, i_only: 1, i_d: 1, i_t: 1 },
     });
-    /* For a 5-trial block with frequency 8, the only candidate pattern-phase
-     * boundary is slot 0. The injection only fires if
-     * slot 0 is imagery-bearing; otherwise no pattern phase appears. */
+    /* A 5-trial block is one reminder window (F = 8): one reminder, always on
+     * the first imagery trial of the block, wherever that falls. */
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
-    const slot0Type = out.schedule[0];
-    if (IMAGERY_BEARING_TYPES.has(slot0Type)) {
-      expect(ppNodes).toHaveLength(1);
-      /* Gate-first ordering: the trial-start gate is now
-       * nodes[0]; the pattern phase is spliced at composer index 1. */
-      expect(out.nodes[1].data.phase).toBe('pattern_phase');
-    } else {
-      expect(ppNodes).toHaveLength(0);
-      expect(out.nodes[1]?.data?.phase).not.toBe('pattern_phase');
-    }
+    const firstImagery = out.schedule.findIndex((t) => IMAGERY_BEARING_TYPES.has(t));
+    expect(ppNodes).toHaveLength(1);
+    expect(ppNodes[0].data.block_position).toBe(firstImagery);
+    /* Gate-first ordering: the trial's start gate is immediately before it. */
+    const at = out.nodes.indexOf(ppNodes[0]);
+    expect(out.nodes[at - 1].data.phase).toMatch(/_trial_start$/);
+    expect(out.nodes[at - 1].data.trial_uid).toBe(ppNodes[0].data.trial_uid);
   });
 
   it('pattern-phase node carries block_label and trial_index_in_block when injected', () => {
@@ -253,18 +250,15 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     resetSequencePools();
   });
 
-  /* Helper: a boundary slot only gets a pattern phase if its
-   * trial type is imagery-bearing. So the expected pattern-phase slots are
-   * the subset of {0, F, 2F, ...} that land on i_only / i_d / i_t. */
+  /* The reminder planner (src/scheduler/pattern-reminders.js) decides which
+   * imagery trials carry a reminder; assembleBlock must inject exactly those.
+   * The planner's own guarantees are tested in pattern-reminder-schedule.test.js. */
   function expectedPatternSlots(schedule, freq) {
-    const out = [];
-    for (let i = 0; i < schedule.length; i += freq) {
-      if (IMAGERY_BEARING_TYPES.has(schedule[i])) out.push(i);
-    }
-    return out;
+    const { reminded } = planPatternReminders({ schedule, frequency: freq });
+    return reminded.flatMap((r, i) => (r ? [i] : []));
   }
 
-  it('a 16-trial block at freq=8 emits pattern phases at the imagery-bearing subset of {0, 8}', () => {
+  it('a 16-trial block at freq=8 injects exactly the planned reminders (one per 8-trial window)', () => {
     const out = assembleBlock({
       blockLabel: 'main_a',
       countsByType: { d_only: 4, t_only: 4, i_only: 4, i_d: 2, i_t: 2 },
@@ -273,9 +267,11 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     const expected = expectedPatternSlots(out.schedule, 8);
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
     expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
+    expect(expected).toHaveLength(2);
+    for (const slot of expected) expect(IMAGERY_BEARING_TYPES.has(out.schedule[slot])).toBe(true);
   });
 
-  it('a 12-trial block at freq=8 emits pattern phases at the imagery-bearing subset of {0, 8}', () => {
+  it('a 12-trial block at freq=8 injects exactly the planned reminders', () => {
     const out = assembleBlock({
       blockLabel: 'practice',
       countsByType: { d_only: 3, t_only: 3, i_only: 2, i_d: 2, i_t: 2 },
@@ -286,9 +282,9 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
   });
 
-  it('honours a custom patternPhaseFrequency, still gated on imagery-bearing slots', () => {
-    /* freq=4 over 12 trials → candidate slots {0, 4, 8}; the actual
-     * pattern phases are the subset that land on imagery-bearing trials. */
+  it('honours a custom patternPhaseFrequency (window length)', () => {
+    /* freq=4 over 12 trials → three windows of 4 trials, one reminder each
+     * unless a window holds no imagery trial. */
     const out = assembleBlock({
       blockLabel: 'mini',
       countsByType: { d_only: 3, t_only: 3, i_only: 2, i_d: 2, i_t: 2 },
@@ -297,6 +293,24 @@ describe('assembleBlock: pattern-phase placement at frequency boundaries', () =>
     const expected = expectedPatternSlots(out.schedule, 4);
     const ppNodes = out.nodes.filter((n) => n?.data?.phase === 'pattern_phase');
     expect(ppNodes.map((n) => n.data.block_position)).toEqual(expected);
+    expect(expected.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('every row of a trial carries pattern_reminder / trials_since_pattern_reminder', () => {
+    const out = assembleBlock({
+      blockLabel: 'main_a',
+      countsByType: { d_only: 12, t_only: 12, i_only: 12, i_d: 12, i_t: 12 },
+    });
+    const reminded = new Set(
+      out.nodes.filter((n) => n?.data?.phase === 'pattern_phase').map((n) => n.data.trial_uid)
+    );
+    for (const node of out.nodes) {
+      expect(node.data.pattern_reminder).toBe(reminded.has(node.data.trial_uid));
+      if (node.data.pattern_reminder) expect(node.data.trials_since_pattern_reminder).toBe(0);
+      if (MEMORY_ONLY_TYPES.has(node.data.condition)) {
+        expect(node.data.trials_since_pattern_reminder).toBeNull();
+      }
+    }
   });
 });
 
