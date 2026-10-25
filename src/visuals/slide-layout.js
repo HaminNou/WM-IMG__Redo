@@ -53,6 +53,7 @@
  */
 import { config } from '../config.js';
 import { questionMarkPath, QMARK_STROKE_MM } from './fixation-mark.js';
+import { ARROW_CENTRE_HOLE_STYLE } from './rotation-arrow-style.js';
 
 /* Single source of truth for the wrapper's vertical extent. The exported
  * style strings reference this so a change propagates everywhere at once.
@@ -114,7 +115,16 @@ const BASE_STYLE = `
  * stimulus, so the nav lands at the wrapper's bottom edge → at a stable y
  * across every page of every deck.
  */
-const SLIDE_STYLE_TEXT = `${BASE_STYLE} width: ${SLIDE_WIDTH_TEXT}; max-width: 94vw;`;
+const SLIDE_STYLE_TEXT = `${BASE_STYLE} width: ${SLIDE_WIDTH_TEXT}; max-width: min(94vw, 100%);`;
+
+/* Marker class on every text-slide wrapper. index.html widens the host
+ * `.jspsych-content` (capped at 720 px for ordinary screens) to fit this
+ * wrapper via `.jspsych-content:has(.slide-text)`, so the 50 rem column is
+ * centred in its container. Without that rule the 800 px wrapper overflowed
+ * the 720 px container to the right and the deck sat ~40 px off-centre.
+ * `min(94vw, 100%)` above is the fallback for browsers without `:has()`:
+ * the wrapper then shrinks to the 720 px container instead of overflowing. */
+export const SLIDE_TEXT_CLASS = 'slide-text';
 
 /**
  * Wrapper style for the five demo screens.
@@ -216,7 +226,7 @@ export function slideTextPage({ title, body, narration }) {
   const compactTitleRowStyle =
     'flex: 0 0 auto; width: 100%; margin: 0 0 0.5rem; display: flex; align-items: center; justify-content: center;';
   return `
-    <div style="${compactWrapperStyle}">
+    <div class="${SLIDE_TEXT_CLASS}" style="${compactWrapperStyle}">
       <div style="${compactTitleRowStyle}">
         <h2 style="${SLIDE_TITLE_H2_STYLE}">${title}</h2>
       </div>
@@ -253,12 +263,25 @@ const SLIDE_TONE_GLYPH_SIZE_MM = 12;
  * does not pull the runtime graph in). Mirrors the runtime overlay built by
  * `pattern.js::buildPatternOverlay`. If the cell size changes, update both.
  *
- * SLIDE_PATTERN_OPACITY is 0.33 to match the live gray-trial rendering.
- * The slide bull's-eye sits on the SAME light-gray (#D3D3D3) the trial
- * uses, so the same opacity yields a visually identical pattern. */
+ * The live gray-trial pattern is solid white (`colour-palette.js`
+ * PATTERN_FILLS_BY_BG.gray) at opacity 1.0 (`frame.js` TRIAL_PATTERN_OPACITY)
+ * on the same light-gray (#D3D3D3) card. White on #D3D3D3 is only about
+ * 1.5:1, and the deck exemplar used to be drawn at 0.33 opacity (about 1.1:1,
+ * nearly invisible). The exemplar now uses the live fill and opacity and adds
+ * a thin dark outline around the SHAPE (not around each cell), at about 5:1
+ * against the card, so the 13-cell silhouette can actually be seen. The live
+ * pattern itself is unchanged. */
 const SLIDE_CELL_SIZE_MM = 10;
 const SLIDE_PATTERN_FILL = '#FFFFFF';
-const SLIDE_PATTERN_OPACITY = 0.33;
+const SLIDE_PATTERN_OPACITY = 1;
+const SLIDE_PATTERN_OUTLINE_COLOUR = 'rgba(0, 0, 0, 0.6)';
+/* Drawn first, under the fills, so interior cell borders are covered by the
+ * neighbouring fills and only the outer silhouette shows (half the stroke). */
+const SLIDE_PATTERN_OUTLINE_WIDTH_MM = 1.2;
+/* A white stroke the same colour as the fill covers the hairline seams that
+ * anti-aliasing would otherwise leave between neighbouring fills, where the
+ * outline underneath would peek through. */
+const SLIDE_PATTERN_SEAM_STROKE_MM = 0.4;
 
 function starPolygonPoints(cx, cy, R) {
   const INNER_RATIO = 0.382;
@@ -314,24 +337,37 @@ function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG 
   const centreOccupied = want.has('tone');
   const showPattern = want.has('pattern');
   const ring = `<circle cx="${SLIDE_GRID_MID_MM}" cy="${SLIDE_GRID_MID_MM}" r="${SLIDE_RING_RADIUS_MM}" fill="none" stroke="${SLIDE_RING_STROKE_COLOUR}" stroke-width="0.5" />`;
-  /* Pattern hides the fixation dot too — when the pattern is on display the
-   * centre cell (cell 12) is one of the 13 painted cells, so a tiny dot at
-   * its centre would be lost in the white wash and the slide would read as
-   * "pattern with a stray speck" rather than as the gestalt the participant
-   * will see in trials. */
-  const centreDot =
-    centreOccupied || showPattern
-      ? ''
-      : `<circle cx="${SLIDE_GRID_MID_MM}" cy="${SLIDE_GRID_MID_MM}" r="0.65" fill="${SLIDE_FIXATION_DOT_COLOUR}" />`;
+  /* The bull's-eye dot stays on screen with the pattern, as on a live trial
+   * and on the reminder screen: it is drawn after the pattern fills, so it
+   * sits on top of the centre cell (cell 12), which is one of the 13 painted
+   * cells. */
+  const centreDot = centreOccupied
+    ? ''
+    : `<circle cx="${SLIDE_GRID_MID_MM}" cy="${SLIDE_GRID_MID_MM}" r="0.65" fill="${SLIDE_FIXATION_DOT_COLOUR}" />`;
+  const patternCell = (cellIndex, attrs) => {
+    const col = cellIndex % 5;
+    const row = Math.floor(cellIndex / 5);
+    const x = col * SLIDE_CELL_SIZE_MM;
+    const y = row * SLIDE_CELL_SIZE_MM;
+    return `<rect x="${x}" y="${y}" width="${SLIDE_CELL_SIZE_MM}" height="${SLIDE_CELL_SIZE_MM}" ${attrs} />`;
+  };
+  const patternCells = config.pattern.gray_pattern_cells;
   const pattern = showPattern
-    ? config.pattern.gray_pattern_cells
-        .map((cellIndex) => {
-          const col = cellIndex % 5;
-          const row = Math.floor(cellIndex / 5);
-          const x = col * SLIDE_CELL_SIZE_MM;
-          const y = row * SLIDE_CELL_SIZE_MM;
-          return `<rect x="${x}" y="${y}" width="${SLIDE_CELL_SIZE_MM}" height="${SLIDE_CELL_SIZE_MM}" fill="${SLIDE_PATTERN_FILL}" opacity="${SLIDE_PATTERN_OPACITY}" />`;
-        })
+    ? patternCells
+        .map((c) =>
+          patternCell(
+            c,
+            `fill="${SLIDE_PATTERN_OUTLINE_COLOUR}" stroke="${SLIDE_PATTERN_OUTLINE_COLOUR}" stroke-width="${SLIDE_PATTERN_OUTLINE_WIDTH_MM}" stroke-linejoin="round" class="slide-pattern-outline"`
+          )
+        )
+        .join('') +
+      patternCells
+        .map((c) =>
+          patternCell(
+            c,
+            `fill="${SLIDE_PATTERN_FILL}" stroke="${SLIDE_PATTERN_FILL}" stroke-width="${SLIDE_PATTERN_SEAM_STROKE_MM}" opacity="${SLIDE_PATTERN_OPACITY}" class="slide-pattern-fill"`
+          )
+        )
         .join('')
     : '';
   const dot = want.has('dot')
@@ -368,7 +404,7 @@ function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG 
     ? `<img src="${getRotationArrowUrl()}" alt="rotation cue"
             style="position: absolute; top: 50%; left: 50%; width: ${SLIDE_ARROW_PX}px; height: ${SLIDE_ARROW_PX}px;
                    transform: translate(-50%, -50%) rotate(${arrowTurns}turn); pointer-events: none; z-index: 10; user-select: none;
-                   filter: brightness(0) saturate(100%) drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff);" />`
+                   filter: brightness(0) saturate(100%) drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff); ${ARROW_CENTRE_HOLE_STYLE}" />`
     : '';
   return `
     <div style="position: relative; width: calc(var(--mm) * ${SLIDE_VIEWBOX_MM}); height: calc(var(--mm) * ${SLIDE_VIEWBOX_MM}); margin: 0 auto;">
@@ -414,7 +450,7 @@ export function slideStimulusPage({ title, body, narration, exemplar = [], arrow
    * leftover viewport height so the plugin nav row lands at a stable y
    * on every page regardless of body length. */
   return `
-    <div style="${SLIDE_STYLE_TEXT} align-items: center;">
+    <div class="${SLIDE_TEXT_CLASS}" style="${SLIDE_STYLE_TEXT} align-items: center;">
       <div style="${SLIDE_TITLE_ROW_STYLE}">
         <h2 style="${SLIDE_TITLE_H2_STYLE}">${title}</h2>
       </div>

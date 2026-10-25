@@ -79,6 +79,59 @@ export const PREVIOUSLY_USED_IDS = Object.freeze([]);
 const PLACEHOLDER_TOKEN_RE = /\[[A-Z][A-Z0-9_]*\]/g;
 
 /** Bracketed placeholder tokens such as `[PAYMENT_POLICY]` found in `text`. */
+/**
+ * Differences between package.json and the root entry of package-lock.json:
+ * a dependency that is declared in one and missing from the other, or declared
+ * with another version range. `npm ci` fails on such a lock, and `npm install`
+ * silently changes it, so a build made from it is not the one that was tested.
+ *
+ * @param {{dependencies?: object, devDependencies?: object}} pkg
+ * @param {{packages?: {[k: string]: {dependencies?: object, devDependencies?: object}}}} lock
+ * @returns {string[]} one line per difference; [] when consistent
+ */
+export function lockfileMismatches(pkg, lock) {
+  const root = lock?.packages?.[''];
+  if (!root) return ['package-lock.json has no root entry'];
+  const out = [];
+  for (const group of ['dependencies', 'devDependencies']) {
+    const want = pkg?.[group] ?? {};
+    const have = root[group] ?? {};
+    for (const [name, range] of Object.entries(want)) {
+      if (!(name in have))
+        out.push(`${group}: ${name} is in package.json but not in the lock file`);
+      else if (have[name] !== range) {
+        out.push(
+          `${group}: ${name} is ${range} in package.json but ${have[name]} in the lock file`
+        );
+      }
+    }
+    for (const name of Object.keys(have)) {
+      if (!(name in want))
+        out.push(`${group}: ${name} is in the lock file but not in package.json`);
+    }
+  }
+  return out;
+}
+
+/** Marker a maintainer leaves in code or text to forbid a launch until it is removed. */
+export const LAUNCH_BLOCKER_MARKER = 'LAUNCH-BLOCKER';
+
+/**
+ * Lines that carry the launch-blocker marker.
+ *
+ * @param {Array<{source: string, text: string}>} files
+ * @returns {string[]} `file:line` for each hit
+ */
+export function findLaunchBlockers(files) {
+  const hits = [];
+  for (const { source, text } of files) {
+    text.split('\n').forEach((line, i) => {
+      if (line.includes(LAUNCH_BLOCKER_MARKER)) hits.push(`${source}:${i + 1}`);
+    });
+  }
+  return hits;
+}
+
 export function findPlaceholderTokens(text) {
   return Array.from(new Set(String(text).match(PLACEHOLDER_TOKEN_RE) ?? []));
 }
@@ -94,6 +147,8 @@ export function findPlaceholderTokens(text) {
  * @param {Array<{source: string, text: string}>} [opts.participantText]  participant-facing texts to scan for placeholders
  * @param {readonly string[]} [opts.previouslyUsedIds]  ids that must not be reused
  * @param {readonly string[]} [opts.uncommittedPaths]  paths with uncommitted changes among the files that ship
+ * @param {readonly string[]} [opts.lockfileProblems]  output of `lockfileMismatches`
+ * @param {readonly string[]} [opts.launchBlockers]    `file:line` of each LAUNCH-BLOCKER marker
  * @returns {Array<{severity: 'error'|'warning', code: string, message: string}>}
  */
 export function evaluatePreflight({
@@ -103,8 +158,24 @@ export function evaluatePreflight({
   participantText = [],
   previouslyUsedIds = PREVIOUSLY_USED_IDS,
   uncommittedPaths = [],
+  lockfileProblems = [],
+  launchBlockers = [],
 }) {
   const issues = [];
+  if (lockfileProblems.length > 0) {
+    issues.push({
+      severity: strictDeployment ? 'error' : 'warning',
+      code: 'LOCKFILE_MISMATCH',
+      message: `package.json and package-lock.json disagree: ${lockfileProblems.slice(0, 3).join('; ')}${lockfileProblems.length > 3 ? ` (+${lockfileProblems.length - 3} more)` : ''}. Run \`npm install\`, test, and commit both files.`,
+    });
+  }
+  if (launchBlockers.length > 0) {
+    issues.push({
+      severity: strictDeployment ? 'error' : 'warning',
+      code: 'LAUNCH_BLOCKER_MARKER',
+      message: `${LAUNCH_BLOCKER_MARKER} marker found at ${launchBlockers.slice(0, 5).join(', ')}${launchBlockers.length > 5 ? ` (+${launchBlockers.length - 5} more)` : ''}. Resolve it and remove the marker before launch.`,
+    });
+  }
   if (uncommittedPaths.length > 0) {
     const shown = uncommittedPaths.slice(0, 5).join(', ');
     const more = uncommittedPaths.length > 5 ? ` (+${uncommittedPaths.length - 5} more)` : '';
@@ -297,6 +368,40 @@ export function uncommittedShippedPaths() {
   }
 }
 
+/** package.json against package-lock.json; [] when either cannot be read. */
+function loadLockfileProblems() {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf-8'));
+    const lock = JSON.parse(readFileSync(resolve(ROOT, 'package-lock.json'), 'utf-8'));
+    return lockfileMismatches(pkg, lock);
+  } catch {
+    return ['package.json or package-lock.json could not be read'];
+  }
+}
+
+/** Source, scripts, pre-registration and the Prolific text, scanned for the launch-blocker marker. */
+function loadLaunchBlockers() {
+  const files = [];
+  const add = (rel) => {
+    const abs = resolve(ROOT, rel);
+    if (existsSync(abs)) files.push({ source: rel, text: readFileSync(abs, 'utf-8') });
+  };
+  try {
+    const out = execSync('git ls-files src scripts pre-reg schemas', {
+      cwd: ROOT,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .split('\n')
+      .filter((f) => f && /\.(js|json|md|html|txt)$/.test(f) && f !== 'scripts/preflight.js');
+    out.forEach(add);
+  } catch {
+    /* no git: skip */
+  }
+  add('prolific-study-description.md');
+  return findLaunchBlockers(files);
+}
+
 function loadPreReg() {
   return JSON.parse(readFileSync(PRE_REG_PATH, 'utf-8'));
 }
@@ -336,6 +441,8 @@ async function main(argv) {
     strictDeployment: opts.strictDeployment,
     participantText,
     uncommittedPaths: uncommittedShippedPaths(),
+    lockfileProblems: loadLockfileProblems(),
+    launchBlockers: loadLaunchBlockers(),
   });
   const issueSummary = formatIssues(issues);
 

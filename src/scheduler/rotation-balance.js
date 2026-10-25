@@ -2,12 +2,20 @@
  * Rotation-angle design for the imagery-bearing conditions and the display
  * angle of D-only trials.
  *
- * The angle of each trial is drawn from six equal strata of 30 integer
- * degrees, [-90, -61], [-60, -31], [-30, -1], [1, 30], [31, 60], [61, 90],
- * so a 24-trial condition holds exactly 4 angles per stratum (12 clockwise,
- * 12 counter-clockwise), no angle is repeated within a condition, and the
- * whole range is covered in every session. A 0 degree trial would involve no
- * rotation and is not drawn.
+ * The angle of each trial is a whole number of degrees in the closed range
+ * [config.grid.rotation_min_deg, config.grid.rotation_max_deg] = [-90, +90],
+ * 0 and both end points included. The range is cut into six strata that are
+ * as equal as whole degrees allow: three counter-clockwise strata of 30
+ * degrees ([-90, -61], [-60, -31], [-30, -1]) and three non-negative strata
+ * ([0, 30], [31, 60], [61, 90]; the first holds 31 angles because it contains
+ * 0). A 24-trial condition holds exactly 4 angles per stratum, drawn at
+ * random without replacement inside the stratum, so no angle is repeated
+ * within a condition, every part of the range is covered in every session,
+ * and 12 trials turn counter-clockwise (negative) and 12 do not (0 or
+ * positive). 0 degrees (no rotation) is drawn like any other angle: 4 of the
+ * 31 angles of its stratum are chosen per condition, so a given condition
+ * contains a 0 degree trial in 4/31 (about 13%) of sessions. The sign class
+ * of 0 is "non-negative" (see `rotationSignClass`).
  *
  * Given the angles, the on/off labels of the stars are re-paired with trials
  * so that, at the 24-trial block size, every S-slot (1-6) and every angle
@@ -15,15 +23,36 @@
  * serial position at exactly 12 on / 12 off, so the pre-registered balance is
  * untouched.
  */
+import { config } from '../config.js';
+
+/* Cut the integer range [lo, hi] into `parts` bands of near-equal size; the
+ * first `size % parts` bands take the extra angle. */
+function bandsOf(lo, hi, parts) {
+  const size = hi - lo + 1;
+  const base = Math.floor(size / parts);
+  const extra = size % parts;
+  const out = [];
+  let start = lo;
+  for (let i = 0; i < parts; i++) {
+    const n = base + (i < extra ? 1 : 0);
+    out.push(Object.freeze([start, start + n - 1]));
+    start += n;
+  }
+  return out;
+}
+
+const ROTATION_MIN_DEG = config.grid.rotation_min_deg;
+const ROTATION_MAX_DEG = config.grid.rotation_max_deg;
 
 export const ROTATION_STRATA = Object.freeze([
-  Object.freeze([-90, -61]),
-  Object.freeze([-60, -31]),
-  Object.freeze([-30, -1]),
-  Object.freeze([1, 30]),
-  Object.freeze([31, 60]),
-  Object.freeze([61, 90]),
+  ...bandsOf(ROTATION_MIN_DEG, -1, 3),
+  ...bandsOf(0, ROTATION_MAX_DEG, 3),
 ]);
+
+/** -1 for a counter-clockwise (negative) angle; +1 for 0 and clockwise angles. */
+export function rotationSignClass(angle) {
+  return angle < 0 ? -1 : 1;
+}
 
 export function rotationStratumIndex(angle) {
   for (let i = 0; i < ROTATION_STRATA.length; i++) {
@@ -110,6 +139,9 @@ export function balanceStarLabels({ sequences, starLabels, angles, prng, maxSwap
 const MAX_SAME_SIGN_RUN = 6;
 const MIN_ANGLE_STEP_DEG = 3;
 const MAX_SAME_SHADE_RUN = 6;
+/* Trials of the previous block that can still take part in a run: the longest
+ * run limit (6) plus the trial that breaks it. */
+const BOUNDARY_WINDOW = Math.max(MAX_SAME_SIGN_RUN, MAX_SAME_SHADE_RUN) + 1;
 
 /** Rotation angle of a trial: the imagery angle, or the display angle of a D-only trial. */
 export function trialAngleDeg(t) {
@@ -121,7 +153,7 @@ export function trialAngleDeg(t) {
 /**
  * Count rule violations in a presentation-ordered list of trials:
  *   - over rotated trials (imagery-bearing trials and D-only trials), a run of more than MAX_SAME_SIGN_RUN
- *     rotations in the same direction, or two consecutive angles closer than
+ *     rotations in the same direction (0 counts as non-negative), or two consecutive angles closer than
  *     MIN_ANGLE_STEP_DEG;
  *   - over all trials, a run of more than MAX_SAME_SHADE_RUN trials with the
  *     same page background.
@@ -134,7 +166,7 @@ export function orderViolations(trials) {
     const a = angles[i - 1];
     const b = angles[i];
     if (Math.abs(b - a) < MIN_ANGLE_STEP_DEG) v += 1;
-    run = Math.sign(a) === Math.sign(b) ? run + 1 : 1;
+    run = rotationSignClass(a) === rotationSignClass(b) ? run + 1 : 1;
     if (run > MAX_SAME_SIGN_RUN) v += 1;
   }
   let shadeRun = 1;
@@ -149,17 +181,26 @@ export function orderViolations(trials) {
  * Reorder trials of the same condition (the condition sequence is fixed) to
  * satisfy `orderViolations`. Trial content moves as a whole, so every
  * counterbalance of the pool is untouched. Returns a new array.
+ *
+ * `previous` is the trials that were presented immediately before this block
+ * (Main B receives Main A's), so the run limits hold across the boundary
+ * between blocks as well as inside them: the last `BOUNDARY_WINDOW` of them
+ * are prepended when the rules are counted. Violations that already exist
+ * inside `previous` are not this block's to fix and are ignored.
  */
-export function arrangeTrialOrder(trials, prng, maxSwaps = 5000) {
+export function arrangeTrialOrder(trials, prng, maxSwaps = 5000, previous = []) {
+  const prefix = previous.slice(-BOUNDARY_WINDOW);
+  const baseline = orderViolations(prefix);
+  const score = (list) => orderViolations(prefix.concat(list)) - baseline;
   const out = trials.slice();
-  let best = orderViolations(out);
+  let best = score(out);
   for (let step = 0; step < maxSwaps && best > 0; step++) {
     const a = prng.int(out.length);
     const b = prng.int(out.length);
     if (a === b || out[a].trial_type !== out[b].trial_type) continue;
     [out[a], out[b]] = [out[b], out[a]];
-    const score = orderViolations(out);
-    if (score <= best) best = score;
+    const s = score(out);
+    if (s <= best) best = s;
     else [out[a], out[b]] = [out[b], out[a]];
   }
   return out;

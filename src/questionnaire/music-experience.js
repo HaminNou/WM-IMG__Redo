@@ -1,19 +1,46 @@
 /**
  * Music-experience questionnaire (post-experiment covariate).
  *
- * The questionnaire mirrors the **Goldsmiths Musical Sophistication Index,
- * Musical Training (MT) subscale** verbatim (Müllensiefen, Gingras, Musil,
- * & Stewart, 2014, *PLOS ONE* 9(2): e89642) plus one absolute-pitch
- * self-report, because AP is a specific risk for the tone bank that
- * Gold-MSI does not address.
+ * The seven Musical Training items are the **Goldsmiths Musical
+ * Sophistication Index (Gold-MSI) v1.0 Musical Training subscale**
+ * (Müllensiefen, Gingras, Musil, & Stewart, 2014, *PLOS ONE* 9(2): e89642),
+ * in the item set and order of the paper's File S1 ("Musical Training,
+ * 7 items, alpha = .903"), plus one absolute-pitch self-report appended last
+ * (AP is a specific risk for the tone bank that Gold-MSI does not address).
  *
- * Why Gold-MSI MT. Six of its seven items ask about concrete observable
- * behaviours (years, hours, number of instruments, level on best
- * instrument) and only one is a direct self-rating ("I would consider
- * myself a musician", 7-point Likert). The composite score (sum of the
- * seven 7-point items, range 7-49) therefore rests mostly on facts a
- * participant cannot easily over- or under-report. Reported reliability is
- * Cronbach alpha = .903 (Müllensiefen et al. 2014, Table 7).
+ * What was checked against the primary sources (read 2026-10-25: the paper,
+ * its File S1, and the Gold-MSI v1.0 documentation, gms_documentation_en.pdf):
+ *   - the subscale has exactly these seven items (S1): years of regular daily
+ *     practice; number of instruments played; "I have never been complimented
+ *     for my talents as a musical performer"; hours practised at the peak of
+ *     interest; years of formal music-theory training; years of formal
+ *     training on an instrument; "I would not consider myself a musician";
+ *   - all items are scored on one 7-point scale with equal weights, the
+ *     subscale is the sum (Table 2: minimum 7, maximum 49);
+ *   - the negatively phrased items are reverse-scored before summing
+ *     (documentation, section 2.3: a response of 1 scores 7, 4 scores 4,
+ *     2 scores 6, and so on). The two negatively phrased Musical Training
+ *     items are the "never been complimented" and "would not consider myself
+ *     a musician" statements;
+ *   - for the items answered as a range ("___ years", "___ hours"), the
+ *     documentation says to enter the number 1-7 that corresponds to the
+ *     range's order of presentation.
+ * NOT verified from a primary source that could be read: the printed labels of
+ * the response ranges (0, 1, 2, 3, 4-5, 6-9, 10+ and so on). They are kept as
+ * they were; compare them with the Gold-MSI questionnaire PDF before the data
+ * are reported as "the Gold-MSI Musical Training subscale".
+ *
+ * Deviations from the published form, all deliberate and minor: US spelling
+ * ("practiced" for "practised"); the hours item says "per day" (the paper
+ * quotes the item that way in its Factor 3 description); the two agreement
+ * items use anchored 1-7 labels ("Completely disagree" ... "Completely
+ * agree"); one item per row in a single form rather than interleaved with the
+ * other 31 Gold-MSI items, so published percentile norms for the full
+ * inventory do not apply to the order effects of this short form.
+ *
+ * Why Gold-MSI MT. Five of its seven items ask about concrete observable
+ * behaviours (years, hours, number of instruments), so the composite rests
+ * mostly on facts a participant cannot easily over- or under-report.
  *
  * Why it matters here. The tone bank is a non-musical log-spaced ladder
  * (200-3900 Hz, neighbour ratio ~1.138) that blocks note-name re-encoding,
@@ -22,41 +49,58 @@
  * The Gold-MSI MT composite is the covariate column for that risk; the AP
  * item is a separate indicator for the extreme case.
  *
- * Item me_q04 (MT04, years of formal training) carries an explicit
- * "(school + private / conservatory combined)" parenthetical so that
- * in-school-only respondents do not under-count.
+ * Item map (File S1 order; AP appended last):
+ *   - me_q01 = MT01 - years of regular daily practice.
+ *   - me_q02 = MT02 - number of instruments played (including voice).
+ *   - me_q03 = MT03 - "I have never been complimented for my talents as a
+ *                     musical performer" (agreement; REVERSE-scored).
+ *   - me_q04 = MT04 - hours per day practiced at the peak of interest.
+ *   - me_q05 = MT05 - years of formal music-theory training.
+ *   - me_q06 = MT06 - years of formal training on an instrument or voice.
+ *   - me_q07 = MT07 - "I would not consider myself a musician"
+ *                     (agreement; REVERSE-scored).
+ *   - me_q08 = AP self-report (outside the composite).
  *
- * Item map (Gold-MSI MT order is preserved; AP appended last):
- *   - me_q01 = MT01 — years of regular daily practice.
- *   - me_q02 = MT02 — peak hours/day on primary instrument.
- *   - me_q03 = MT03 — years of formal music-theory training.
- *   - me_q04 = MT04 — years of formal training on an instrument or voice (lifetime).
- *   - me_q05 = MT05 — number of instruments the participant plays.
- *   - me_q06 = MT06 — "I would consider myself a musician" 7-point Likert.
- *   - me_q07 = MT07 — level on best instrument (Beginner..Expert).
- *   - me_q08 = AP self-report.
- *
- * Bin labels follow Müllensiefen et al. 2014 verbatim where the original
- * scale supplies discrete labels, and follow the standard 7-point Likert
- * anchors elsewhere. Each bin maps to an integer 1..7 for composite
- * scoring (`goldMsiMtComposite`).
- *
- * Responses are stored on the data row as `music_experience_responses`,
- * an object keyed by item id (string codes preserved verbatim so the
- * raw response is auditable; the integer score is derived in scoring).
+ * Responses are stored on the data row as `music_experience_responses`, an
+ * object keyed by item id. The stored value is the raw option the participant
+ * chose (so the raw response is auditable); the 1-7 item score, with the
+ * reversal applied to the two negatively phrased items, is derived in scoring
+ * from each option's `score`.
  */
 import surveyHtmlForm from '@jspsych/plugin-survey-html-form';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
 
 /* Each item carries its options as `{ value, label, score }` triples.
- * `score` is the integer 1..7 used by the Gold-MSI MT composite (Müllensiefen
- * et al. 2014, Methods §2.2 — items are scored on a 1–7 ordinal). The AP
- * item is OUTSIDE the composite (Gold-MSI does not include it) and carries
- * a `score: null` so the composite scorer skips it without special-casing. */
+ * `score` is the 1..7 value used by the Gold-MSI MT composite. For the two
+ * negatively phrased items (`reverse_keyed: true`) the score is already the
+ * REVERSED value (response 1 scores 7, 4 scores 4, 7 scores 1), so the
+ * composite is a plain sum. The AP item is OUTSIDE the composite and carries
+ * `score: null` so the composite scorer skips it without special-casing. */
+
+/* The 7-point agreement scale, 1 = completely disagree ... 7 = completely
+ * agree. `reverse` turns the score around (the stored `value` stays raw). */
+function agreementOptions(reverse) {
+  const labels = [
+    '1 – Completely disagree',
+    '2',
+    '3',
+    '4 – Neither agree nor disagree',
+    '5',
+    '6',
+    '7 – Completely agree',
+  ];
+  return Object.freeze(
+    labels.map((label, i) =>
+      Object.freeze({ value: String(i + 1), label, score: reverse ? 7 - i : i + 1 })
+    )
+  );
+}
+
 export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
   Object.freeze({
     id: 'me_q01',
     gold_msi: 'MT01',
+    reverse_keyed: false,
     text: 'I engaged in regular, daily practice of a musical instrument (including voice) for ___ years.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
@@ -71,7 +115,30 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
   Object.freeze({
     id: 'me_q02',
     gold_msi: 'MT02',
-    text: 'At the peak of my interest, I practiced my primary instrument for ___ hours per day.',
+    reverse_keyed: false,
+    text: 'I can play the following number of musical instruments (including voice): ___',
+    options: Object.freeze([
+      Object.freeze({ value: '0', label: '0', score: 1 }),
+      Object.freeze({ value: '1', label: '1', score: 2 }),
+      Object.freeze({ value: '2', label: '2', score: 3 }),
+      Object.freeze({ value: '3', label: '3', score: 4 }),
+      Object.freeze({ value: '4', label: '4', score: 5 }),
+      Object.freeze({ value: '5', label: '5', score: 6 }),
+      Object.freeze({ value: '6+', label: '6 or more', score: 7 }),
+    ]),
+  }),
+  Object.freeze({
+    id: 'me_q03',
+    gold_msi: 'MT03',
+    reverse_keyed: true /* negatively phrased: agreement means LESS training */,
+    text: 'I have never been complimented for my talents as a musical performer.',
+    options: agreementOptions(true),
+  }),
+  Object.freeze({
+    id: 'me_q04',
+    gold_msi: 'MT04',
+    reverse_keyed: false,
+    text: 'At the peak of my interest, I practiced my primary instrument (including voice) for ___ hours per day.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
       Object.freeze({ value: '0.5', label: '0.5', score: 2 }),
@@ -83,8 +150,9 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
     ]),
   }),
   Object.freeze({
-    id: 'me_q03',
-    gold_msi: 'MT03',
+    id: 'me_q05',
+    gold_msi: 'MT05',
+    reverse_keyed: false,
     text: 'I have had formal training in music theory for ___ years.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
@@ -97,9 +165,10 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
     ]),
   }),
   Object.freeze({
-    id: 'me_q04',
-    gold_msi: 'MT04',
-    text: 'I have had ___ years of formal training on a musical instrument (including voice) during my lifetime – count school music classes <strong>and</strong> private lessons / conservatory together.',
+    id: 'me_q06',
+    gold_msi: 'MT06',
+    reverse_keyed: false,
+    text: 'During my life time I have had formal training on a musical instrument (including voice) for ___ years.',
     options: Object.freeze([
       Object.freeze({ value: '0', label: '0', score: 1 }),
       Object.freeze({ value: '0.5', label: '0.5', score: 2 }),
@@ -111,61 +180,16 @@ export const MUSIC_EXPERIENCE_ITEMS = Object.freeze([
     ]),
   }),
   Object.freeze({
-    id: 'me_q05',
-    gold_msi: 'MT05',
-    text: 'I can play ___ musical instruments.',
-    options: Object.freeze([
-      Object.freeze({ value: '0', label: '0', score: 1 }),
-      Object.freeze({ value: '1', label: '1', score: 2 }),
-      Object.freeze({ value: '2', label: '2', score: 3 }),
-      Object.freeze({ value: '3', label: '3', score: 4 }),
-      Object.freeze({ value: '4', label: '4', score: 5 }),
-      Object.freeze({ value: '5', label: '5', score: 6 }),
-      Object.freeze({ value: '6+', label: '6 or more', score: 7 }),
-    ]),
-  }),
-  Object.freeze({
-    id: 'me_q06',
-    gold_msi: 'MT06',
-    /* The single self-rating in Gold-MSI MT. Anchored at both ends so the
-     * scale is symmetric and the midpoint is explicitly neutral — this
-     * symmetry is what protects the composite from modesty (an expert
-     * answering "neutral" still scores 4/7, which is balanced by their
-     * high MT01–05 / MT07 scores) and from over-claim (a novice
-     * answering "completely agree" gets 7/7, but their low behavioural
-     * items keep the composite low). */
-    text: 'I would consider myself a musician.',
-    options: Object.freeze([
-      Object.freeze({ value: '1', label: '1 – Completely disagree', score: 1 }),
-      Object.freeze({ value: '2', label: '2', score: 2 }),
-      Object.freeze({ value: '3', label: '3', score: 3 }),
-      Object.freeze({ value: '4', label: '4 – Neither agree nor disagree', score: 4 }),
-      Object.freeze({ value: '5', label: '5', score: 5 }),
-      Object.freeze({ value: '6', label: '6', score: 6 }),
-      Object.freeze({ value: '7', label: '7 – Completely agree', score: 7 }),
-    ]),
-  }),
-  Object.freeze({
     id: 'me_q07',
     gold_msi: 'MT07',
-    /* Behavioural anchor for skill level on the participant's primary
-     * instrument. Five named anchors rather than a numeric scale —
-     * Müllensiefen et al. found this reduces midpoint bias compared to
-     * a 1–7 numeric self-rating. The five anchors are scored
-     * by mapping Beginner..Expert linearly to {1, 2.5, 4, 5.5, 7} so
-     * the composite stays in the 7..49 range. */
-    text: 'The musical instrument I play best (including voice), I play at the level of a:',
-    options: Object.freeze([
-      Object.freeze({ value: 'none', label: 'I do not play any instrument', score: 1 }),
-      Object.freeze({ value: 'beginner', label: 'Beginner', score: 2.5 }),
-      Object.freeze({ value: 'intermediate', label: 'Intermediate', score: 4 }),
-      Object.freeze({ value: 'advanced', label: 'Advanced', score: 5.5 }),
-      Object.freeze({ value: 'expert', label: 'Expert / professional', score: 7 }),
-    ]),
+    reverse_keyed: true /* negatively phrased: agreement means LESS training */,
+    text: 'I would not consider myself a musician.',
+    options: agreementOptions(true),
   }),
   Object.freeze({
     id: 'me_q08',
     gold_msi: null /* outside the Gold-MSI composite */,
+    reverse_keyed: false,
     text: 'Can you name a musical note (e.g., "C", "F♯") just from hearing it played, without comparing it to any reference note? (This is sometimes called "absolute pitch" or "perfect pitch".)',
     options: Object.freeze([
       Object.freeze({ value: 'no', label: 'No', score: null }),
@@ -193,8 +217,9 @@ const SCORE_LOOKUP = (() => {
 })();
 
 /* The seven Gold-MSI MT item ids, in order. The composite is the sum of
- * their per-item scores; range 7..49 (matching Müllensiefen et al. 2014
- * Table 7's reported MT subscale range). */
+ * their per-item scores (reversal already applied to the two negatively
+ * phrased items); range 7..49 (Müllensiefen et al. 2014, Table 2: scale
+ * minimum 7, maximum 49). */
 const GOLD_MSI_MT_ITEM_IDS = Object.freeze(
   MUSIC_EXPERIENCE_ITEMS.filter((i) => i.gold_msi !== null).map((i) => i.id)
 );
@@ -227,6 +252,10 @@ function musicExperienceIntro() {
   return trackHiddenNavNode(node, stepId);
 }
 
+/* Row padding is 0.5 rem (it was 0.75 rem): with the title and the intro
+ * paragraph, eight two-line items at 0.75 rem pushed the Continue button below
+ * the fold at 1440 x 900 (its bottom edge was at y = 926). At 0.5 rem it ends at
+ * y = 862. The items and their wording are unchanged. */
 function musicExperienceFormNode() {
   const itemRows = MUSIC_EXPERIENCE_ITEMS.map((item) => {
     const optionsHtml = item.options
@@ -234,10 +263,10 @@ function musicExperienceFormNode() {
       .join('');
     return `
       <tr>
-        <td style="padding: 0.75rem 0.75rem 0.75rem 0; vertical-align: top; max-width: 28rem;">
+        <td style="padding: 0.5rem 0.75rem 0.5rem 0; vertical-align: top; max-width: 28rem;">
           ${item.text}
         </td>
-        <td style="padding: 0.75rem 0; vertical-align: top;">
+        <td style="padding: 0.5rem 0; vertical-align: top;">
           <select name="${item.id}" required>
             <option value="">–</option>
             ${optionsHtml}
@@ -287,8 +316,8 @@ export function musicExperienceTimeline() {
 
 /**
  * Convert a single response-code map ({ me_q01: '4-5', ... }) to the
- * Gold-MSI MT composite score (sum of items 1..7, range 7..49) and the
- * raw item codes. Returns `null` for the composite if any of the seven
+ * Gold-MSI MT composite score (sum of items 1..7 with the two negatively
+ * phrased items reverse-scored, range 7..49) and the raw item codes. Returns `null` for the composite if any of the seven
  * MT items is unanswered (Müllensiefen et al. require all items present
  * for a valid subscale score). The AP item (me_q08) is reported as a
  * separate field and never counted in the composite.

@@ -56,6 +56,13 @@ const INTER_TONE_MS = 200;
  * without making the page feel idle. */
 const INTER_SWEEP_MS = 500;
 
+/* Length of one full sweep through the bank, rounded up to whole seconds. The
+ * continue button unlocks when the first sweep has finished (see `on_load`),
+ * so the wait shown to the participant is derived from the same constants. */
+const SWEEP_SECONDS = Math.ceil(
+  (config.tones.count * (config.tones.duration_ms + INTER_TONE_MS)) / 1000
+);
+
 /* Audio-clock lead-in so the first tone of the first sweep doesn't fire
  * before the page has finished its layout / paint. */
 const AUDIO_LEAD_IN_MS = 50;
@@ -170,7 +177,7 @@ export function toneAudibilityAndComfortTrial() {
           margin: 0 auto 1.25rem;
         }
       </style>
-      <h2>Adjust the volume to a comfortable level</h2>
+      <h2>Sound check: adjust the volume to a comfortable level</h2>
       <div data-voiceover-target data-tac-narration>
         <p class="tac-instructions">
           ${config.tones.count} tones will start playing in a loop in a
@@ -203,6 +210,10 @@ export function toneAudibilityAndComfortTrial() {
           <span>louder</span>
         </div>
       </div>
+      <p class="tac-instructions tac-wait-note" id="tac-wait-note" role="status" aria-live="polite" style="text-align: center; font-size: 0.9rem; opacity: 0.8;">
+        The <strong>continue</strong> button unlocks after all
+        ${config.tones.count} tones have played once (about ${SWEEP_SECONDS} seconds).
+      </p>
     `,
     choices: ["I'm comfortable – continue"],
     /* The button opens after one complete sweep of all tones has played. */
@@ -343,6 +354,11 @@ export function toneAudibilityAndComfortTrial() {
               yesBtn.disabled = false;
               yesBtn.setAttribute('aria-disabled', 'false');
               yesBtn.style.opacity = '';
+            }
+            const waitNote = document.getElementById('tac-wait-note');
+            if (waitNote) {
+              waitNote.innerHTML =
+                'All tones have played once. You can continue now, or keep adjusting the volume.';
             }
           }
           /* Inter-sweep gap. */

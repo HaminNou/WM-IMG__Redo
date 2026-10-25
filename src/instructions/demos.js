@@ -132,6 +132,7 @@
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import { createGridFrame, clearStimuli, setFixation, setRotation } from '../visuals/frame.js';
+import { ARROW_CENTRE_HOLE_STYLE } from '../visuals/rotation-arrow-style.js';
 import { buildPatternOverlay, showPattern, hidePattern } from '../visuals/pattern.js';
 import { addDot, removeElement } from '../visuals/dot.js';
 import { addStar, recolourStar } from '../visuals/star.js';
@@ -218,8 +219,9 @@ const DEMO_FEEDBACK_DWELL_MS = 1500;
 const DEMO_HIDDEN_FILLER_SLOT_MS = 1000;
 
 /* Curated set of integer rotation angles (multiples of 15° spanning
- * -90..+90, excluding 0°). Picked once per imagery-bearing demo loop via
- * the session PRNG, so participants see several distinct rotations across
+ * -90..+90, excluding 0° so the demo's turn is unmistakable). Picked once per
+ * demo loop of every rotating condition (I-only, I+D, I+T and D-only) via the
+ * session PRNG, so participants see several distinct rotations across
  * a demo's repetitions instead of always the same angle.
  * The live task samples any integer in [-90, +90] per the design; these
  * 12 values are a representative subset that's quick to read and
@@ -759,7 +761,9 @@ function addStandaloneArrow(frame, angleDeg) {
       'z-index: 10',
       'user-select: none',
       'filter: brightness(0) saturate(100%) drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff)',
-    ].join('; ') + ';'
+    ].join('; ') +
+      ';' +
+      ARROW_CENTRE_HOLE_STYLE
   );
   frame.wrapper.appendChild(img);
   return img;
@@ -1107,6 +1111,13 @@ function pressOutcomeCaption({ pressedLabel, correctLabel, isCorrect, stimulusNa
  */
 async function runDOnlyMiniTrial(frame, ctl) {
   const { memCells, fillerCells, probeCells } = pickDemoCells();
+  /* Live D-only trials show the dots on the grid turned by the trial's
+   * display angle (the same stratified angle as the imagery conditions), and
+   * retention and the probes stay on that rotated frame. The demo does the
+   * same, so the dots appear where they will in the task: snap the rotor to
+   * this loop's angle before the first dot (the rotation itself is invisible
+   * in the live task too). `loopify` resets the rotor between loops. */
+  setRotation(frame, pickDemoRotationAngle());
 
   /* Mount the persistent WATCH-AND-LISTEN banner in its own row
    * (#demo-watch-banner-row). It stays visible for the entire mini-

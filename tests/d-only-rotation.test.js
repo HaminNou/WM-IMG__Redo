@@ -28,19 +28,18 @@ function dOnlyBlock(seed, blockSize = 24) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('d_only display_rotation_deg', () => {
-  it('is an integer in -90..90, never 0, and unique within a 24-trial block', () => {
+  it('is an integer in -90..90 (0 allowed) and unique within a 24-trial block', () => {
     const angles = dOnlyBlock('d-rot-1').map((t) => t.display_rotation_deg);
     expect(angles).toHaveLength(24);
     for (const a of angles) {
       expect(Number.isInteger(a)).toBe(true);
-      expect(Math.abs(a)).toBeGreaterThanOrEqual(1);
       expect(Math.abs(a)).toBeLessThanOrEqual(90);
     }
     expect(new Set(angles).size).toBe(24);
   });
 
   it.each(['d-rot-a', 'd-rot-b', 'd-rot-c'])(
-    'has exactly 4 angles in each of the six 30-degree strata (%s)',
+    'has exactly 4 angles in each of the six strata (%s)',
     (seed) => {
       const counts = Array(ROTATION_STRATA.length).fill(0);
       for (const t of dOnlyBlock(seed)) counts[rotationStratumIndex(t.display_rotation_deg)] += 1;
@@ -48,9 +47,9 @@ describe('d_only display_rotation_deg', () => {
     }
   );
 
-  it('splits evenly between clockwise and counter-clockwise', () => {
+  it('splits evenly between counter-clockwise (negative) and non-negative (0 or clockwise)', () => {
     const angles = dOnlyBlock('d-rot-sign').map((t) => t.display_rotation_deg);
-    expect(angles.filter((a) => a > 0)).toHaveLength(12);
+    expect(angles.filter((a) => a >= 0)).toHaveLength(12);
     expect(angles.filter((a) => a < 0)).toHaveLength(12);
   });
 

@@ -172,6 +172,78 @@ describe('evaluateAttentionChecks', () => {
     expect(evaluateAttentionChecks(undefined).total).toBe(0);
   });
 
+  /* The practice loop repeats all three checks whenever practice accuracy is below
+   * criterion. A check counts once, as failed if it was failed the first time shown. */
+  describe('practice re-loop (a check administered more than once)', () => {
+    const row = (id, passed) => ({
+      phase: 'attention_check',
+      attention_check_id: id,
+      attention_check_passed: passed,
+    });
+
+    it('counts a check once: the same check missed in both passes is ONE failure', () => {
+      const rows = [
+        row('ac1', true),
+        row('ac2', false),
+        row('ac3', true),
+        row('ac1', true),
+        row('ac2', false),
+        row('ac3', true),
+      ];
+      const r = evaluateAttentionChecks(rows);
+      expect(r.total).toBe(3);
+      expect(r.failed).toBe(1);
+      expect(r.failedFinal).toBe(1);
+      expect(r.administrations).toBe(6);
+      expect(r.exceededThreshold).toBe(false);
+    });
+
+    it('judges a check on its FIRST administration; the final verdict is reported beside it', () => {
+      const rows = [
+        row('ac1', false),
+        row('ac2', false),
+        row('ac3', true),
+        row('ac1', true),
+        row('ac2', true),
+        row('ac3', true),
+      ];
+      const r = evaluateAttentionChecks(rows);
+      expect(r.failed).toBe(2);
+      expect(r.failedFinal).toBe(0);
+      expect(r.exceededThreshold).toBe(true);
+    });
+
+    it('a pass the first time followed by a miss the second time does not fail the check', () => {
+      const rows = [row('ac1', true), row('ac1', false)];
+      const r = evaluateAttentionChecks(rows);
+      expect(r.failed).toBe(0);
+      expect(r.failedFinal).toBe(1);
+    });
+
+    it('the summary node stamps the distinct counts and both verdicts', () => {
+      const rows = [
+        row('ac1', true),
+        row('ac2', false),
+        row('ac3', true),
+        row('ac1', true),
+        row('ac2', false),
+        row('ac3', true),
+      ];
+      Object.defineProperty(window, 'jsPsych', {
+        value: { data: { get: () => ({ values: () => rows }) } },
+        configurable: true,
+        writable: true,
+      });
+      const data = {};
+      attentionCheckSummaryNode().on_finish(data);
+      expect(data.attention_total).toBe(3);
+      expect(data.attention_failed).toBe(1);
+      expect(data.attention_failed_final).toBe(1);
+      expect(data.attention_administrations).toBe(6);
+      expect(data.attention_excluded).toBe(false);
+    });
+  });
+
   it('exposes the ids in administration order', () => {
     const rows = [
       { phase: 'attention_check', attention_check_id: 'first', attention_check_passed: true },

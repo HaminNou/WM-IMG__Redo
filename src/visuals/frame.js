@@ -69,7 +69,7 @@ import {
 export const BULLSEYE_COLOUR = 'rgba(255, 255, 255, 0.229)';
 export const FIXATION_MARK_COLOUR = 'rgba(255, 255, 255, 0.35)';
 const STIMULUS_WHITE = '#fff';
-/* Dark-theme pattern (gray on black at 33% alpha). Trial-state pattern is
+/* Dark-theme pattern (white on black at 33% alpha). Trial-state pattern is
  * fully opaque and uses the complement of the trial's background shade —
  * see `colour-palette.js`'s `PATTERN_FILLS_BY_BG`. */
 const DARK_PATTERN_COLOUR = '#fff';
@@ -86,7 +86,7 @@ const CELL_BORDER_COLOUR = 'rgba(0, 0, 0, 0)';
  * that without the occlusion side-effect. */
 const CELL_FILL_COLOUR = 'none';
 const CENTER_CELL_FILL = 'none';
-const FIXATION_DOT_DIAMETER_MM = 1.3; /* 5 px @ 96 DPI */
+export const FIXATION_DOT_DIAMETER_MM = 1.3; /* 5 px @ 96 DPI */
 const BULLSEYE_RING_STROKE_MM = 0.5;
 const GRID_BORDER_STROKE_MM = 0.28;
 const CELL_BORDER_STROKE_MM = 0.16;

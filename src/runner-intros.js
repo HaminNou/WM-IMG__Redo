@@ -22,8 +22,24 @@ import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from './config.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from './hidden-nav.js';
 import { unmountTrialCounter } from './conditions/trial-counter.js';
-import { narrateNowIfPresent } from './visuals/voiceover-slide.js';
+import { narrateNowIfPresent, unmountToggle } from './visuals/voiceover-slide.js';
+import { getVoiceover } from './visuals/voiceover.js';
 import { continueHintHtml } from './visuals/continue-hint.js';
+
+/**
+ * Leaving a narrated screen: stop any utterance still running and remove the "Voice on/off"
+ * pill. The pill is mounted when a narrated screen is handed to the engine and is otherwise only
+ * removed by the trial-start gate, so without this it stayed on the end-of-task questionnaires,
+ * the upload screen and the redirect screen, where nothing is narrated.
+ */
+function leaveNarratedScreen() {
+  unmountToggle();
+  try {
+    getVoiceover().cancel();
+  } catch {
+    /* engine init touches localStorage/document; never let this block the session */
+  }
+}
 
 export function mainAIntroNode() {
   const stepId = 'main_a_intro';
@@ -38,21 +54,23 @@ export function mainAIntroNode() {
           ${config.blocks.rest_duration_s}-second rest after trials 20 and 40,
           and there is another ${config.blocks.rest_duration_s}-second rest
           between the two blocks.</p>
-          <p>Same controls as the practice: <strong>Yes</strong> /
+          <p>Same controls as the practice: <strong>Yes</strong> or
           <strong>On-pattern</strong> on the
           <kbd>&rarr;</kbd> RIGHT arrow key,
-          <strong>No</strong> / <strong>Not on-pattern</strong> on the
+          <strong>No</strong> or <strong>Not on-pattern</strong> on the
           <kbd>&larr;</kbd> LEFT arrow key.</p>
-          <p><strong>Important:</strong> Before you press both arrow keys
-          to start each trial, look at the label shown above the circle.
-          It tells you what type of trial is coming next, so you know
-          what to expect.</p>
+          <p><strong>Important:</strong> To start each trial, press the
+          Left and Right arrow keys <strong>at the same time</strong>.
+          Before you do, look at the label shown above the circle. It
+          tells you what type of trial is coming next, so you know what
+          to expect.</p>
           ${continueHintHtml('Press <kbd>Space</kbd> to begin Block 1.')}
         </div>
       </div>
     `,
     choices: [' '],
     data: { phase: 'main_a_intro' },
+    on_finish: leaveNarratedScreen,
     /* Voiceover scope (see runner.js): the global slide-narration observer
      * is intentionally NOT installed, so instruction decks / calibration /
      * questionnaires stay silent. This single screen, the practice→main
@@ -110,6 +128,7 @@ export function endOfTaskIntroNode() {
     `,
     choices: [' '],
     data: { phase: 'end_of_task_intro' },
+    on_finish: leaveNarratedScreen,
     on_load: () => {
       /* Main task is over — remove the dim "Trial X / 120" overlay so it
        * doesn't bleed into the questionnaire chain. */

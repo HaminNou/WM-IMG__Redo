@@ -63,7 +63,13 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    target: 'es2022',
+    /* ES2022 class static blocks (used inside the jsPsych plugins) do not parse
+     * before Safari 16.4 and the page would be blank. These targets make esbuild
+     * lower them. They are the oldest browsers that have Object.hasOwn, which jsPsych
+     * calls on every trial and no build step can supply (MDN browser-compat-data:
+     * Chrome/Edge 93, Firefox 92, Safari 15.4); the ES5 gate in index.html names the
+     * same versions. `tests/browser-support.test.js` pins the list. */
+    target: ['es2020', 'chrome93', 'edge93', 'firefox92', 'safari15.4'],
     rollupOptions: {
       /* Production pages: the experiment and the data-recovery page. */
       input: {

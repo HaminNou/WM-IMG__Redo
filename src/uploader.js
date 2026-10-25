@@ -64,10 +64,20 @@ import {
   getUploadCursor,
   setUploadCursor,
   getRunId,
+  getRecentRows,
   flushPendingWrites,
 } from './storage.js';
 
 const midSessionUploaded = new Set();
+
+/* Highest seq of this run known to have reached the server, every row up to it
+ * included (checkpoint, end-of-session upload, tail). The last-chance upload
+ * on page hide sends only rows newer than this. A keepalive request cannot
+ * report whether it arrived, so it never moves this number. */
+let deliveredSeq = 0;
+function noteDelivered(seq) {
+  if (Number.isFinite(seq) && seq > deliveredSeq) deliveredSeq = seq;
+}
 
 /* Largest checkpoint request. The assumption is that DataPipe accepts a
  * request body of about 1 MB; a checkpoint with more rows than fit is sent as
@@ -261,18 +271,20 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
 }
 
 /**
- * DataPipe filename for a bucket: `<session_id>__<run_id>__<bucket_label>.json`.
+ * DataPipe filename for a bucket: `<session_id>__<run_id>__<bucket_label>.json`
+ * (for a regular bucket the label carries the seq range, see `bucketFileLabel`).
  *
  * Stability requirements:
  *   - **Unique per bucket per run.** DataPipe stores each POST as a
  *     separate file under the project; a repeated filename is refused. Each
  *     bucket's `label` is unique and the run id changes with every page load,
  *     so a reloaded page never meets the files of the earlier one.
- *   - **Deterministic within a run.** The bucket label comes from the static
- *     `BUCKETS` table, so a retry POSTs the same filename. DataPipe rejects a
- *     name that already exists (FILE_EXISTS); the uploader counts that as
- *     delivered, because the name identifies the same run, and failed posts
- *     get another attempt.
+ *   - **Deterministic for the same content.** The bucket label comes from the
+ *     static `BUCKETS` table plus the seq range of the rows, so a retry of the
+ *     same rows POSTs the same filename. DataPipe rejects a name that already
+ *     exists (FILE_EXISTS); the uploader counts that as delivered, because the
+ *     name identifies the same rows, and failed posts get another attempt. A
+ *     bucket that gained rows since an earlier attempt has another name.
  *   - **Sorts alphabetically in storage in canonical order.** Labels carry a
  *     two-digit prefix (`01_…` through `10_…`) so a directory listing matches
  *     the analysis-relevant order without manual sort.
@@ -287,7 +299,37 @@ export function dataPipeFilenameForBucket({ session_id, run_id, bucket_label }) 
   if (!bucket_label) {
     throw new Error('dataPipeFilenameForBucket: bucket_label is required');
   }
-  return `${session_id}__${run_id}__${bucket_label}.json`;
+  return `${safeFilePart(session_id)}__${safeFilePart(run_id)}__${safeFilePart(bucket_label)}.json`;
+}
+
+/* Longest piece of a file name kept as is; a longer one is cut and given a short hash. */
+const FILE_PART_MAX = 64;
+
+/**
+ * One piece of a DataPipe file name, reduced to `[A-Za-z0-9_-]`. The session id
+ * comes from the page URL, so it must not be able to put a path separator, a
+ * dot sequence or any other special character into a name. Prolific ids (hex),
+ * the run id (hex) and the bucket labels are already in this alphabet and pass
+ * through unchanged, so file names stay identical to those of earlier builds.
+ * The result depends only on the input, so a retry produces the same name.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeFilePart(value) {
+  const raw = String(value);
+  let out = raw.replace(/[^A-Za-z0-9_-]/g, '_');
+  if (out.length > FILE_PART_MAX || out !== raw) {
+    /* Two different hostile ids must not collapse into one name. */
+    let h = 0x811c9dc5;
+    for (let i = 0; i < raw.length; i++) {
+      h ^= raw.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    const tag = h.toString(16).padStart(8, '0');
+    out = `${out.slice(0, FILE_PART_MAX - 9)}_${tag}`;
+  }
+  return out;
 }
 
 /**
@@ -315,10 +357,35 @@ export function buildDataPipeEnvelope({ bucketEnvelope, experimentId }) {
     filename: dataPipeFilenameForBucket({
       session_id: bucketEnvelope.session_id,
       run_id: bucketEnvelope.run_id,
-      bucket_label: bucketEnvelope.bucket_label,
+      bucket_label: bucketFileLabel(bucketEnvelope),
     }),
     data: JSON.stringify(bucketEnvelope),
   };
+}
+
+/* Bucket ids whose labels already carry their own seq range. */
+const RANGE_LABELLED_BUCKETS = new Set(['checkpoint', 'tail', 'partial']);
+
+/**
+ * The label used in a bucket's DataPipe file name. A regular bucket
+ * (`03_d_only`, `10_meta`, …) gets the seq range of the rows it holds appended
+ * (`10_meta_s2-9`). DataPipe refuses a second file with the same name
+ * (FILE_EXISTS) and the uploader counts that as "delivered", which is right only
+ * if the content is the same. Rows are append-only with a unique seq, so the same
+ * session, run and range always means the same content: an identical retry is
+ * still FILE_EXISTS (delivered), while a bucket that grew between two attempts is
+ * a new file and its new rows are sent. Rows present in two files are dropped by
+ * the exporter on (run_id, seq). Checkpoint, tail and partial files already name
+ * their range.
+ *
+ * @param {{bucket_id?: string, bucket_label: string, seq_min?: number|null, seq_max?: number|null}} env
+ * @returns {string}
+ */
+export function bucketFileLabel(env) {
+  const label = env.bucket_label;
+  if (RANGE_LABELLED_BUCKETS.has(env.bucket_id)) return label;
+  if (!Number.isFinite(env.seq_min) || !Number.isFinite(env.seq_max)) return label;
+  return `${label}_s${env.seq_min}-${env.seq_max}`;
 }
 
 /**
@@ -588,6 +655,7 @@ export async function uploadCheckpoint({
       return { status: 'failed', error: err.message };
     }
     checkpointCursor = seqMax;
+    noteDelivered(seqMax);
     sent += part.length;
   }
   return { status: 'ok', rows: sent };
@@ -647,6 +715,7 @@ export async function uploadTail({
     return { status: 'failed', error: err.message };
   }
   await setUploadCursor(seqMax);
+  noteDelivered(seqMax);
   return { status: 'ok', rows: rows.length };
 }
 
@@ -654,6 +723,174 @@ export async function uploadTail({
 export function _resetCheckpointForTests() {
   checkpointCursor = 0;
   finalUploadComplete = false;
+  deliveredSeq = 0;
+  lastFlushSeqMax = 0;
+  lastFlushAt = 0;
+  uninstallPageHideFlush();
+}
+
+/* ---------- Last-chance upload when the page is hidden or closed ---------- */
+
+/* A keepalive request may carry about 64 KiB (65,536 bytes) in all, and the limit
+ * is on the final request body in UTF-8 bytes. The rows are stringified twice (once
+ * as rows, again inside the DataPipe envelope's `data` string), so quotes and
+ * backslashes double and non-ASCII characters cost 2-4 bytes each. The body is
+ * therefore MEASURED, with a margin below the limit. */
+const FLUSH_MAX_BYTES = 48_000;
+
+/** UTF-8 length of a string. */
+function utf8Bytes(str) {
+  if (typeof TextEncoder !== 'undefined') return new TextEncoder().encode(str).length;
+  if (typeof Blob !== 'undefined') return new Blob([str]).size;
+  return str.length * 4; /* worst case */
+}
+/* No new flush sooner than this after the last one (tab switching fires often). */
+const FLUSH_MIN_INTERVAL_MS = 15_000;
+let lastFlushSeqMax = 0;
+let lastFlushAt = 0;
+
+/**
+ * Best-effort upload of the newest unsent rows, for the moment a participant
+ * closes the tab, switches away or the browser discards the page. It is a
+ * safety net between checkpoints, not a replacement for them:
+ *   - rows come from the in-memory tail (an IndexedDB read would not finish
+ *     while the page is unloading) and only the newest ones that fit in one
+ *     small request are sent; older rows stay in browser storage and in the
+ *     recovery page;
+ *   - the request uses `keepalive`, so the browser may finish it after the
+ *     page is gone, and nothing waits for the answer;
+ *   - the file is named `<session>__<run>__partial_<seqMin>-<seqMax>.json`: a
+ *     range that was already sent is never sent twice, and DataPipe's
+ *     one-file-per-name rule cannot block a later, different range. The
+ *     exporter pools files by (run, seq) and drops duplicates, so rows that
+ *     also arrive in a regular file are counted once;
+ *   - it never throws and never changes the upload cursor;
+ *   - tab switches fire `visibilitychange` often, so those flushes are throttled to one per
+ *     15 s. `pagehide` is not throttled (`bypassThrottle`): the browser is about to discard
+ *     the page, so it is the last chance, and rows written since the previous flush would
+ *     otherwise be lost. It still sends only rows newer than the range already sent.
+ *
+ * @param {object} opts
+ * @param {object} opts.session
+ * @param {Function} [opts.fetchImpl]
+ * @param {boolean} [opts.bypassThrottle]     skip the 15 s throttle (pagehide)
+ * @param {number} [opts.nowMs]               clock for the throttle (tests)
+ * @param {number} [opts.maxBytes]            limit for the request BODY in UTF-8 bytes (default 48,000)
+ * @returns {{status: 'sent'|'nothing'|'throttled'|'no_endpoint'|'error', rows?: number, filename?: string}}
+ */
+export function flushOnHide({
+  session,
+  fetchImpl,
+  bypassThrottle = false,
+  nowMs = Date.now(),
+  maxBytes = FLUSH_MAX_BYTES,
+} = {}) {
+  try {
+    const url = config.uploader.endpoint;
+    const provider = config.uploader.provider ?? 'raw';
+    const experimentId = config.uploader.datapipe_experiment_id ?? null;
+    if (!url || !session || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+      return { status: 'no_endpoint' };
+    }
+    const run = getRunId();
+    const floor = Math.max(deliveredSeq, lastFlushSeqMax);
+    const unsent = getRecentRows().filter((r) => r.run_id === run && r.seq > floor);
+    if (unsent.length === 0) return { status: 'nothing' };
+    if (!bypassThrottle && nowMs - lastFlushAt < FLUSH_MIN_INTERVAL_MS && lastFlushAt > 0) {
+      return { status: 'throttled' };
+    }
+    const fetcher = fetchImpl ?? globalThis.fetch;
+    if (typeof fetcher !== 'function') return { status: 'error' };
+    /* The request body for a set of rows, and its size in UTF-8 bytes. */
+    const requestFor = (rows) => {
+      const envelope = buildBucketEnvelope({
+        session,
+        bucket: { id: 'partial', label: `partial_${rows[0].seq}-${rows[rows.length - 1].seq}` },
+        bucketIndex: 0,
+        totalBuckets: 1,
+        rows,
+      });
+      const body =
+        provider === 'datapipe'
+          ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+          : envelope;
+      const json = JSON.stringify(body);
+      return { body, json, bytes: utf8Bytes(json) };
+    };
+    /* Newest rows first, until the size limit; then back into seq order. The
+     * running estimate counts each row twice-escaped; the real body is measured
+     * afterwards and the oldest rows are dropped until it fits. */
+    const chosen = [];
+    let estimate = 0;
+    for (let i = unsent.length - 1; i >= 0; i--) {
+      const size = utf8Bytes(JSON.stringify(JSON.stringify(unsent[i]))) - 1;
+      if (estimate + size > maxBytes && chosen.length > 0) break;
+      if (size > maxBytes) break;
+      chosen.push(unsent[i]);
+      estimate += size;
+    }
+    if (chosen.length === 0) return { status: 'nothing' };
+    chosen.reverse();
+    let request = requestFor(chosen);
+    while (request.bytes > maxBytes && chosen.length > 1) {
+      chosen.shift();
+      request = requestFor(chosen);
+    }
+    if (request.bytes > maxBytes) return { status: 'nothing' }; /* one row alone is too big */
+    const seqMax = chosen[chosen.length - 1].seq;
+    const { body, json } = request;
+    lastFlushSeqMax = seqMax;
+    lastFlushAt = nowMs;
+    const pending = fetcher(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: json,
+      keepalive: true,
+    });
+    if (pending && typeof pending.catch === 'function') pending.catch(() => {});
+    return { status: 'sent', rows: chosen.length, filename: body.filename ?? null };
+  } catch {
+    return { status: 'error' };
+  }
+}
+
+let removePageHideListeners = null;
+
+/**
+ * Start flushing on `visibilitychange` (hidden) and `pagehide`. Idempotent.
+ *
+ * @param {object} opts
+ * @param {object} opts.session
+ * @param {Document} [opts.doc]
+ * @param {Window} [opts.win]
+ * @returns {() => void} removes the listeners
+ */
+export function installPageHideFlush({
+  session,
+  doc = typeof document !== 'undefined' ? document : undefined,
+  win = typeof window !== 'undefined' ? window : undefined,
+} = {}) {
+  if (removePageHideListeners) return removePageHideListeners;
+  if (!doc || !win) return () => {};
+  const onVisibility = () => {
+    if (doc.visibilityState === 'hidden') flushOnHide({ session });
+  };
+  const onPageHide = () => {
+    /* last chance before the page is discarded: do not throttle */
+    flushOnHide({ session, bypassThrottle: true });
+  };
+  doc.addEventListener('visibilitychange', onVisibility);
+  win.addEventListener('pagehide', onPageHide);
+  removePageHideListeners = () => {
+    doc.removeEventListener('visibilitychange', onVisibility);
+    win.removeEventListener('pagehide', onPageHide);
+    removePageHideListeners = null;
+  };
+  return removePageHideListeners;
+}
+
+function uninstallPageHideFlush() {
+  removePageHideListeners?.();
 }
 
 /* ---------- Public uploader entrypoint ---------- */
@@ -666,10 +903,11 @@ export function _resetCheckpointForTests() {
  * them by bucket; POSTs each non-empty bucket in `BUCKETS` order; advances
  * the cursor past the highest uploaded seq only after every bucket succeeds.
  * On endpoint absence, returns `{status: 'no_endpoint'}` without touching the
- * cursor. On a permanent per-bucket failure, returns `{status: 'partial'}`
- * with `uploadedBuckets` reflecting how many buckets made it through before
- * the failure — a re-run will re-POST every bucket from scratch (idempotent
- * via deterministic filenames).
+ * cursor. A bucket that fails permanently does not stop the ones after it:
+ * every bucket is attempted. If any failed, returns `{status: 'partial'}`
+ * with `uploadedBuckets` (how many arrived) and `failedBuckets` (their ids);
+ * the cursor stays where it was, so a re-run re-POSTs every bucket from
+ * scratch (idempotent via deterministic filenames).
  *
  * @param {object}   opts
  * @param {object}   opts.session                  output of `prolific.initSession()`
@@ -685,6 +923,7 @@ export function _resetCheckpointForTests() {
  *   uploadedBuckets: number,
  *   totalBuckets: number,
  *   uploadedRows: number,
+ *   failedBuckets?: string[],
  *   lastError: string | null,
  * }>}
  */
@@ -750,6 +989,7 @@ export async function uploadPendingData({
   let uploadedRows = 0;
   let lastError = null;
   let maxUploadedSeq = cursor;
+  const failedBuckets = [];
 
   for (let i = 0; i < nonEmpty.length; i++) {
     const { bucket, rows } = nonEmpty[i];
@@ -765,7 +1005,17 @@ export async function uploadPendingData({
         ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId: resolvedExperimentId })
         : envelope;
     try {
-      await postWithRetry({ url, body, fetchImpl, sleepImpl });
+      await postWithRetry({
+        url,
+        body,
+        fetchImpl,
+        sleepImpl,
+        /* After one bucket has used up its retries the server is most likely
+         * down: the buckets after it get a single attempt each, so an outage
+         * costs one back-off sequence, not one per bucket. If the server is
+         * back, those single attempts still deliver them. */
+        ...(failedBuckets.length > 0 ? { retryMax: 0 } : {}),
+      });
       uploadedBuckets += 1;
       uploadedRows += rows.length;
       const seqs = rows.map((r) => r.seq).filter((s) => Number.isFinite(s));
@@ -782,6 +1032,7 @@ export async function uploadPendingData({
       });
     } catch (err) {
       lastError = err.message;
+      failedBuckets.push(bucket.id);
       onProgress?.({
         bucketIndex: i,
         totalBuckets,
@@ -790,17 +1041,23 @@ export async function uploadPendingData({
         status: 'failed',
         error: err.message,
       });
-      /* All-or-nothing cursor: don't advance on partial — the re-run re-POSTs
-       * every bucket (filenames are deterministic, so buckets already stored
-       * come back as FILE_EXISTS and count as delivered). */
-      return {
-        status: 'partial',
-        uploadedBuckets,
-        totalBuckets,
-        uploadedRows,
-        lastError,
-      };
+      /* A bucket that cannot be sent must not stop the buckets after it: each
+       * is a separate file, and one that arrives is data saved. */
     }
+  }
+
+  if (failedBuckets.length > 0) {
+    /* All-or-nothing cursor: don't advance on partial — the re-run re-POSTs
+     * every bucket (filenames are deterministic, so buckets already stored
+     * come back as FILE_EXISTS and count as delivered). */
+    return {
+      status: 'partial',
+      uploadedBuckets,
+      totalBuckets,
+      uploadedRows,
+      failedBuckets,
+      lastError,
+    };
   }
 
   if (allRuns) {
@@ -815,14 +1072,24 @@ export async function uploadPendingData({
     await setUploadCursor(maxUploadedSeq);
   }
   finalUploadComplete = true;
+  noteDelivered(maxUploadedSeq);
 
   return {
     status: 'uploaded',
     uploadedBuckets,
     totalBuckets,
     uploadedRows,
+    failedBuckets: [],
     lastError: null,
   };
+}
+
+/** 8 random hex characters for a file name (crypto when available). */
+function randomFileToken() {
+  const bytes = new Uint8Array(4);
+  if (globalThis.crypto?.getRandomValues) globalThis.crypto.getRandomValues(bytes);
+  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -841,9 +1108,12 @@ export async function uploadPendingData({
 export function downloadAsJson({ session, rows, filenamePrefix, doc } = {}) {
   const documentRef = doc ?? document;
   const prefix = filenamePrefix ?? 'wm-img-followup';
-  const pid = session?.params?.prolific_pid ?? 'preview';
+  /* The Prolific id is NOT put in the file name: a name travels in e-mails and download
+   * folders. A random token tells two downloads apart; the file CONTENT still carries
+   * the id (the researcher needs it to approve and pay the participant). */
+  const token = randomFileToken();
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `${prefix}__${pid}__${stamp}.json`;
+  const filename = `${prefix}__${token}__${stamp}.json`;
   const payload = {
     session,
     n_rows: rows.length,

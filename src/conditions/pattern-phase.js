@@ -11,8 +11,9 @@
  * judgements depend on.
  *
  * Implementation: a single jsPsych html-keyboard-response node that mounts a
- * non-rotated grid frame, builds the 13-cell gray pattern overlay at 33 %
- * opacity, shows it for the configured duration, then ends. The grid frame
+ * non-rotated grid frame, builds the 13-cell gray pattern overlay (fill and
+ * opacity from the frame palette: 33 % white on the dark theme, fully opaque
+ * in the trial-shade palettes), shows it for the configured duration, then ends. The grid frame
  * is identical to the one used during encoding (same SVG / cell layout) so
  * the participant sees the pattern in the same visual frame they will
  * compare stars against.

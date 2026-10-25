@@ -52,8 +52,35 @@ import { stopDisplayGuardNode } from './calibration/display-guard.js';
 import { startSessionGuard, markUploadDone } from './session-guard.js';
 import { computeContentHashes } from './content-hashes.js';
 import { stampFinishedTrial } from './trial-finish.js';
+import { installGlobalErrorHandlers } from './error-handling.js';
+import { handleFatal } from './fatal-handler.js';
+import { installPageHideFlush } from './uploader.js';
+import { setAudioStateLogger } from './audio/context.js';
+
+/* The browser gate in index.html found a feature this study needs missing and
+ * is already showing its message; do not start. */
+if (typeof window !== 'undefined' && window.__studyUnsupported) {
+  throw new Error(`unsupported browser, missing: ${window.__studyUnsupported.join(', ')}`);
+}
 
 const session = initSession();
+
+/* Failure net, installed before anything else can fail: errors outside the
+ * handled paths are written to the data as `runtime_error` rows instead of
+ * vanishing into the console. See error-handling.js for what it logs and why
+ * it shows nothing to the participant. */
+installGlobalErrorHandlers({
+  logRow: (row) => appendTrialRow(row),
+  getPhase: () => window.jsPsych?.getCurrentTrial?.()?.data?.phase ?? null,
+});
+
+/* Changes of the audio state (suspended, interrupted, running) become rows. */
+setAudioStateLogger((row) => appendTrialRow(row));
+
+/* Where the start-up chain is, so a failure is reported for what it was:
+ * 'storage' (the browser gave no place for data), 'startup' (loading failed)
+ * or 'running' (the timeline ended with an exception). */
+let stage = 'storage';
 
 /* Storage init runs in parallel with the rest of module load. The first
  * jsPsych trial doesn't fire data hooks until the user starts the timeline,
@@ -150,47 +177,60 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('devn
  * demo first speaks. The trial-start gate in `conditions/shared.js`
  * unmounts the pill before live trials begin. */
 
-const mainPair = generateMainBlockPair();
-
-const timeline = [
-  ...assembleCalibrationChain(),
-  ...assembleInstructionsAndPractice(),
-  sessionInfoNode(session),
-  mainAIntroNode(),
-  ...mainPair.mainA.nodes,
-  restNode({ session }),
-  mainBIntroNode(),
-  ...mainPair.mainB.nodes,
-  /* Zoom and fullscreen no longer matter after the last trial. */
-  stopDisplayGuardNode(),
-  endOfTaskIntroNode(),
-  ...assembleQuestionnaireChain(),
-  uploadProgressNode({ session }),
-  completionRedirectNode({ session }),
-];
+/* The schedule and the timeline are built here, at load, in the same order as
+ * before. If building throws (a schedule that cannot be generated), the error
+ * is kept and reported through the same start-up failure screen below, instead
+ * of leaving the participant on a blank page. */
+let timeline = [];
+let timelineError = null;
+try {
+  const mainPair = generateMainBlockPair();
+  timeline = [
+    ...assembleCalibrationChain(),
+    ...assembleInstructionsAndPractice(),
+    sessionInfoNode(session),
+    mainAIntroNode(),
+    ...mainPair.mainA.nodes,
+    restNode({ session }),
+    mainBIntroNode(),
+    ...mainPair.mainB.nodes,
+    /* Zoom and fullscreen no longer matter after the last trial. */
+    stopDisplayGuardNode(),
+    endOfTaskIntroNode(),
+    ...assembleQuestionnaireChain(),
+    uploadProgressNode({ session }),
+    completionRedirectNode({ session }),
+  ];
+} catch (err) {
+  timelineError = err;
+}
 
 /* If IDB open fails fatally we'd otherwise sit on a blank screen forever —
  * `initStorage` already falls back to the in-memory backend on a recoverable
  * error, so a rejected promise here means something has gone genuinely wrong
  * (browser blocking storage entirely, etc.). Surface a fatal error UI rather
- * than starting a session whose data we can't persist. */
+ * than starting a session whose data we can't persist.
+ *
+ * The same `catch` also receives a rejection of `jsPsych.run` — an exception
+ * thrown inside a trial — which the old single screen reported as a storage
+ * problem. `stage` tells the cases apart (see fatal-handler.js). */
 storageReadyPromise
-  .then(() =>
+  .then(() => {
+    stage = 'startup';
+    if (timelineError) throw timelineError;
     /* The hashes are only needed for the data record; the task runs without them. */
-    computeContentHashes().catch((err) => console.error('[runner] content hashes failed', err))
-  )
+    return computeContentHashes().catch((err) =>
+      console.error('[runner] content hashes failed', err)
+    );
+  })
   .then(() => startSessionGuard(session))
-  .then(() => jsPsych.run(timeline))
+  .then(() => {
+    /* A safety net between checkpoints: if the page is hidden or closed, send
+     * the newest unsent rows (see uploader.js, flushOnHide). */
+    installPageHideFlush({ session });
+    stage = 'running';
+    return jsPsych.run(timeline);
+  })
   .catch((err) => {
-    console.error('[runner] fatal startup failure', err);
-    const root = document.body;
-    root.innerHTML = `
-      <div style="max-width: 36rem; margin: 4rem auto; padding: 2rem; text-align: center;">
-        <h2>Unable to start the experiment</h2>
-        <p>Your browser is blocking the local storage this study needs. Please
-        try a different browser (Chrome, Firefox, or Safari) on a desktop or
-        laptop computer, with private/incognito mode disabled.</p>
-        <p><small>Error reference: <code>${(err && err.message) || 'unknown'}</code></small></p>
-      </div>
-    `;
+    handleFatal({ stage, error: err, session });
   });

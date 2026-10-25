@@ -16,6 +16,9 @@ import { planPatternReminders } from './pattern-reminders.js';
  * @param {Record<string, number>} opts.countsByType
  * @param {number} [opts.runLengthCap]
  * @param {{type: string, length: number}} [opts.previousTail]
+ * @param {object[]} [opts.previousTrials]        the trials presented just before this block (Main B gets
+ *                                                Main A's `trialParams`): the shade / rotation run limits
+ *                                                are enforced across the boundary too
  * @param {number} [opts.presentationOffset]       main-task trials presented before this block
  * @param {number} [opts.patternPhaseFrequency]  window length of the reminder planner (default config)
  * @param {object} [opts.reminderCounts]          reminders already given per imagery condition earlier
@@ -29,6 +32,7 @@ export function planBlockTrials({
   countsByType,
   runLengthCap,
   previousTail,
+  previousTrials,
   presentationOffset,
   patternPhaseFrequency,
   reminderCounts,
@@ -55,7 +59,7 @@ export function planBlockTrials({
     }
     return queue.shift();
   });
-  if (ordered.length >= 20) ordered = arrangeTrialOrder(ordered, rng);
+  if (ordered.length >= 20) ordered = arrangeTrialOrder(ordered, rng, undefined, previousTrials);
 
   /* Which trials carry the pattern reminder: a function of the type sequence
    * only (see pattern-reminders.js), so it is part of the pure plan and the

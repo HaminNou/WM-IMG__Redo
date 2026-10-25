@@ -112,10 +112,13 @@ describe('consentTrial disclosure', () => {
     );
   });
 
-  it('says the headphone check is recorded only and headphones are strongly recommended', () => {
+  it('says the headphone check is recorded only; headphones are recommended, speakers acceptable', () => {
     const html = body();
     expect(html).toMatch(/Headphone check:<\/strong>[^<]*recorded only and never ends the session/);
-    expect(html).toContain('headphones are strongly recommended');
+    expect(html).toContain(
+      'Headphones are recommended, but built-in or external speakers are acceptable'
+    );
+    expect(html).not.toContain('strongly recommended');
   });
 
   it('says the device check happens at the very start', () => {
@@ -125,7 +128,8 @@ describe('consentTrial disclosure', () => {
 
   it('says eligibility is by the Prolific prescreeners and not re-tested', () => {
     const html = body();
-    expect(html).toContain('Eligibility is determined only by the Prolific screening filters');
+    expect(html).toContain('Eligibility is determined by the Prolific screening filters');
+    expect(html).toContain('the study itself does not test your age, hearing, or vision');
     expect(html).toContain('task-capability checks');
     expect(html).not.toContain('We do not check your age, hearing, or vision again');
   });
@@ -133,9 +137,9 @@ describe('consentTrial disclosure', () => {
   it('renders the payment text given by the config, not a literal placeholder', () => {
     expect(config.prolific.payment_policy_text).toBeTruthy();
     expect(consentTrial().stimulus).toContain(config.prolific.payment_policy_text);
-    const custom = consentBodyHtml('Participants are paid pro rata for time spent.');
+    const custom = consentBodyHtml('a fixed screen-out payment of $9.99 through Prolific');
     expect(custom).toContain(
-      'Payment for the time you spent before the session ended: Participants are paid pro rata for time spent.'
+      'You will then be paid a fixed screen-out payment of $9.99 through Prolific.'
     );
     expect(custom).toContain('Payment in these cases is described under');
     expect(custom).not.toContain(config.prolific.payment_policy_text);

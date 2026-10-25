@@ -110,7 +110,7 @@ function showOverlay(reason) {
       ${
         zoom
           ? `<p>The page zoom or display scaling has changed, so the stimuli would
-        no longer be the right size. Press <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>0</kbd>
+        no longer be the right size. Press <kbd>Ctrl</kbd> or <kbd>Command</kbd> together with <kbd>0</kbd>
         to reset zoom to 100%, and do not change the zoom again. The task continues
         by itself once the zoom is restored.</p>`
           : ''

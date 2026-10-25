@@ -159,10 +159,10 @@ describe('post-encoding frames follow one rotation rule', () => {
     }
   );
 
-  it('I+T and I+D never leave the post-encoding frame upright when the trial angle is not 0', () => {
+  it('I+T and I+D never leave the post-encoding frame upright when the trial angle is not 0 (0 is a legal draw)', () => {
     for (const cond of ['i_d', 'i_t']) {
       for (const { params, nodes } of trials[cond]) {
-        expect(params.rotation_deg).not.toBe(0);
+        if (params.rotation_deg === 0) continue; /* 0 degrees is a legal draw */
         for (const n of nodes.filter((x) => /_(retention|probe)$/.test(x.data.phase))) {
           expect(n.data.frame_rotation_deg).not.toBe(0);
         }

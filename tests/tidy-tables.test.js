@@ -121,7 +121,6 @@ describe('tidy tables from simulated sessions', () => {
     expect(dTrials.length).toBeGreaterThan(0);
     for (const t of dTrials) {
       expect(Number.isInteger(t.rotation_deg)).toBe(true);
-      expect(t.rotation_deg).not.toBe(0);
       expect(t.rotation_sign).toBe(Math.sign(t.rotation_deg));
       expect(t.rotation_stratum).toBeGreaterThanOrEqual(1);
       expect(t.rotation_stratum).toBeLessThanOrEqual(6);

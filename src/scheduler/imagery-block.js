@@ -24,11 +24,11 @@
  *   - 3 stars: on/off labels from the block-level schedule, assigned to S-slots
  *   - 3 dummies: open-square outlines at non-star non-centre cells
  *   - 1 rotation angle, drawn from six 30° strata between -90° and +90° (4 per
- *     stratum per 24 trials, no angle repeated, 0° not used; see rotation-balance.js)
+ *     stratum per 24 trials, no angle repeated, 0° possible; see rotation-balance.js)
  *
  * Note: this generator does NOT emit pattern-phase events — pattern
- * presentation is a block-level concern (every 8 trials),
- * handled by the trial-type scheduler alongside the cross-condition
+ * presentation is a block-level concern (windowed, condition-balanced
+ * reminders; see pattern-reminders.js), handled by the trial-type scheduler alongside the cross-condition
  * run-length cap.
  */
 import { getSessionPRNG } from '../prng.js';

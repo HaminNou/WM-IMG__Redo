@@ -175,7 +175,7 @@ function iOnlyStarRow({
 
 describe('parseExportArgs', () => {
   it('returns defaults for empty argv', () => {
-    expect(parseExportArgs([])).toEqual({
+    expect(parseExportArgs([])).toMatchObject({
       inputs: [],
       outputDir: null,
       jsonManifest: false,
@@ -185,27 +185,51 @@ describe('parseExportArgs', () => {
   });
 
   it('separates --out and inputs', () => {
-    expect(parseExportArgs(['node', 'csv-export.js', '--out', 'out/', 'a.json', 'b.json'])).toEqual(
-      {
-        inputs: ['a.json', 'b.json'],
-        outputDir: 'out/',
-        jsonManifest: false,
-        excelBom: false,
-        neutraliseFormulas: false,
-      }
-    );
+    expect(
+      parseExportArgs(['node', 'csv-export.js', '--out', 'out/', 'a.json', 'b.json'])
+    ).toMatchObject({
+      inputs: ['a.json', 'b.json'],
+      outputDir: 'out/',
+      jsonManifest: false,
+      excelBom: false,
+      neutraliseFormulas: false,
+    });
   });
 
   it('flips jsonManifest on --json-manifest', () => {
     expect(
       parseExportArgs(['node', 'csv-export.js', '--out', 'o', '--json-manifest', 'a.json'])
-    ).toEqual({
+    ).toMatchObject({
       inputs: ['a.json'],
       outputDir: 'o',
       jsonManifest: true,
       excelBom: false,
       neutraliseFormulas: false,
     });
+  });
+
+  it('pseudonymises by default: keepPid/share off, no salt or private dir chosen', () => {
+    const o = parseExportArgs(['node', 'csv-export.js', '--out', 'o', 'a.json']);
+    expect(o).toMatchObject({ keepPid: false, share: false, saltFile: null, privateDir: null });
+  });
+
+  it('parses --salt-file, --private-dir and --keep-pid; refuses --keep-pid with --share', () => {
+    const o = parseExportArgs([
+      'node',
+      'csv-export.js',
+      '--out',
+      'o',
+      '--salt-file',
+      's.txt',
+      '--private-dir',
+      'priv',
+      '--keep-pid',
+      'a.json',
+    ]);
+    expect(o).toMatchObject({ saltFile: 's.txt', privateDir: 'priv', keepPid: true, share: false });
+    expect(() => parseExportArgs(['node', 'csv-export.js', '--keep-pid', '--share'])).toThrow(
+      /--keep-pid .*--share/
+    );
   });
 
   it('parses --excel-bom and --neutralise-formulas (both default off)', () => {
@@ -395,6 +419,10 @@ describe('extractRtMs', () => {
 });
 
 describe('formatCsvValue', () => {
+  it('writes booleans as TRUE / FALSE so base R reads them as logical, not character', () => {
+    expect(formatCsvValue(true)).toBe('TRUE');
+    expect(formatCsvValue(false)).toBe('FALSE');
+  });
   it('quotes strings and doubles embedded quotes', () => {
     expect(formatCsvValue('hello')).toBe('"hello"');
     expect(formatCsvValue('he said "hi"')).toBe('"he said ""hi"""');
@@ -1148,7 +1176,7 @@ describe('expandInputPaths', () => {
 /* ---------- composeExport (end-to-end) ---------- */
 
 describe('composeExport', () => {
-  it('emits 5 trial-type files × 2 criteria + 4 aux files for a one-participant fixture', () => {
+  it('emits 5 trial-type files × 2 criteria + the aux files for a one-participant fixture', () => {
     const rows = [
       dOnlyEncodingRow({ trial: 0 }),
       dOnlyProbeRow({ pos: 1, type: 'T_on', cell: 6, isTarget: true, correct: true, rt: 800 }),
@@ -1199,8 +1227,8 @@ describe('composeExport', () => {
     const { files, manifest } = composeExport(perParticipant, {
       generatedAtIso: '2000-01-01T11:00:00Z',
     });
-    /* 5 trial types × 2 criteria + 7 auxiliary files + 3 tidy tables = 20 entries. */
-    expect(Object.keys(files)).toHaveLength(20);
+    /* 5 trial types × 2 criteria + 9 auxiliary files + 3 tidy tables = 22 entries. */
+    expect(Object.keys(files)).toHaveLength(22);
     expect(files['D_ONLY_Criterion1.csv']).toContain(
       '"Participant_ID","Block","Trial_Type","Trial"'
     );
@@ -1482,9 +1510,14 @@ describe('extractCalibrationRow: environment and checks', () => {
       inner_height_px: 960,
       device_pixel_ratio: 2,
     },
+    ...['quiet', 'quiet', 'quiet', 'quiet', 'quiet', 'quiet'].map((chosen_kind, i) => ({
+      phase: 'headphone_check_trial',
+      trial_i: i,
+      chosen_kind,
+    })),
     {
       phase: 'headphone_check_summary',
-      value: { n_trials: 6, n_correct: 6, headphones_pass: true },
+      value: { n_trials: 6, n_correct: 6, headphones_pass: true, n_chose_anti: 0 },
     },
     {
       phase: 'pitch_check_summary',
@@ -1506,8 +1539,6 @@ describe('extractCalibrationRow: environment and checks', () => {
       refresh_hz_est: 60,
       frame_p95_ms: 18,
       timeout_overshoot_p95_ms: 3,
-      hardware_concurrency: 8,
-      device_memory_gb: 8,
     },
     { phase: 'viewing_distance' },
     { phase: 'hand_placement' },
@@ -1530,6 +1561,8 @@ describe('extractCalibrationRow: environment and checks', () => {
     expect(row.Audio_Sample_Rate_Hz).toBe(48000);
     expect(row.Audio_Output_Latency_Ms).toBe(20);
     expect(row.Headphone_Pass).toBe(1);
+    expect(row.Headphone_N_Chose_Anti).toBe(0);
+    expect(row.Headphone_Chosen_Kinds).toBe('quiet;quiet;quiet;quiet;quiet;quiet');
     expect(row.Pitch_Attempts).toBe(2);
     expect(row.Pitch_Pass).toBe(1);
     expect(row.Pitch_N_Correct).toBe(8);
@@ -1537,7 +1570,8 @@ describe('extractCalibrationRow: environment and checks', () => {
     expect(row.Timing_Ok).toBe(1);
     expect(row.Timing_Fail_Reasons).toBe('');
     expect(row.Timing_Refresh_Hz_Est).toBe(60);
-    expect(row.Hardware_Concurrency).toBe(8);
+    expect(row).not.toHaveProperty('Hardware_Concurrency');
+    expect(row).not.toHaveProperty('Device_Memory_Gb');
     expect(row.Viewing_Posture_Acknowledged).toBe(1);
     expect(row.Hand_Placement_Acknowledged).toBe(1);
     expect(row.Visibility_Change_Events).toBe(2);
@@ -1557,7 +1591,8 @@ describe('extractCalibrationRow: environment and checks', () => {
     expect(row.Build_Commit).toBe('NA');
     expect(row.Pitch_Pass).toBe('NA');
     expect(row.Timing_Ok).toBe('NA');
-    expect(row.Hardware_Concurrency).toBe('NA');
+    expect(row.Headphone_N_Chose_Anti).toBe('NA');
+    expect(row.Headphone_Chosen_Kinds).toBe('NA');
   });
 
   it('gives a screened-out session a row with its exit reason', () => {
@@ -1598,16 +1633,23 @@ describe('MUSIC.csv and STRATEGY_SCORES.csv rows', () => {
     expect(MUSIC_COLUMNS).not.toContain('Me_Q08_Score');
   });
 
-  it('MUSIC row sums the seven MT scores when all are answered', () => {
+  it('MUSIC row sums the seven MT scores (reversal applied) when all are answered', () => {
+    /* First option of every item: the five ranged items score 1, and the two
+     * negatively phrased items (raw 1 = completely disagree) score 7 each,
+     * so the composite is 5 + 14 = 19. */
     const codes = Object.fromEntries(
       MUSIC_EXPERIENCE_ITEMS.map((it) => [it.id, it.options[0].value])
     );
     const row = extractMusicRow('P1', musicRows(codes));
     expect(row.Me_Q01_Raw).toBe('0');
     expect(row.Me_Q01_Score).toBe(1);
+    expect(row.Me_Q03_Raw).toBe('1');
+    expect(row.Me_Q03_Score).toBe(7);
+    expect(row.Me_Q07_Raw).toBe('1');
+    expect(row.Me_Q07_Score).toBe(7);
     expect(row.Absolute_Pitch).toBe(codes.me_q08);
     expect(row.Complete).toBe(1);
-    expect(row.Gold_MSI_MT_Composite).toBe(7);
+    expect(row.Gold_MSI_MT_Composite).toBe(19);
     expect(row.Gold_MSI_MT_Complete).toBe(1);
   });
 
@@ -1692,5 +1734,41 @@ describe('EVENTS.csv and wide files: new fields', () => {
     );
     expect(row.Qmark_1_EncPos).toBe(0);
     expect(row.Qmark_2_EncPos).toBe('NA');
+  });
+});
+
+describe('extractCalibrationRow: headphone check loudspeaker signature', () => {
+  const meta = { session_id: 'S1', started_at_iso: '2000-01-01T00:00:00Z' };
+  const trial = (i, chosen_kind) => ({ phase: 'headphone_check_trial', trial_i: i, chosen_kind });
+  it('exports how often the anti-phase sound was called quietest, and the chosen kinds in order', () => {
+    const kinds = ['anti', 'anti', 'quiet', 'anti', 'ref', 'anti'];
+    const row = extractCalibrationRow('P1', meta, [
+      ...kinds.map((k, i) => trial(i, k)),
+      {
+        phase: 'headphone_check_summary',
+        value: { n_trials: 6, n_correct: 1, headphones_pass: false, n_chose_anti: 4 },
+      },
+    ]);
+    expect(row.Headphone_N_Chose_Anti).toBe(4);
+    expect(row.Headphone_Chosen_Kinds).toBe(kinds.join(';'));
+    expect(row.Headphone_Pass).toBe(0);
+  });
+  it('uses only the last block when the check was repeated, and NA for old dumps', () => {
+    const row = extractCalibrationRow('P1', meta, [
+      ...Array.from({ length: 12 }, (_, i) => trial(i, i < 6 ? 'ref' : 'quiet')),
+      {
+        phase: 'headphone_check_summary',
+        value: { n_trials: 6, n_correct: 6, headphones_pass: true, n_chose_anti: 0 },
+      },
+    ]);
+    expect(row.Headphone_Chosen_Kinds).toBe('quiet;quiet;quiet;quiet;quiet;quiet');
+    const old = extractCalibrationRow('P1', meta, [
+      {
+        phase: 'headphone_check_summary',
+        value: { n_trials: 6, n_correct: 6, headphones_pass: true },
+      },
+    ]);
+    expect(old.Headphone_N_Chose_Anti).toBe('NA');
+    expect(old.Headphone_Chosen_Kinds).toBe('NA');
   });
 });

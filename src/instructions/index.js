@@ -145,6 +145,10 @@ export function practiceReadinessNode() {
             Please try to be <strong>as accurate as you can</strong> during
             the practice trials.</p>
           <p style="font-size: 1.05rem; line-height: 1.6;">
+            To start each trial, press the Left and Right arrow keys
+            <strong>at the same time</strong>. A reminder is shown at the
+            bottom of the screen.</p>
+          <p style="font-size: 1.05rem; line-height: 1.6;">
             If your overall practice score falls below
             <strong>${critPct}%</strong>, you will be returned to the
             beginning of the instructions to read them again and repeat
@@ -345,7 +349,7 @@ function practiceFailureExit() {
         ', which is below the required ' +
         critPct +
         '% threshold. ' +
-        'Our pre-registered protocol requires participants to demonstrate ' +
+        'Our protocol requires participants to demonstrate ' +
         'at least ' +
         critPct +
         '% accuracy on the practice trials before ' +

@@ -2,7 +2,9 @@
 /**
  * Writes schemas/tidy-tables.schema.json from the column definitions in
  * scripts/tidy-tables.js. Run after changing the columns:
- *   node scripts/make-tidy-schema.js
+ *   node scripts/make-tidy-schema.js && npx prettier --write schemas/tidy-tables.schema.json
+ * (the formatting step keeps `prettier --check .` in the preflight green; the test in
+ * tests/tidy-tables.test.js compares the parsed JSON, so layout does not matter to it).
  */
 import { writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

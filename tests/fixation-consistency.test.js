@@ -40,10 +40,13 @@ import { iOnlyTrial } from '../src/conditions/i_only.js';
 import { iDTrial } from '../src/conditions/i_d.js';
 import { iTTrial } from '../src/conditions/i_t.js';
 import { _resetStorageForTests, initStorage } from '../src/storage.js';
-import { createGridFrame, setFixation } from '../src/visuals/frame.js';
+import { createGridFrame, setFixation, clearStimuli } from '../src/visuals/frame.js';
 import { questionMarkPath, QMARK_STROKE_MM } from '../src/visuals/fixation-mark.js';
 import { config } from '../src/config.js';
 import { slideStimulusPage } from '../src/visuals/slide-layout.js';
+import { patternPhaseNode } from '../src/conditions/pattern-phase.js';
+import { ARROW_CENTRE_HOLE_STYLE } from '../src/visuals/rotation-arrow-style.js';
+import { buildPatternOverlay, showPattern, hidePattern } from '../src/visuals/pattern.js';
 
 const CONDITIONS = {
   i_only: {
@@ -315,4 +318,230 @@ describe('instruction-card exemplar matches the live cue', () => {
       true
     );
   });
+});
+
+describe("pattern-reminder screen shows the same bull's-eye", () => {
+  const attrs = (el) => ({
+    cx: el.getAttribute('cx'),
+    cy: el.getAttribute('cy'),
+    r: el.getAttribute('r'),
+    fill: el.getAttribute('fill'),
+  });
+  const visibleDots = (svg) =>
+    [...svg.querySelectorAll('circle')].filter(
+      (c) =>
+        (c.getAttribute('class') === 'grid-bullseye-dot' ||
+          c.getAttribute('class') === 'pattern-reference-dot') &&
+        c.getAttribute('visibility') !== 'hidden'
+    );
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it.each(['white', 'gray'])(
+    'the real pattern-phase node (%s shade) draws the standard ring and dot, on top of the overlay',
+    (shade) => {
+      const standard = createGridFrame({ rotation_deg: 0, background_shade: shade });
+      const node = patternPhaseNode({
+        block_label: 'main_a',
+        trial_index_in_block: 0,
+        background_shade: shade,
+      });
+      document.body.innerHTML = node.stimulus;
+      node.on_load();
+      const svg = document.querySelector('#pattern-phase-mount svg');
+      expect(svg).not.toBeNull();
+
+      /* ring: present, same geometry and ink as an ordinary frame */
+      const ring = svg.querySelector('.grid-bullseye-ring');
+      expect(ring).not.toBeNull();
+      expect(attrs(ring)).toEqual(attrs(standard.svg.querySelector('.grid-bullseye-ring')));
+
+      /* exactly one visible centre dot, identical to the standard frame's */
+      const dots = visibleDots(svg);
+      expect(dots).toHaveLength(1);
+      expect(attrs(dots[0])).toEqual(attrs(standard.centerDot));
+      const mid = (config.grid.cells_per_side * config.grid.cell_size_mm) / 2;
+      expect(Number(dots[0].getAttribute('cx'))).toBeCloseTo(mid, 6);
+      expect(Number(dots[0].getAttribute('cy'))).toBeCloseTo(mid, 6);
+
+      /* upright (outside the rotor) and painted after, i.e. above, the pattern overlay */
+      expect(dots[0].closest('.grid-rotor')).toBeNull();
+      const order = [...svg.querySelectorAll('*')];
+      expect(order.indexOf(dots[0])).toBeGreaterThan(
+        order.indexOf(svg.querySelector('.grid-pattern'))
+      );
+      expect(svg.querySelector('.grid-pattern').getAttribute('visibility')).toBe('visible');
+    }
+  );
+
+  it('after a demo replay clears the stimuli, showPattern puts the centre dot back (one visible dot)', () => {
+    const frame = createGridFrame({ rotation_deg: 0, background_shade: 'white' });
+    document.body.appendChild(frame.wrapper);
+    buildPatternOverlay(frame);
+    showPattern(frame);
+    expect(visibleDots(frame.svg)).toHaveLength(1);
+    /* what the instruction demos do between loops */
+    clearStimuli(frame);
+    hidePattern(frame);
+    showPattern(frame);
+    const dots = visibleDots(frame.svg);
+    expect(dots).toHaveLength(1);
+    expect(dots[0].getAttribute('class')).toBe('pattern-reference-dot');
+    expect(dots[0].parentNode).toBe(frame.stimuliLayer);
+    expect(attrs(dots[0])).toEqual(attrs(frame.centerDot));
+    /* a detached (never-mounted) frame must not accumulate copies either */
+    showPattern(frame);
+    showPattern(frame);
+    expect(frame.svg.querySelectorAll('.pattern-reference-dot')).toHaveLength(1);
+  });
+
+  it('showPattern/hidePattern swap the dot cleanly and never leave two or zero dots', () => {
+    const frame = createGridFrame({ rotation_deg: 0, background_shade: 'white' });
+    document.body.appendChild(frame.wrapper);
+    buildPatternOverlay(frame);
+    expect(visibleDots(frame.svg)).toHaveLength(1);
+    showPattern(frame);
+    showPattern(frame);
+    expect(visibleDots(frame.svg)).toHaveLength(1);
+    hidePattern(frame);
+    expect(visibleDots(frame.svg)).toHaveLength(1);
+    expect(visibleDots(frame.svg)[0]).toBe(frame.centerDot);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Before encoding: arrow cue, blank imagination period, rotation      */
+/* ------------------------------------------------------------------ */
+
+/** Sample the on-screen frame in every pre-encoding step of one real trial. */
+async function runPreEncoding(cond, params) {
+  document.body.innerHTML = '';
+  const jsPsych = initJsPsych({});
+  window.jsPsych = jsPsych;
+  const timeline = CONDITIONS[cond].compose(params);
+  timeline.forEach((n) => {
+    n.data = { ...(n.data ?? {}), block_label: 'main_a' };
+  });
+  let done = false;
+  const runP = jsPsych.run(timeline).then(() => {
+    done = true;
+  });
+  const press = (key) =>
+    window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  const release = (key) =>
+    window.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true, cancelable: true }));
+  const steps = new Map(); /* step -> { frames, arrowStyles, times } */
+  let encStart = null;
+  const prefix = /^(i_only|i_d|i_t|d_only|t_only)_/;
+  for (let t = 0; t < 40000 && !done; t += STEP_MS) {
+    await vi.advanceTimersByTimeAsync(STEP_MS);
+    if (document.querySelector('.trial-start-hint')) {
+      press('ArrowLeft');
+      press('ArrowRight');
+      release('ArrowLeft');
+      release('ArrowRight');
+    }
+    const phase = (jsPsych.getCurrentTrial?.()?.data?.phase ?? '').replace(prefix, '');
+    let step = phase;
+    if (phase === 'encoding') {
+      encStart ??= performance.now();
+      /* rotation (500 ms) + stabilisation (1000 ms) before the first slot */
+      if (performance.now() - encStart > 1400) break;
+      step = 'encoding_pre';
+    }
+    if (!['trial_start', 'arrow_cue', 'imagination', 'encoding_pre'].includes(step)) continue;
+    const frames = snapshotFrames();
+    if (!steps.has(step)) steps.set(step, { frames: [], arrowStyles: [], count: 0 });
+    const rec = steps.get(step);
+    rec.count += 1;
+    rec.frames.push(...frames);
+    const arrow = document.querySelector('img.rotation-arrow-cue');
+    if (arrow) rec.arrowStyles.push(arrow.getAttribute('style'));
+  }
+  jsPsych.abortExperiment?.('test over');
+  await vi.advanceTimersByTimeAsync(50);
+  void runP;
+  return steps;
+}
+
+describe("bull's-eye before encoding (arrow cue, imagination period, rotation)", () => {
+  beforeEach(async () => {
+    _resetStorageForTests();
+    await initStorage({ backend: 'memory' });
+    vi.useFakeTimers({ toFake: FAKE });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each(['i_only', 'i_d', 'i_t', 'd_only'])(
+    '%s: ring + dot stay visible, centred and upright through every pre-encoding step',
+    async (cond) => {
+      const params = pickTrial(cond);
+      const angle = params.rotation_deg ?? params.display_rotation_deg;
+      const steps = await runPreEncoding(cond, params);
+      const expected =
+        cond === 'd_only' ? ['encoding_pre'] : ['arrow_cue', 'imagination', 'encoding_pre'];
+      for (const step of expected) {
+        const rec = steps.get(step);
+        expect(rec, `${cond}: step ${step} never sampled`).toBeDefined();
+        expect(rec.frames.length, `${cond}/${step}: no frame on screen`).toBeGreaterThan(0);
+        for (const f of rec.frames) {
+          const where = `${cond}/${step}`;
+          expect(f.ring.slice(0, 2), where).toEqual([MID, MID]);
+          expect(f.dot.slice(0, 2), where).toEqual([MID, MID]);
+          expect(f.dotVisible, `${where}: dot hidden`).toBe(true);
+          expect(f.dotInRotor, where).toBe(false);
+          expect(f.ringInRotor, where).toBe(false);
+        }
+      }
+      /* The grid is upright until the encoding animation turns it to the trial angle. */
+      if (cond !== 'd_only') {
+        for (const step of ['arrow_cue', 'imagination'])
+          for (const f of steps.get(step).frames) expect(f.rotation).toBe(0);
+      }
+      const last = steps.get('encoding_pre').frames.at(-1);
+      expect(last.rotation).toBeCloseTo(angle, 3);
+    },
+    120000
+  );
+
+  it.each(['i_only', 'i_d', 'i_t'])(
+    "%s: the blank imagination period lasts its configured time with the bull's-eye in view",
+    async (cond) => {
+      const steps = await runPreEncoding(cond, pickTrial(cond));
+      const rec = steps.get('imagination');
+      const ms = rec.count * STEP_MS;
+      expect(Math.abs(ms - config.imagery.imagination_duration_ms)).toBeLessThanOrEqual(
+        2 * STEP_MS
+      );
+      expect(rec.frames.length).toBeGreaterThanOrEqual(rec.count);
+      expect(rec.frames.every((f) => f.dotVisible)).toBe(true);
+      /* no arrow on screen during the blank period */
+      expect(rec.arrowStyles).toEqual([]);
+    },
+    120000
+  );
+
+  it.each(['i_only', 'i_d', 'i_t'])(
+    "%s: the arrow cue leaves a hole at its centre so the bull's-eye dot shows through",
+    async (cond) => {
+      const params = pickTrial(cond);
+      const steps = await runPreEncoding(cond, params);
+      const styles = steps.get('arrow_cue').arrowStyles;
+      expect(styles.length).toBeGreaterThan(0);
+      for (const st of styles) {
+        expect(st).toContain('radial-gradient');
+        expect(st).toContain('mask-image');
+        expect(st).toContain(ARROW_CENTRE_HOLE_STYLE);
+        /* the cue itself is unchanged: size, centring and rotation by the trial angle */
+        expect(st).toContain(`rotate(${params.rotation_deg}deg)`);
+        expect(st).toContain(`width: ${config.imagery.rotation_arrow_size_px}px`);
+      }
+      expect(steps.get('arrow_cue').frames.every((f) => f.dotVisible)).toBe(true);
+    },
+    120000
+  );
 });

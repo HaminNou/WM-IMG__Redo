@@ -68,9 +68,9 @@ const HANDS_HTML = slideTextPage({
     <p>Throughout the study you will respond with the
     <strong>two horizontal arrow keys</strong>
     (<kbd>&larr;</kbd>&nbsp;<kbd>&rarr;</kbd>) on your keyboard. The
-    demonstrations will label them <strong>&ldquo;No&rdquo;</strong> /
-    <strong>&ldquo;Yes&rdquo;</strong> and
-    <strong>&ldquo;Not on-pattern&rdquo;</strong> /
+    demonstrations will label them <strong>&ldquo;No&rdquo;</strong> or
+    <strong>&ldquo;Yes&rdquo;</strong>, and
+    <strong>&ldquo;Not on-pattern&rdquo;</strong> or
     <strong>&ldquo;On-pattern&rdquo;</strong>. How you place your hands
     matters:</p>
     <ul style="margin: 0.5rem 0 0.75rem 1.25rem; line-height: 1.45;">

@@ -12,6 +12,9 @@ import {
   evaluatePreflight,
   formatIssues,
   findPlaceholderTokens,
+  findLaunchBlockers,
+  lockfileMismatches,
+  LAUNCH_BLOCKER_MARKER,
   PREVIOUSLY_USED_IDS,
 } from '../scripts/preflight.js';
 
@@ -444,5 +447,106 @@ describe('evaluatePreflight – uncommitted changes', () => {
     expect(l.severity).toBe('warning');
     expect(s.message).toContain('src/a.js');
     expect(s.message).toContain('+1 more');
+  });
+});
+
+describe('lockfileMismatches', () => {
+  const lock = (deps = {}, dev = {}) => ({
+    packages: { '': { dependencies: deps, devDependencies: dev } },
+  });
+
+  it('finds nothing when package.json and the lock file agree', () => {
+    expect(
+      lockfileMismatches(
+        { dependencies: { jspsych: '^8.2.3' }, devDependencies: { vitest: '^2.1.9' } },
+        lock({ jspsych: '^8.2.3' }, { vitest: '^2.1.9' })
+      )
+    ).toEqual([]);
+  });
+
+  it('reports a version range that differs', () => {
+    const out = lockfileMismatches(
+      { dependencies: { jspsych: '^8.2.3' } },
+      lock({ jspsych: '^8.0.0' })
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatch(/jspsych is \^8\.2\.3 in package\.json but \^8\.0\.0 in the lock file/);
+  });
+
+  it('reports a dependency that is only in one of the two files', () => {
+    const missingFromLock = lockfileMismatches({ dependencies: { a: '^1.0.0' } }, lock({}));
+    expect(missingFromLock[0]).toMatch(/a is in package\.json but not in the lock file/);
+    const missingFromPackage = lockfileMismatches({}, lock({ b: '^2.0.0' }));
+    expect(missingFromPackage[0]).toMatch(/b is in the lock file but not in package\.json/);
+    const dev = lockfileMismatches({ devDependencies: { c: '^3.0.0' } }, lock());
+    expect(dev[0]).toMatch(/devDependencies: c/);
+  });
+
+  it('copes with a lock file that has no root entry', () => {
+    expect(lockfileMismatches({ dependencies: {} }, {})).toEqual([
+      'package-lock.json has no root entry',
+    ]);
+  });
+
+  it('holds for the real package.json and package-lock.json of this program', async () => {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+    const lockfile = JSON.parse(
+      readFileSync(new URL('../package-lock.json', import.meta.url), 'utf-8')
+    );
+    expect(lockfileMismatches(pkg, lockfile)).toEqual([]);
+  });
+});
+
+describe('launch-blocker marker', () => {
+  it('lists file and line of each marker', () => {
+    const hits = findLaunchBlockers([
+      { source: 'src/a.js', text: `ok\n// ${LAUNCH_BLOCKER_MARKER}: decide the pay\nok` },
+      { source: 'pre-reg/x.json', text: 'nothing here' },
+      { source: 'src/b.js', text: `${LAUNCH_BLOCKER_MARKER}\n${LAUNCH_BLOCKER_MARKER}` },
+    ]);
+    expect(hits).toEqual(['src/a.js:2', 'src/b.js:1', 'src/b.js:2']);
+  });
+
+  it('finds none in clean text', () => {
+    expect(findLaunchBlockers([{ source: 'a', text: 'launch blocker (no marker)' }])).toEqual([]);
+  });
+});
+
+describe('evaluatePreflight: lock file and launch-blocker checks', () => {
+  const base = () => ({
+    config: fakeConfig({
+      uploader: {
+        endpoint: 'https://pipe.example/api/',
+        provider: 'datapipe',
+        datapipe_experiment_id: 'abc123',
+      },
+      prolific: {
+        completion_url: 'https://app.prolific.com/submissions/complete?cc=REAL',
+        screen_out_completion_code: 'REAL2',
+      },
+    }),
+    preReg: fakePreReg(),
+  });
+
+  it('are errors in strict mode and warnings otherwise', () => {
+    const problems = {
+      lockfileProblems: ['dependencies: a is ^1 in package.json but ^2 in the lock file'],
+      launchBlockers: ['src/a.js:3'],
+    };
+    const strict = evaluatePreflight({ ...base(), strictDeployment: true, ...problems });
+    const lax = evaluatePreflight({ ...base(), strictDeployment: false, ...problems });
+    for (const code of ['LOCKFILE_MISMATCH', 'LAUNCH_BLOCKER_MARKER']) {
+      expect(strict.find((i) => i.code === code)?.severity).toBe('error');
+      expect(lax.find((i) => i.code === code)?.severity).toBe('warning');
+    }
+    expect(strict.find((i) => i.code === 'LOCKFILE_MISMATCH').message).toMatch(/npm install/);
+    expect(strict.find((i) => i.code === 'LAUNCH_BLOCKER_MARKER').message).toContain('src/a.js:3');
+  });
+
+  it('raise nothing when there are no problems', () => {
+    const issues = evaluatePreflight({ ...base(), strictDeployment: true });
+    expect(issues.find((i) => i.code === 'LOCKFILE_MISMATCH')).toBeUndefined();
+    expect(issues.find((i) => i.code === 'LAUNCH_BLOCKER_MARKER')).toBeUndefined();
   });
 });

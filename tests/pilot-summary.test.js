@@ -58,13 +58,20 @@ function attentionRow(passed) {
 
 describe('parseArgs', () => {
   it('returns defaults for empty argv', () => {
-    expect(parseArgs([])).toEqual({ paths: [], jsonOutput: false });
+    expect(parseArgs([])).toEqual({
+      paths: [],
+      jsonOutput: false,
+      keepPid: false,
+      saltFile: null,
+    });
   });
 
   it('separates paths from flags', () => {
     expect(parseArgs(['node', 'script.js', 'a.json', 'b.json'])).toEqual({
       paths: ['a.json', 'b.json'],
       jsonOutput: false,
+      keepPid: false,
+      saltFile: null,
     });
   });
 
@@ -72,6 +79,8 @@ describe('parseArgs', () => {
     expect(parseArgs(['node', 'script.js', '--json', 'dir/'])).toEqual({
       paths: ['dir/'],
       jsonOutput: true,
+      keepPid: false,
+      saltFile: null,
     });
   });
 
@@ -106,10 +115,13 @@ describe('expandPaths', () => {
 
 describe('summariseAttentionChecks', () => {
   it('returns zeros for an empty rows array', () => {
-    expect(summariseAttentionChecks([])).toEqual({
+    expect(summariseAttentionChecks([])).toMatchObject({
       total: 0,
       passed: 0,
       failed: 0,
+      failed_first: 0,
+      failed_final: 0,
+      administrations: 0,
       threshold: 1,
       excluded: false,
     });
@@ -388,8 +400,14 @@ describe('summariseExclusions (participant-level rules)', () => {
       block_label: 'main_a',
       probe_correct: i < correct,
     }));
+  /* The runtime writes the outcome with the call-function plugin, which nests the
+   * returned object under `value`. */
+  const calibrationRow = (status, accepted = true) => ({
+    phase: 'screen_calibration_outcome',
+    value: { accepted, status },
+  });
   const base = () => [
-    { phase: 'screen_calibration_outcome', accepted: true, status: 'ok' },
+    calibrationRow('ok'),
     ...main('d_only_probe', 30, 36),
     ...main('t_only_probe', 30, 36),
     { phase: 'completion_redirect' },
@@ -404,14 +422,29 @@ describe('summariseExclusions (participant-level rules)', () => {
 
   it('excludes an inconsistent-but-accepted screen calibration', () => {
     const rows = base();
+    rows[0] = calibrationRow('inconsistent_accepted');
+    const e = summariseExclusions(rows);
+    expect(e.reasons).toEqual(['screen_calibration_inconsistent']);
+    expect(e.retained).toBe(false);
+  });
+
+  it('also reads a calibration outcome whose fields sit at the top level (download fallback)', () => {
+    const rows = base();
     rows[0] = {
       phase: 'screen_calibration_outcome',
       accepted: true,
       status: 'inconsistent_accepted',
     };
-    const e = summariseExclusions(rows);
-    expect(e.reasons).toEqual(['screen_calibration_inconsistent']);
-    expect(e.retained).toBe(false);
+    expect(summariseExclusions(rows).reasons).toEqual(['screen_calibration_inconsistent']);
+  });
+
+  it('judges the LAST calibration attempt, not the first', () => {
+    const rows = base();
+    rows.splice(0, 1, calibrationRow('retry', false), calibrationRow('ok'));
+    expect(summariseExclusions(rows).reasons).toEqual([]);
+    const reversed = base();
+    reversed.splice(0, 1, calibrationRow('inconsistent_accepted'), calibrationRow('ok'));
+    expect(summariseExclusions(reversed).reasons).toEqual([]);
   });
 
   it('excludes when single-task accuracy is at or below .55 in either single-task condition', () => {

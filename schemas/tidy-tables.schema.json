@@ -13,7 +13,7 @@
       "properties": {
         "participant_id": {
           "type": ["string", "null"],
-          "description": "Prolific participant id."
+          "description": "Participant id used in this table: a pseudonymous code (\"P\" + 12 hex) in the default export, never the Prolific id; the raw Prolific id only with --keep-pid. A reloaded run is suffixed __run_<run_id>."
         },
         "trial_seq_session": {
           "type": ["integer", "null"],
@@ -65,11 +65,11 @@
         },
         "rotation_sign": {
           "type": ["integer", "null"],
-          "description": "-1 counter-clockwise, 1 clockwise."
+          "description": "-1 counter-clockwise, 0 no rotation, 1 clockwise."
         },
         "rotation_stratum": {
           "type": ["integer", "null"],
-          "description": "Index 1-6 of the 30-degree stratum the angle was drawn from (-90..-61 = 1 ... 61..90 = 6)."
+          "description": "Index 1-6 of the stratum the angle was drawn from (-90..-61 = 1, -60..-31 = 2, -30..-1 = 3, 0..30 = 4, 31..60 = 5, 61..90 = 6)."
         },
         "background_shade": {
           "type": ["string", "null"],
@@ -142,6 +142,10 @@
         "trial_star_excluded": {
           "type": ["boolean", "null"],
           "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
+        },
+        "star_correct_all": {
+          "type": ["boolean", "null"],
+          "description": "True if every planned star of the trial has a recorded row and was answered correctly (accuracy only: the 250 ms anticipatory rule is not applied). False if any star was incorrect, unanswered or has no recorded row; NA for conditions without stars. Nothing is filtered on it. Use it for the star-contingent SENSITIVITY analysis of memory accuracy; the primary analysis uses all trials."
         },
         "n_probes_correct": {
           "type": ["integer", "null"],
@@ -278,7 +282,7 @@
       "properties": {
         "participant_id": {
           "type": ["string", "null"],
-          "description": "Prolific participant id."
+          "description": "Participant id used in this table: a pseudonymous code (\"P\" + 12 hex) in the default export, never the Prolific id; the raw Prolific id only with --keep-pid. A reloaded run is suffixed __run_<run_id>."
         },
         "trial_seq_session": {
           "type": ["integer", "null"],
@@ -322,11 +326,11 @@
         },
         "rotation_sign": {
           "type": ["integer", "null"],
-          "description": "-1 counter-clockwise, 1 clockwise."
+          "description": "-1 counter-clockwise, 0 no rotation, 1 clockwise."
         },
         "rotation_stratum": {
           "type": ["integer", "null"],
-          "description": "Index 1-6 of the 30-degree stratum the angle was drawn from (-90..-61 = 1 ... 61..90 = 6)."
+          "description": "Index 1-6 of the stratum the angle was drawn from (-90..-61 = 1, -60..-31 = 2, -30..-1 = 3, 0..30 = 4, 31..60 = 5, 61..90 = 6)."
         },
         "background_shade": {
           "type": ["string", "null"],
@@ -420,6 +424,10 @@
           "type": ["boolean", "null"],
           "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
         },
+        "star_correct_all": {
+          "type": ["boolean", "null"],
+          "description": "True if every planned star of the trial has a recorded row and was answered correctly (accuracy only: the 250 ms anticipatory rule is not applied). False if any star was incorrect, unanswered or has no recorded row; NA for conditions without stars. Nothing is filtered on it. Use it for the star-contingent SENSITIVITY analysis of memory accuracy; the primary analysis uses all trials."
+        },
         "position_matches_runtime": {
           "type": ["boolean", "null"],
           "description": "True if the exporter position equals the position logged at runtime; empty if none was logged."
@@ -487,7 +495,7 @@
       "properties": {
         "participant_id": {
           "type": ["string", "null"],
-          "description": "Prolific participant id."
+          "description": "Participant id used in this table: a pseudonymous code (\"P\" + 12 hex) in the default export, never the Prolific id; the raw Prolific id only with --keep-pid. A reloaded run is suffixed __run_<run_id>."
         },
         "trial_seq_session": {
           "type": ["integer", "null"],
@@ -708,6 +716,10 @@
         "trial_star_excluded": {
           "type": ["boolean", "null"],
           "description": "True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions."
+        },
+        "star_correct_all": {
+          "type": ["boolean", "null"],
+          "description": "True if every planned star of the trial has a recorded row and was answered correctly (accuracy only: the 250 ms anticipatory rule is not applied). False if any star was incorrect, unanswered or has no recorded row; NA for conditions without stars. Nothing is filtered on it. Use it for the star-contingent SENSITIVITY analysis of memory accuracy; the primary analysis uses all trials."
         },
         "position_matches_runtime": {
           "type": ["boolean", "null"],

@@ -33,7 +33,12 @@
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
-import { encodingRecord, starRenderFields, slotPositionsMm } from './trial-record.js';
+import {
+  encodingRecord,
+  starRenderFields,
+  slotPositionsMm,
+  postEncodingRotationDeg,
+} from './trial-record.js';
 import { createGridFrame, clearStimuli, setFixation, setRotation } from '../visuals/frame.js';
 import { addDot, removeElement } from '../visuals/dot.js';
 import { addStar, recolourStar } from '../visuals/star.js';
@@ -113,7 +118,9 @@ function scheduledOnsetPerfMs(ac, when) {
  * @param {string} cfg.mount_id
  * @param {string} cfg.phase             e.g. 'i_t_encoding'
  * @param {{phase: string}|null} cfg.star_row   e.g. { phase: 'i_t_star' } (null if no star rows)
- * @param {boolean} cfg.rotate           animate 0 -> rotation_deg before slot 0
+ * @param {boolean} cfg.rotate           animate 0 -> the trial's rotation angle before slot 0
+ *                                       (`postEncodingRotationDeg(params)`: the imagery angle,
+ *                                       or the display angle of a D-only trial)
  * @param {'dot'|'tone'|'dummy'} cfg.m_kind   what an M-slot shows
  * @param {'star'|'dummy'} cfg.s_kind         what an S-slot shows
  * @param {object} [cfg.data]            extra fields for the node's data row
@@ -132,6 +139,9 @@ export function createEncodingNode(cfg) {
   } = cfg;
   const star_phase = star_row ? star_row.phase : null;
   const sequence = params.sequence;
+  /* One angle per trial for every condition that rotates (I-only, I+D, I+T and
+   * D-only), taken through the same helper the retention and probe frames use. */
+  const angle_deg = postEncodingRotationDeg(params);
   const plan = planEncoding({ sequence, pre_ms: PRE_ENCODING_PAD_MS });
   const slot_onsets_ts_ms = new Array(sequence.length).fill(null);
   const slot_audio_context_times_ms = new Array(sequence.length).fill(null);
@@ -153,7 +163,7 @@ export function createEncodingNode(cfg) {
     planned_total_ms: plan.total_ms,
     trial_spec: encodingRecord(params),
     slot_positions_mm: slotPositionsMm(params, {
-      rotationDeg: rotate ? params.rotation_deg : frame_rotation_deg,
+      rotationDeg: rotate ? angle_deg : frame_rotation_deg,
       m_kind,
       s_kind,
     }),
@@ -193,6 +203,7 @@ export function createEncodingNode(cfg) {
         params,
         plan,
         rotate,
+        angle_deg,
         m_kind,
         s_kind,
         star_phase,
@@ -227,7 +238,8 @@ export function createEncodingNode(cfg) {
 }
 
 function startRun(ctx) {
-  const { frame, params, plan, rotate, m_kind, s_kind, star_phase, summary, key_log } = ctx;
+  const { frame, params, plan, rotate, angle_deg, m_kind, s_kind, star_phase, summary, key_log } =
+    ctx;
   const t0 = performance.now();
   const timers = new Set();
   const frames = new Set();
@@ -394,7 +406,7 @@ function startRun(ctx) {
   if (rotate) {
     frame.rotor.style.transition = `transform ${ROTATION_ANIMATION_MS}ms ease-in-out`;
     nextFrame((ts) => {
-      setRotation(frame, params.rotation_deg);
+      setRotation(frame, angle_deg);
       summary.rotation_start_ts_ms = Math.round(ts);
     });
     at(ROTATION_ANIMATION_MS + 50, () => {

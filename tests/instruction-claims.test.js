@@ -7,7 +7,7 @@
  * what the code does, and check that the I+D and I+T decks stay parallel.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 vi.mock('../src/audio/context.js', () => ({
   unlockAudio: vi.fn(() => Promise.resolve()),
@@ -102,12 +102,47 @@ describe('I+D and I+T decks are parallel', () => {
 });
 
 describe('attention checks', () => {
-  it('the arrow-mapping check describes the real mapping (right = Yes / On-pattern)', () => {
+  it('the arrow-mapping check describes the real mapping (right = Yes or On-pattern)', () => {
     const ac3 = ATTENTION_CHECK_ITEMS.find((i) => i.id === 'ac3_arrow_mapping');
     expect(ac3.prompt).toContain('right-arrow key means');
     expect(ac3.prompt).toContain('Yes');
     expect(ac3.prompt).toContain('On-pattern');
     expect(ac3.prompt).not.toMatch(/points/i);
     expect(ac3.expected_answer).toBe('right');
+  });
+});
+
+describe('response labels are written with "or", never a slash (the voice reads a slash aloud)', () => {
+  const plain = (html) =>
+    html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&rarr;|&larr;/g, ' ')
+      .replace(/\s+/g, ' ');
+
+  it('the practice-to-main intro names the response labels with "or"', () => {
+    const t = plain(mainAIntroNode().stimulus);
+    expect(t).toContain('Yes or On-pattern');
+    expect(t).toContain('No or Not on-pattern');
+    expect(t).not.toMatch(/Yes\s*\/|\/\s*On-pattern|No\s*\/|\/\s*Not on-pattern/);
+  });
+
+  it('no narrated string contains slash notation', () => {
+    const strings = JSON.parse(readFileSync('public/voiceover/strings.json', 'utf8'));
+    const offenders = strings
+      .map((r) => (typeof r === 'string' ? r : r.text))
+      .filter((t) => /\s\/\s|\w\/\w/.test(t));
+    expect(offenders).toEqual([]);
+  });
+
+  it('no participant-facing markup puts a slash between two emphasised labels or between key names', () => {
+    const files = readdirSync('src', { recursive: true }).filter((f) => String(f).endsWith('.js'));
+    const bad = [];
+    for (const f of files) {
+      const src = readFileSync(`src/${f}`, 'utf8').replace(/\s+/g, ' ');
+      if (/(<\/(strong|em|b)>|&rdquo;|\u201d) \/ (<(strong|em|b)>|&ldquo;|\u201c)/.test(src))
+        bad.push(`${f}: label / label`);
+      if (/<\/kbd>\s*\/\s*<kbd>/.test(src)) bad.push(`${f}: key / key`);
+    }
+    expect(bad).toEqual([]);
   });
 });

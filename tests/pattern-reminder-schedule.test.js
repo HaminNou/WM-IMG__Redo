@@ -191,10 +191,11 @@ describe(`pattern reminders on real main plans (${N_SEEDS} seeds)`, () => {
     expect(sessionsOf16 / N_SEEDS).toBeGreaterThan(0.9);
   });
 
-  it('I-only, I+D and I+T get near-equal reminder exposure', () => {
-    /* Measured over 1000 seeds: counts differ by at most 1 in 87 % of
-     * sessions, by at most 2 in 97 %, never by more than 4; the fixed-grid
-     * alternatives average a spread of 3.6. */
+  it('I-only, I+D and I+T get the fewest-possible difference in reminder exposure', () => {
+    /* The planner searches all rule-abiding placements for the smallest final
+     * difference between the conditions' counts, so it is at most 1 in EVERY
+     * session (and 0 when the session total is a multiple of 3). Measured over
+     * 600 seeds: 28 sessions with 0, 572 with 1, none higher. */
     const spreads = [];
     const totals = { i_only: 0, i_d: 0, i_t: 0 };
     for (const blocks of sessions) {
@@ -203,14 +204,55 @@ describe(`pattern reminders on real main plans (${N_SEEDS} seeds)`, () => {
       const v = REMINDER_CONDITIONS.map((k) => c[k]);
       spreads.push(Math.max(...v) - Math.min(...v));
       for (const k of REMINDER_CONDITIONS) totals[k] += c[k];
+      const sum = v.reduce((a, b) => a + b, 0);
+      if (sum % 3 === 0) expect(Math.max(...v) - Math.min(...v)).toBe(0);
     }
-    const share = (limit) => spreads.filter((x) => x <= limit).length / N_SEEDS;
-    expect(share(1)).toBeGreaterThan(0.8);
-    expect(share(2)).toBeGreaterThan(0.93);
-    expect(Math.max(...spreads)).toBeLessThanOrEqual(4);
-    /* no condition is favoured on average over seeds */
+    expect(Math.max(...spreads)).toBeLessThanOrEqual(1);
+    /* no condition is favoured on average over seeds (measured: 5.34 / 5.32 / 5.30) */
     const means = REMINDER_CONDITIONS.map((k) => totals[k] / N_SEEDS);
-    expect(Math.max(...means) - Math.min(...means)).toBeLessThan(0.15);
+    expect(Math.max(...means) - Math.min(...means)).toBeLessThan(0.2);
+  });
+
+  it('reaches the smallest spread that any rule-abiding placement can reach (brute force)', () => {
+    const types = ['d_only', 't_only', 'i_only', 'i_d', 'i_t'];
+    const isImagery = (t) => IMAGERY_BEARING_TYPES.has(t);
+    const rng = createPRNG('reminder-bruteforce');
+    const maxGap = maxGapTrials(F);
+    for (let trial = 0; trial < 150; trial++) {
+      const schedule = Array.from({ length: 24 }, () => types[rng.int(types.length)]);
+      const counts = { i_only: rng.int(4), i_d: rng.int(4), i_t: rng.int(4) };
+      /* independent enumeration of every placement: one imagery trial per window that has one */
+      const windows = [];
+      for (let w = 0; w < schedule.length; w += F) {
+        const c = [];
+        for (let j = w; j < Math.min(schedule.length, w + F); j++)
+          if (isImagery(schedule[j])) c.push(j);
+        if (c.length) windows.push(c);
+      }
+      const imagery = schedule.map((t, j) => (isImagery(t) ? j : -1)).filter((j) => j >= 0);
+      let bestSpread = Infinity;
+      const walk = (w, picks) => {
+        if (w === windows.length) {
+          /* validity: first imagery trial reminded; every imagery trial within maxGap of a reminder */
+          if (picks.length === 0 || picks[0] !== imagery[0]) return;
+          for (const j of imagery) {
+            const prior = picks.filter((p) => p <= j);
+            if (prior.length === 0 || j - Math.max(...prior) > maxGap) return;
+          }
+          const c = { ...counts };
+          for (const p of picks) c[schedule[p]] += 1;
+          const v = Object.values(c);
+          bestSpread = Math.min(bestSpread, Math.max(...v) - Math.min(...v));
+          return;
+        }
+        for (const p of windows[w]) walk(w + 1, [...picks, p]);
+      };
+      walk(0, []);
+      const plan = planPatternReminders({ schedule, counts });
+      const v = REMINDER_CONDITIONS.map((k) => plan.counts[k]);
+      if (windows.length === 0) continue;
+      expect(Math.max(...v) - Math.min(...v)).toBe(bestSpread);
+    }
   });
 
   it('the recorded trials_since_pattern_reminder agrees with the reminder flags', () => {

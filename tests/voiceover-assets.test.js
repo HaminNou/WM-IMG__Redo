@@ -54,3 +54,49 @@ describe('narration assets', () => {
     }
   });
 });
+
+describe('every harvested narration string is recorded and the recordings are sane', () => {
+  const strings = JSON.parse(readFileSync(join(DIR, 'strings.json'), 'utf8'));
+  const texts = strings.map((e) => (typeof e === 'string' ? e : e.text));
+
+  it('every harvested string has a manifest entry whose file hash is the hash of that text', () => {
+    const missing = texts.filter((t) => !manifest.entries[sha(t)]);
+    expect(missing, `no recording for: ${JSON.stringify(missing, null, 1)}`).toEqual([]);
+    for (const t of texts) {
+      const e = manifest.entries[sha(t)];
+      expect(e.file).toBe(`${sha(t)}.mp3`);
+      expect(e.chars).toBe(t.length);
+    }
+  });
+
+  it('the manifest is locked to one voice, model and rate', () => {
+    expect(manifest.voice).toBe('en-US-AndrewMultilingualNeural');
+    expect(manifest.model).toBe('edge-tts');
+    expect(manifest.rate).toBe('-15%');
+  });
+
+  it('every recording carries word boundaries, in order, and a plausible speaking rate', () => {
+    /* 96 kbps mono MP3 is 12,000 bytes/s, so bytes give the duration without decoding. */
+    for (const e of Object.values(manifest.entries)) {
+      const wb = e.word_boundaries;
+      expect(Array.isArray(wb) && wb.length > 0, `no word boundaries: ${e.file}`).toBe(true);
+      for (let i = 1; i < wb.length; i++) {
+        expect(wb[i].offset_ms, e.file).toBeGreaterThanOrEqual(wb[i - 1].offset_ms);
+      }
+      const seconds = e.bytes / 12000;
+      const charsPerSecond = e.chars / seconds;
+      expect(
+        charsPerSecond,
+        `${e.file} speaks at ${charsPerSecond.toFixed(1)} chars/s`
+      ).toBeGreaterThan(6);
+      expect(
+        charsPerSecond,
+        `${e.file} speaks at ${charsPerSecond.toFixed(1)} chars/s`
+      ).toBeLessThan(22);
+      const lastEnd = (wb[wb.length - 1].offset_ms + wb[wb.length - 1].duration_ms) / 1000;
+      expect(lastEnd, `${e.file}: audio ends before the last word`).toBeLessThanOrEqual(
+        seconds + 0.5
+      );
+    }
+  });
+});

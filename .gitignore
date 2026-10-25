@@ -1,3 +1,9 @@
 node_modules
 dist
 .DS_Store
+
+# Pseudonymisation: never commit a salt or the code->PID key
+EXPORT_SALT.local
+.wm-img-pseudonym-salt
+PID_KEY*.csv
+*_PRIVATE/

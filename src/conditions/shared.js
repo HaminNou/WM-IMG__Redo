@@ -39,6 +39,7 @@
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import { createGridFrame } from '../visuals/frame.js';
+import { ARROW_CENTRE_HOLE_STYLE } from '../visuals/rotation-arrow-style.js';
 import { isValidBackgroundShade } from '../visuals/colour-palette.js';
 import { setTrialPageBackground, clearTrialPageBackground } from '../visuals/page-background.js';
 import { appendTrialRow, recordWriteFailure } from '../storage.js';
@@ -83,10 +84,11 @@ const IMAGINATION_DURATION_MS = config.imagery.imagination_duration_ms; /* 3500 
 /* Pre-encoding pad applied to every trial. On
  * imagery-bearing trials the rotation animation (500 ms) plus the
  * post-rotation stabilisation (1000 ms) are already part of the encoding
- * schedule and consume this 1500 ms; on memory-only trials (D-only,
- * T-only) the same 1500 ms is held as a no-rotation grid-stabilisation
- * pad at the start of the encoding node so that the first dot/tone never
- * fires immediately after the gate passes. The shared constant keeps the
+ * schedule and consume this 1500 ms. D-only runs the same rotation and
+ * stabilisation as I+D (its display angle comes from the same sampler);
+ * T-only has no visual stimuli, so its 1500 ms is a no-rotation
+ * stabilisation pad at the start of the encoding node, and the first
+ * dot/tone never fires immediately after the gate passes. The shared constant keeps the
  * pad value defined exactly once. */
 export const PRE_ENCODING_PAD_MS = ROTATION_ANIMATION_MS + POST_ROTATION_MS; /* 1500 */
 /* Recolour palette for star / dot / question-mark feedback, chosen for
@@ -445,6 +447,7 @@ export function arrowCueNode({
           'user-select: none',
         ].join('; ') +
           ';' +
+          ARROW_CENTRE_HOLE_STYLE +
           tintFilter
       );
       frame.wrapper.appendChild(arrowImg);
@@ -467,7 +470,8 @@ export function arrowCueNode({
  * and the encoding node on every imagery-bearing trial (I-only, I+D, I+T).
  * The participant uses this window to pre-imagine the 13-cell pattern at
  * the rotation angle just shown by the arrow; the window is fixed
- * (`IMAGINATION_DURATION_MS`, default 3500 ms) so the time available for
+ * (`IMAGINATION_DURATION_MS`, default 3500 ms; with the encoding node's rotation
+ * and stabilisation the blank interval before the first stimulus is 5000 ms) so the time available for
  * imagination is identical across trials.
  *
  * Crucially, this is NOT the trial-start gate: the gate sits earlier in
@@ -685,7 +689,8 @@ export function trialStartGateNode({
       const hintEl = document.createElement('div');
       hintEl.id = hintId;
       hintEl.className = 'trial-start-hint';
-      hintEl.textContent = 'Press both Left and Right arrow keys to start the next trial.';
+      hintEl.textContent =
+        'Press the Left and Right arrow keys at the same time to start the next trial.';
       hintEl.setAttribute(
         'style',
         [

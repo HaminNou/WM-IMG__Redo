@@ -34,7 +34,8 @@ import jsPsychInstructions from '@jspsych/plugin-instructions';
 import { config } from '../config.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { slideStimulusPage } from '../visuals/slide-layout.js';
-import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../conditions/shared.js';
+import { FEEDBACK_GREEN, FEEDBACK_RED } from './feedback-words.js';
+import { ARROW_MEANING_HTML, ARROW_MEANING_TEXT, PATTERN_REMINDER_SECONDS } from './shared-copy.js';
 
 /* See `slide-layout.js` for the unification rationale — the H2 title
  * and the plugin's Previous/Next nav land at the same y across every
@@ -42,8 +43,6 @@ import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../condi
  * demo screens) because every wrapper shares the same `min-height`. */
 /* Match the exact feedback green/red the participant sees on a live trial
  * and in the demo animation — same #0BC926 / #FF1818 hex at full opacity. */
-const FEEDBACK_GREEN = `<span style="color: ${FEEDBACK_COLOR_CORRECT_TEXT};"><strong>green</strong></span>`;
-const FEEDBACK_RED = `<span style="color: ${FEEDBACK_COLOR_WRONG_TEXT};"><strong>red</strong></span>`;
 const CALLOUT_OPEN = `<p style="border-left: 3px solid #772139; padding: 0.5rem 0.75rem; margin: 1rem 0; background: rgba(119, 33, 57, 0.08);">`;
 
 const NAV_OPTS = Object.freeze({
@@ -70,23 +69,26 @@ export function iOnlyInstructionNode() {
         ${CALLOUT_OPEN}
         <strong style="color: #772139;">Important:</strong> the
         demonstration will show this pattern once more so you can commit
-        it to memory. It will <strong>not</strong> be shown during the
-        trials.</p>
+        it to memory. During the task, right after you start a trial and
+        before the arrow, the upright pattern will sometimes appear again on
+        its own screen for ${PATTERN_REMINDER_SECONDS} seconds, as a
+        reminder. It is never shown during the rest of the trial.</p>
       `,
-      narration: `In Task 3 you will picture this pattern in your mind and keep that picture clear while you respond. Important: the demonstration will show this pattern once more so you can commit it to memory. It will not be shown during the trials.`,
+      narration: `In Task 3 you will picture this pattern in your mind and keep that picture clear while you respond. Important: the demonstration will show this pattern once more so you can commit it to memory. During the task, right after you start a trial and before the arrow, the upright pattern will sometimes appear again on its own screen for ${PATTERN_REMINDER_SECONDS} seconds, as a reminder. It is never shown during the rest of the trial.`,
       exemplar: ['pattern'],
     }),
     slideStimulusPage({
       title,
       body: `
         <p>Each trial begins with an <strong>arrow</strong>. The arrow
-        tells you to <strong>turn the pattern in your mind</strong> in
-        the direction it points, like rotating a piece of paper. Hold
-        this turned pattern in mind.</p>
-        <p>You'll have <strong>5 seconds</strong> to imagine and turn
-        the pattern, then the trial continues automatically.</p>
+        tells you to <strong>turn the pattern in your mind</strong>, like
+        rotating a piece of paper. ${ARROW_MEANING_HTML} Hold this turned
+        pattern in mind.</p>
+        <p>After the arrow goes away you'll have about
+        <strong>5 seconds</strong> to imagine and turn the pattern, then the
+        trial continues automatically.</p>
       `,
-      narration: `Each trial begins with an arrow. The arrow tells you to turn the pattern in your mind in the direction it points, like rotating a piece of paper. Hold this turned pattern in mind. You'll have 5 seconds to imagine and turn the pattern, then the trial continues automatically.`,
+      narration: `Each trial begins with an arrow. The arrow tells you to turn the pattern in your mind, like rotating a piece of paper. ${ARROW_MEANING_TEXT} Hold this turned pattern in mind. After the arrow goes away you'll have about 5 seconds to imagine and turn the pattern, then the trial continues automatically.`,
       exemplar: ['arrow'],
     }),
     slideStimulusPage({

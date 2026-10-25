@@ -4,11 +4,16 @@
  * Sequence:
  *   1. Trial-start gate: participant presses both arrow keys together to
  *      arm the trial.
- *   2. Pre-stimulus pad (1500 ms): empty circle
- *      with no fixation. The same temporal envelope as the rotation
- *      animation + stabilisation in imagery trials, applied here even
- *      though there is no rotation, so that the gap between gate-pass
- *      and the first encoding stimulus is matched across trial types.
+ *   2. Pre-stimulus rotation (1500 ms): the empty circle with its
+ *      bull's-eye, exactly as in the imagery trials. The grid starts
+ *      upright, turns to the trial's display angle over the configured
+ *      rotation animation (500 ms) and then holds for the post-rotation
+ *      delay (1000 ms). The display angle is drawn by the same stratified
+ *      sampler as the imagery angles (see scheduler/rotation-balance.js) and
+ *      this node uses the same encoding code path as I+D, so the gap between
+ *      gate-pass and the first encoding stimulus and the on-screen position
+ *      of every dot are matched across the conditions that rotate. D-only
+ *      has no arrow cue and no imagination period before this step.
  *   3. Encoding (length-6 sequence): for each event,
  *        M-slot → white dot at the assigned cell, 1000 ms visible, 500 ms blank.
  *        S-slot → open-square dummy at a non-item cell, visible for
@@ -45,11 +50,11 @@ import {
   KEY_NO,
 } from './shared.js';
 
-/* Encoding length = 1500 ms pre-stim pad + 3×M + 3×S. The pad keeps the
- * gate-pass → first-stimulus gap byte-identical to the imagery trials'
- * rotation-animation (500 ms) + stabilisation (1000 ms) interval. The
- * trial-start gate is a separate node and ends immediately on a valid
- * two-key response, so none of its duration comes out of this budget. */
+/* Encoding length = 1500 ms rotation + stabilisation + 3×M + 3×S. The
+ * rotation (500 ms) and stabilisation (1000 ms) are the imagery trials'
+ * own pre-encoding interval, run by the same code. The trial-start gate is a
+ * separate node and ends immediately on a valid two-key response, so none of
+ * its duration comes out of this budget. */
 
 /**
  * Trial-start gate (both-arrow-keys, no arrow for D-only
@@ -78,8 +83,7 @@ function encodingNode(params) {
     mount_id: 'd-only-mount',
     phase: 'd_only_encoding',
     star_row: null,
-    rotate: false,
-    frame_rotation_deg: params.display_rotation_deg ?? 0,
+    rotate: true,
     m_kind: 'dot',
     s_kind: 'dummy',
     data: {

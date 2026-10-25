@@ -15,7 +15,7 @@
  *     {T_on, T_off, F_on, F_off}; in I+D the probe is a dot, in I+T a tone.
  *     Probe-type balance is enforced across the block, not within every trial.
  *   - 1 rotation angle, drawn from six 30° strata between -90° and +90° (4 per
- *     stratum per 24 trials, no angle repeated, 0° not used; see rotation-balance.js).
+ *     stratum per 24 trials, no angle repeated, 0° possible; see rotation-balance.js).
  *
  * Two counterbalances are enforced exactly across a 24-trial block:
  *
@@ -47,8 +47,8 @@
  *   - Target probes intentionally repeat the corresponding encoded item's cell.
  *
  * This generator does NOT emit pattern-phase events — pattern presentation
- * is a block-level concern (every 8 trials), handled by the
- * trial-type scheduler.
+ * is a block-level concern (windowed, condition-balanced reminders; see
+ * pattern-reminders.js), handled by the trial-type scheduler.
  */
 import { getSessionPRNG } from '../prng.js';
 import { onPatternCells, offPatternCells } from '../grid.js';

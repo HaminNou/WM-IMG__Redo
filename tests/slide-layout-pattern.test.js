@@ -15,7 +15,7 @@ describe('slide-layout pattern overlay', () => {
   function patternRects() {
     const host = document.createElement('div');
     host.innerHTML = page;
-    return Array.from(host.querySelectorAll('rect[opacity="0.33"]')).map((r) => ({
+    return Array.from(host.querySelectorAll('rect.slide-pattern-fill')).map((r) => ({
       x: Number(r.getAttribute('x')),
       y: Number(r.getAttribute('y')),
     }));

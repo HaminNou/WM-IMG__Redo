@@ -23,13 +23,22 @@
  *     trial inside it. A window with no imagery trial has none.
  *   - The first imagery trial of a block is always reminded (the block starts
  *     after instructions or a rest).
- *   - Among the imagery trials of the window, the reminder goes to the one
- *     whose condition has had the fewest reminders so far in the session
- *     (ties: earliest). I-only, I+D and I+T therefore get the same reminder
- *     exposure (counts differ by one or two), instead of a random split.
  *   - Bound: no imagery trial starts more than F + 1 trials after the last
- *     reminder. The delivery is brought forward to the first imagery trial
- *     that would otherwise break the bound.
+ *     reminder.
+ *   - Within those rules the reminders are placed so that I-only, I+D and I+T
+ *     end up with the fewest possible difference in reminder exposure: the
+ *     planner searches all placements that satisfy the rules above (dynamic
+ *     programming over the windows, carrying the per-condition counts of the
+ *     whole session) and keeps the smallest final difference between the
+ *     conditions' counts, which is at most one for the block planned together
+ *     with the counts it starts from. The whole-session guarantee is made by
+ *     `generateMainPlan` (main-plan.js), which plans Main B on Main A's counts and
+ *     draws the plan again until the totals of both blocks differ by at most
+ *     one. Among placements that reach
+ *     that optimum it takes, window by window, the imagery trial whose
+ *     condition has had the fewest reminders so far (ties: earliest). The
+ *     difference is exactly one rather than zero whenever the session's
+ *     number of reminders is not a multiple of three.
  *
  * Everything is a function of the (seeded) trial-type schedule: no extra
  * randomness, so the same seed gives the same reminders, and the plan can be
@@ -81,33 +90,72 @@ export function planPatternReminders({ schedule, frequency, counts } = {}) {
   const n = schedule.length;
   const reminded = new Array(n).fill(false);
 
-  let last = null;
+  /* Windows that contain at least one imagery trial, each with its imagery slots. */
+  const windows = [];
   for (let start = 0; start < n; start += freq) {
     const end = Math.min(n, start + freq);
     const candidates = [];
     for (let j = start; j < end; j++) {
       if (IMAGERY_BEARING_TYPES.has(schedule[j])) candidates.push(j);
     }
-    if (candidates.length === 0) continue;
+    if (candidates.length > 0) windows.push(candidates);
+  }
+  const imagery = [];
+  for (let j = 0; j < n; j++) if (IMAGERY_BEARING_TYPES.has(schedule[j])) imagery.push(j);
 
-    /* Latest allowed delivery: the end of the window, brought forward to the
-     * first imagery trial that would otherwise start more than maxGap trials
-     * after the last reminder. The first imagery trial of the block is always
-     * reminded. */
-    let deadline = candidates[candidates.length - 1];
-    if (last === null) {
-      deadline = candidates[0];
-    } else {
-      const forced = candidates.find((j) => j - last > maxGap);
-      if (forced !== undefined) deadline = Math.min(deadline, forced);
-    }
-    const eligible = candidates.filter((j) => j <= deadline);
+  /* A reminder at `p`, after the previous one at `last`, is allowed if no
+   * imagery trial strictly between them starts more than maxGap after `last`
+   * (the first reminder of the block must sit on the first imagery trial). */
+  const placeOk = (last, p) => {
+    if (last === null) return p === imagery[0];
+    for (const j of imagery) if (j > last && j < p && j - last > maxGap) return false;
+    return true;
+  };
+  /* After the final reminder, the imagery trials that remain must be in range. */
+  const tailOk = (last) => {
+    if (last === null) return imagery.length === 0;
+    for (const j of imagery) if (j > last && j - last > maxGap) return false;
+    return true;
+  };
 
-    let pick = eligible[0];
-    for (const j of eligible) {
-      if (tally[schedule[j]] < tally[schedule[pick]]) pick = j;
+  const kinds = REMINDER_CONDITIONS;
+  const kindOf = (j) => kinds.indexOf(schedule[j]);
+  const spreadOf = (c) => Math.max(...c) - Math.min(...c);
+  /* Smallest final spread of the per-condition counts reachable from window
+   * `w` onward, given the last reminder position and the counts so far. */
+  const memo = new Map();
+  const bestSpread = (w, last, c) => {
+    if (w === windows.length) return tailOk(last) ? spreadOf(c) : Infinity;
+    const key = `${w}|${last}|${c.join(',')}`;
+    const hit = memo.get(key);
+    if (hit !== undefined) return hit;
+    let best = Infinity;
+    for (const p of windows[w]) {
+      if (!placeOk(last, p)) continue;
+      const next = c.slice();
+      next[kindOf(p)] += 1;
+      const v = bestSpread(w + 1, p, next);
+      if (v < best) best = v;
     }
+    memo.set(key, best);
+    return best;
+  };
+
+  let last = null;
+  const running = kinds.map((k) => tally[k]);
+  for (let w = 0; w < windows.length; w++) {
+    const optimum = bestSpread(w, last, running);
+    let pick = null;
+    for (const p of windows[w]) {
+      if (!placeOk(last, p)) continue;
+      const next = running.slice();
+      next[kindOf(p)] += 1;
+      if (bestSpread(w + 1, p, next) !== optimum) continue;
+      if (pick === null || running[kindOf(p)] < running[kindOf(pick)]) pick = p;
+    }
+    if (pick === null) throw new Error('planPatternReminders: no placement satisfies the rules');
     reminded[pick] = true;
+    running[kindOf(pick)] += 1;
     tally[schedule[pick]] += 1;
     last = pick;
   }

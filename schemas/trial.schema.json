@@ -48,6 +48,9 @@
         "session_start",
         "unload_attempt",
         "back_pressed",
+        "runtime_error",
+        "runtime_error_fatal",
+        "audio_state_change",
         "session_info",
         "instructions_overview",
         "instructions_memory_d_only",
@@ -113,6 +116,7 @@
         "music_experience_intro",
         "music_experience",
         "upload_session_end",
+        "upload_retry_result",
         "completion_redirect"
       ]
     },
@@ -153,11 +157,11 @@
     },
     "rotation_deg": {
       "type": "number",
-      "description": "Rotation of the grid and pattern for the trial, an integer in -90..90 (clockwise positive). Drawn from six 30-degree strata (-90..-61, -60..-31, -30..-1, 1..30, 31..60, 61..90), 4 per stratum in each 24-trial condition, 0 not used. Absent for d_only and t_only."
+      "description": "Rotation of the grid and pattern for the trial, an integer in -90..90 (clockwise positive; 0 and both end points allowed). Drawn from six strata (-90..-61, -60..-31, -30..-1, 0..30, 31..60, 61..90), 4 per stratum in each 24-trial condition, 12 negative and 12 non-negative. Absent for d_only (which records display_rotation_deg instead) and t_only."
     },
     "display_rotation_deg": {
       "type": "number",
-      "description": "Rotation at which the grid is shown in a d_only trial, an integer in -90..90 (clockwise positive), drawn from the same six 30-degree strata as `rotation_deg`. Present on d_only rows only."
+      "description": "Rotation at which the grid is shown in a d_only trial, an integer in -90..90 (clockwise positive; 0 allowed), drawn by the same sampler from the same six strata as `rotation_deg`, and reached through the same rotation animation (500 ms) and stabilisation (1000 ms) as the imagery trials. Present on d_only rows only."
     },
     "probe_position": {
       "type": "integer",
@@ -261,17 +265,27 @@
     "attention_total": {
       "type": "integer",
       "minimum": 0,
-      "description": "Total attention checks administered, stamped on the `attention_check_summary` row."
+      "description": "Distinct attention checks administered, stamped on the `attention_check_summary` row."
     },
     "attention_passed": {
       "type": "integer",
       "minimum": 0,
-      "description": "Total attention checks passed."
+      "description": "Distinct attention checks passed the first time they were shown."
     },
     "attention_failed": {
       "type": "integer",
       "minimum": 0,
-      "description": "Total attention checks failed."
+      "description": "Distinct attention checks failed the first time they were shown (the count the exclusion rule uses)."
+    },
+    "attention_failed_final": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Distinct attention checks failed on their final administration (differs from `attention_failed` only after a practice re-loop)."
+    },
+    "attention_administrations": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Attention-check rows administered in total; above `attention_total` when the practice loop repeated the checks."
     },
     "exit_reason": {
       "type": "string",
@@ -310,7 +324,7 @@
     },
     "music_experience_responses": {
       "type": "object",
-      "description": "Map from music-experience item id (me_q01–me_q08) to the participant's selected option value (string code, e.g. '4-5', '1.5', 'intermediate', 'yes') or null if blank. Items me_q01..me_q07 are the Goldsmiths Musical Sophistication Index — Musical Training subscale verbatim (Müllensiefen, Gingras, Musil & Stewart, 2014, *PLOS ONE* 9(2) e89642), each scored 1..7 (item 7 uses 5 named anchors mapped to {1, 2.5, 4, 5.5, 7}); the composite is their sum, range 7..49 (analyst computes via `goldMsiMtComposite`). Item me_q08 is a self-reported absolute-pitch flag, kept outside the composite. Categorical covariate fields used for sensitivity analysis after the §3.2 non-musical tone-bank redesign (draft revisions 2026-05-05 and 2026-05-07).",
+      "description": "Map from music-experience item id (me_q01–me_q08) to the participant's selected option value (string code, e.g. '4-5', '1.5', 'intermediate', 'yes') or null if blank. Items me_q01..me_q07 are the seven items of the Goldsmiths Musical Sophistication Index v1.0 Musical Training subscale in the order of File S1 of Müllensiefen, Gingras, Musil & Stewart (2014, *PLOS ONE* 9(2) e89642), each scored 1..7; me_q03 ('I have never been complimented for my talents as a musical performer') and me_q07 ('I would not consider myself a musician') are negatively phrased and reverse-scored (raw 1 scores 7, raw 7 scores 1) — the stored value is the raw option, the reversal is applied in scoring; the composite is the sum, range 7..49 (analyst computes via `goldMsiMtComposite`). Item me_q08 is a self-reported absolute-pitch flag, kept outside the composite. Categorical covariate fields used for sensitivity analysis after the §3.2 non-musical tone-bank redesign (draft revisions 2026-05-05 and 2026-05-07).",
       "additionalProperties": {
         "type": ["string", "null"]
       }
@@ -509,7 +523,12 @@
     },
     "session_id": {
       "type": ["string", "null"],
-      "description": "Prolific session id."
+      "description": "Prolific session id, or a locally generated `LOCAL_…` id when the URL carried no SESSION_ID (see `session_id_source`)."
+    },
+    "session_id_source": {
+      "type": ["string", "null"],
+      "enum": ["prolific", "local_fallback", null],
+      "description": "`session_info`: where `session_id` came from. `prolific` = the SESSION_ID URL parameter; `local_fallback` = generated in the browser because the parameter was missing (the session is then also `is_preview`)."
     },
     "prolific_pid": {
       "type": ["string", "null"],
@@ -854,33 +873,64 @@
       "type": "string",
       "description": "User-agent string."
     },
-    "hardware_concurrency": {
-      "type": ["integer", "null"],
-      "description": "Display snapshot: logical processors."
-    },
-    "device_memory_gb": {
-      "type": ["number", "null"],
-      "description": "Display snapshot: device memory reported by the browser, GB."
-    },
-    "forced_colors": {
-      "type": ["boolean", "null"],
-      "description": "Display snapshot: forced-colours mode."
-    },
-    "prefers_dark": {
-      "type": ["boolean", "null"],
-      "description": "Display snapshot: dark colour scheme preferred."
-    },
-    "prefers_reduced_motion": {
-      "type": ["boolean", "null"],
-      "description": "Display snapshot: reduced motion preferred."
-    },
-    "display_gamut_p3": {
-      "type": ["boolean", "null"],
-      "description": "Display snapshot: display supports the P3 gamut."
-    },
     "kind": {
       "type": "string",
-      "description": "Event rows (`visibility_event`, `display_guard_event`): kind of event."
+      "description": "Event rows (`visibility_event`, `display_guard_event`): kind of event. `runtime_error`: `error` or `unhandledrejection`."
+    },
+    "error_name": {
+      "type": "string",
+      "description": "`runtime_error`: the error's name (for example `TypeError`)."
+    },
+    "message": {
+      "type": "string",
+      "description": "`runtime_error`, `runtime_error_fatal`: error message cut to 300 characters; no stack, URL or page text."
+    },
+    "source": {
+      "type": ["string", "null"],
+      "description": "`runtime_error`: file name and line:column of the source, without host or path."
+    },
+    "trial_phase": {
+      "type": ["string", "null"],
+      "description": "`runtime_error`: `phase` of the trial that was running when the error happened, if known."
+    },
+    "stage": {
+      "type": "string",
+      "enum": ["startup", "running"],
+      "description": "`runtime_error_fatal`: where the session failed (a storage failure cannot be written)."
+    },
+    "audio_state": {
+      "type": ["string", "null"],
+      "description": "`audio_state_change`: the AudioContext state the browser switched to (running, suspended, interrupted, closed)."
+    },
+    "redirect_after_failed_upload": {
+      "type": "boolean",
+      "description": "`completion_redirect`: the participant went to Prolific after the end-of-session upload had failed, using the Continue button on the failure screen."
+    },
+    "upload_attempt": {
+      "type": "integer",
+      "description": "`upload_retry_result`: number of the upload attempt made on the failure screen after the end-of-session upload failed (1 = first retry)."
+    },
+    "after_failure": {
+      "type": "boolean",
+      "description": "`upload_retry_result`: always true; the attempt came after the end-of-session upload had failed."
+    },
+    "retry_trigger": {
+      "type": "string",
+      "enum": ["retry_button", "continue_button"],
+      "description": "`upload_retry_result`: what started the attempt: the participant pressing 'Try sending my answers again', or the one last attempt made when 'Continue to Prolific' was pressed."
+    },
+    "previous_status": {
+      "type": ["string", "null"],
+      "description": "`upload_retry_result`: the status the end-of-session upload row (`upload_session_end`) had recorded before this attempt."
+    },
+    "download_filename": {
+      "type": ["string", "null"],
+      "description": "`upload_session_end`: name of the data file saved to the device after a failed upload (contains a random token, no Prolific id)."
+    },
+    "failed_buckets": {
+      "type": ["array", "null"],
+      "items": { "type": "string" },
+      "description": "`upload_session_end`: ids of the buckets that could not be sent (every bucket is tried)."
     },
     "ts": {
       "type": "number",
@@ -957,6 +1007,11 @@
     "chosen": {
       "type": "integer",
       "description": "Audio check rows: option chosen."
+    },
+    "chosen_kind": {
+      "type": ["string", "null"],
+      "enum": ["ref", "quiet", "anti", null],
+      "description": "`headphone_check_trial`: which kind of sound the participant called quietest (`ref` full level in phase, `quiet` 6 dB lower, `anti` phase-reversed across channels). Choosing `anti` repeatedly is the loudspeaker signature. The summary row's `value.n_chose_anti` counts these."
     },
     "correct": {
       "type": "boolean",
@@ -1049,18 +1104,6 @@
     "cross_origin_isolated": {
       "type": ["boolean", "null"],
       "description": "`timing_probe`: page is cross-origin isolated."
-    },
-    "battery_api": {
-      "type": "boolean",
-      "description": "`timing_probe`: the battery API is available."
-    },
-    "battery_charging": {
-      "type": ["boolean", "null"],
-      "description": "`timing_probe`: battery is charging."
-    },
-    "battery_level": {
-      "type": ["number", "null"],
-      "description": "`timing_probe`: battery level, 0-1."
     },
     "timing_ok": {
       "type": "boolean",
@@ -1288,7 +1331,7 @@
     },
     "status": {
       "type": "string",
-      "description": "`upload_session_end`: result of the end-of-session upload (uploaded, partial, no_endpoint, nothing_to_upload, timed_out, unknown)."
+      "description": "`upload_session_end`: result of the end-of-session upload (uploaded, partial, no_endpoint, nothing_to_upload, timed_out, unknown). `upload_retry_result`: result of that retry attempt (the same values, or error). The LATEST of these rows is the final upload status."
     },
     "uploadedBuckets": {
       "type": "integer",

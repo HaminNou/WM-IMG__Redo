@@ -2,7 +2,8 @@
  * Objective audio checks (run after the volume / comfort step).
  *
  *   1. Headphone / stereo check (Woods et al., 2017, Atten Percept Psychophys
- *      79:2064). Three 200 Hz tones: one in-phase at full level, one
+ *      79:2064; stimulus and scoring parameters as in that paper, see
+ *      `AUDIO_CHECK`). Three 200 Hz tones: one in-phase at full level, one
  *      in-phase at -6 dB, one anti-phase (left = -right) at full level.
  *      Participants say which was quietest. On headphones the -6 dB tone is
  *      quietest; on loudspeakers the anti-phase tone cancels and is
@@ -36,7 +37,19 @@ import { equalLoudnessGainDb70Phon } from '../audio/equal-loudness.js';
 import { withTimeout } from '../async-util.js';
 
 export const AUDIO_CHECK = Object.freeze({
-  headphone: { n_trials: 6, pass_min: 5, freq_hz: 200, dur_ms: 1000, quiet_db: -6 },
+  /* Parameters of Woods et al. (2017, Atten Percept Psychophys 79:2064): six
+   * 3-AFC trials, 200 Hz tones of 1,000 ms with 100 ms on/off ramps, 500 ms
+   * between tones, one tone 6 dB quieter, one tone phase-reversed across the
+   * channels, pass at 5 of 6, no feedback. */
+  headphone: {
+    n_trials: 6,
+    pass_min: 5,
+    freq_hz: 200,
+    dur_ms: 1000,
+    ramp_ms: 100,
+    gap_ms: 500,
+    quiet_db: -6,
+  },
   pitch: { n_trials: 8, pass_min: 7, margin_db: -12, max_attempts: 2 },
 });
 
@@ -107,23 +120,33 @@ async function playHeadphoneTrial(order) {
   if (!(await startAudio())) return false;
   const ctx = getAudioContext();
   const comp = equalLoudnessGainDb70Phon(h.freq_hz);
+  let scheduleFailed = false;
   let t = ctx.currentTime + 0.15;
   for (let k = 0; k < 3; k++) {
     const kind = order[k];
-    playStereoSine(h.freq_hz, h.freq_hz, {
-      durationMs: h.dur_ms,
-      rampMs: 25,
-      gainDb: comp + (kind === 'quiet' ? h.quiet_db : 0),
-      antiphase: kind === 'anti',
-      when: t,
+    /* playStereoSine(freqHz, opts): frequency first, then ONE options object.
+     * Resolves when the sound ends, so it is not awaited here (the three
+     * sounds are scheduled up front on the audio clock); a rejection is
+     * caught so it cannot go unhandled, and releases the trial as failed. */
+    Promise.resolve(
+      playStereoSine(h.freq_hz, {
+        durationMs: h.dur_ms,
+        rampMs: h.ramp_ms,
+        gainDb: comp + (kind === 'quiet' ? h.quiet_db : 0),
+        antiphase: kind === 'anti',
+        when: t,
+      })
+    ).catch((err) => {
+      scheduleFailed = true;
+      console.error('[audio-check] headphone sound failed', err);
     });
     const el = document.getElementById(`hp-${k}`);
     setTimeout(() => el?.classList.add('on'), (t - ctx.currentTime) * 1000);
     setTimeout(() => el?.classList.remove('on'), (t - ctx.currentTime) * 1000 + h.dur_ms);
-    t += h.dur_ms / 1000 + 0.6;
+    t += (h.dur_ms + h.gap_ms) / 1000;
   }
   await sleep((t - ctx.currentTime) * 1000);
-  return true;
+  return !scheduleFailed;
 }
 
 /** Run `play` with the answer buttons disabled; always re-enable them. */
@@ -147,7 +170,7 @@ function headphoneTrial(getPlan, i) {
     stimulus: `
       <style>.hp-box{display:inline-block;margin:0 .5rem;padding:.6rem 1rem;border:1px solid #555;border-radius:4px;opacity:.5}
       .hp-box.on{opacity:1;background:#60a5fa}</style>
-      <h2>Sound check (${i + 1} of ${AUDIO_CHECK.headphone.n_trials})</h2>
+      <h2>Headphone check (${i + 1} of ${AUDIO_CHECK.headphone.n_trials})</h2>
       <p>You will hear three sounds. Which one was the <strong>quietest</strong>?</p>
       <div style="margin:1rem 0"><span id="hp-0" class="hp-box">1</span><span id="hp-1" class="hp-box">2</span><span id="hp-2" class="hp-box">3</span></div>`,
     choices: ['Sound 1', 'Sound 2', 'Sound 3'],
@@ -164,6 +187,7 @@ function headphoneTrial(getPlan, i) {
         order: p.order,
         correct_pos: p.correct,
         chosen: data.response,
+        chosen_kind: p.order[data.response] ?? null,
         correct: data.response === p.correct,
         playback_ok: playbackOk,
         rt_after_playback_ms: Math.round(performance.now() - t0),
@@ -179,10 +203,10 @@ export function headphoneCheckBlock() {
   const n = AUDIO_CHECK.headphone.n_trials;
   const intro = {
     type: htmlButtonResponse,
-    stimulus: `<h2>Sound check</h2>
+    stimulus: `<h2>Headphone check</h2>
       <p style="max-width:38rem;margin:0 auto 1rem">Next, a short listening check (about one minute).
       Keep your volume where you set it. If you are using headphones, please
-      put them on now.</p>`,
+      put them on now. If any sound is uncomfortable, lower the volume or stop at any time.</p>`,
     choices: ['Start'],
     data: { phase: 'headphone_check_intro' },
   };
@@ -209,7 +233,16 @@ export function headphoneCheckBlock() {
             .last(n)
             .values();
           const s = scoreBlock(rows, AUDIO_CHECK.headphone.pass_min);
-          return { ...s, headphones_pass: s.passed, pass_min: AUDIO_CHECK.headphone.pass_min };
+          /* `n_chose_anti`: how often the anti-phase sound was called quietest, the
+           * signature of listening over loudspeakers (it cancels in the room);
+           * distinguishes speaker listening from guessing. Recorded only. */
+          const n_chose_anti = rows.filter((r) => r.chosen_kind === 'anti').length;
+          return {
+            ...s,
+            headphones_pass: s.passed,
+            pass_min: AUDIO_CHECK.headphone.pass_min,
+            n_chose_anti,
+          };
         },
         data: { phase: 'headphone_check_summary' },
       },
@@ -222,7 +255,7 @@ function pitchTrial(getPlan, i, levelDb, label) {
   let playbackOk = false;
   return {
     type: htmlButtonResponse,
-    stimulus: `<h2>Tone check</h2><p>Two tones will play. Was the <strong>second</strong> tone lower or higher than the first?</p>
+    stimulus: `<h2>Pitch-discrimination check (${i + 1} of ${AUDIO_CHECK.pitch.n_trials})</h2><p>Two tones will play. Was the <strong>second</strong> tone lower or higher than the first?</p>
       <p style="opacity:.6" id="pc-wait">Listen...</p>`,
     choices: ['Lower', 'Higher'],
     on_load: async () => {
@@ -314,7 +347,8 @@ export function pitchCheckChain() {
           {
             type: htmlButtonResponse,
             stimulus: `<h2>Please raise the volume</h2><p style="max-width:38rem;margin:0 auto 1rem">
-              Some tones were hard to tell apart. Raise your computer volume a little, then try again.</p>`,
+              Some tones were hard to tell apart. Raise your computer volume a little, then try again.
+              If any sound is uncomfortable, lower the volume or stop at any time.</p>`,
             choices: ['Try again'],
             data: { phase: 'pitch_check_retry_hint' },
           },

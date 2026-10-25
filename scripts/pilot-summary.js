@@ -1,50 +1,76 @@
 #!/usr/bin/env node
 /**
- * Pilot-data summariser.
+ * Pilot-data summariser and batch-decision tool.
  *
- * Ingests one or more JSON files (or a directory of them) — either the
- * download-fallback exports from `uploader.downloadAsJson` or server-side
- * dumps in the same shape — and reports per-participant + aggregate stats.
+ * Ingests the JSON files of a study folder (the download-fallback exports from
+ * `uploader.downloadAsJson` and the DataPipe bucket, checkpoint and tail
+ * envelopes), POOLS EVERY FILE OF A PARTICIPANT (one Prolific PID), drops rows
+ * repeated across files on (run_id, seq) and reports per-participant and
+ * aggregate statistics. A real session uploads about eight files, so a file is
+ * not a participant: the exclusion rows, the calibration outcome and the
+ * `completion_redirect` row sit in different files.
  *
  * Usage:
  *   node scripts/pilot-summary.js path/to/dump.json
- *   node scripts/pilot-summary.js path/to/dump1.json path/to/dump2.json ...
  *   node scripts/pilot-summary.js path/to/dir/                  # walks directory
  *   node scripts/pilot-summary.js --json path/to/dir/           # machine-readable
+ *   node scripts/pilot-summary.js --keep-pid path/to/dir/       # show raw Prolific ids
  *
- * Per-participant report:
- *   - prolific_pid, build_id, schema_version, is_pilot_run, pilot_label
- *   - session_started_at_iso, session_duration_min (computed from rt sums)
- *   - n_total_rows, n_main_rows, n_practice_rows
- *   - attention check: n typed checks, passed, failed, excluded flag
- *   - participant-level exclusions (screen calibration, attention checks, single-task
- *     floor), `completed` and `retained` flags
- *   - upload_summary status (uploaded / partial / no_endpoint / nothing_to_upload)
- *   - completion redirect: was_placeholder boolean, redirect_url
+ * Privacy: by default the printout and --json show pseudonymous participant codes
+ * ("P" + 12 hex), the same codes csv-export.js writes into the tables, and no file
+ * names or Prolific ids (see pseudonymise.js; --salt-file or $CSV_EXPORT_SALT choose
+ * the salt). csv-export.js must use the SAME salt, or its codes will not match
+ * these. The codes map back to people only through the private PID_KEY.csv.
+ * --keep-pid prints the raw ids (internal use, e.g. approving payments); never paste
+ * that output anywhere shared.
+ *
+ * Definitions (shared with csv-export.js through participant-rules.js):
+ *   completed  a run wrote `completion_redirect` and none of its rows carries
+ *              `exit_reason`; data without that row is `incomplete`, a run that
+ *              ended at a collection-time screen-out is `screened_out`
+ *   retained   completed and not excluded by the three participant-level rules
+ *              (calibration inconsistent, more than 1 of the 3 attention checks
+ *              failed on first administration, single-task accuracy <= .55)
+ *   runs       a reload starts a new run; the completed run is analysed
+ *   class      real (a Prolific PID, no pilot flag), pilot (is_pilot_run) or preview
+ *              (no Prolific PID at all: a researcher testing the link without the
+ *              Prolific parameters, a LOCAL_ session id). A session without a PID is
+ *              keyed by its session id, so all its files are ONE participant. The
+ *              sampling decision counts real participants only (and pilot sessions
+ *              only in a pilot batch); previews never count; the report says how many
+ *              sessions were left out, and warns about a session that has a PID but is
+ *              flagged preview (a URL parameter was missing), which IS counted.
  *
  * Aggregate report:
  *   - n_participants, n_completed, n_retained, and the exclusion rate among completed
  *     sessions (all three participant-level rules) vs the 25-35% pre-reg estimate
  *   - the sampling-plan decision (collect / recruit another batch / stop / stop at the
  *     maximum) computed from pre-reg.json -> sampling_plan; no p-values or Bayes factors
- *   - build_id homogeneity (all sessions must share the same build_id, else flagged)
- *   - schema_version homogeneity
- *   - pilot-flag homogeneity (pilot dumps should all carry is_pilot_run=true)
- *   - condition distribution: counts per (phase × probe_type) pair to spot-check
- *     counterbalance integrity. Aggregate counts should approach 24/type for the
- *     full main batch; per-participant we expect 24/type/participant per design.
+ *   - build_id, schema_version and pilot-flag homogeneity
+ *   - reloaded participants, completed sessions with missing main trials
+ *   - condition distribution: counts per (phase x probe_type) pair
  *   - median session duration (design estimate 110 min, pre-reg.json design_summary)
- *   - schema-drift detection: any row whose top-level keys diverge from the
- *     locked vocabulary in `schemas/trial.schema.json`
  *
- * Exit code: 0 on no flagged issues; 1 if any aggregate issue is detected
- * (build-id heterogeneity, missing pilot flag in pilot mode, etc.).
+ * Exit code: 0 on no flagged issues; 1 if any aggregate error is detected
+ * (build-id heterogeneity, unreadable file, etc.).
  *
- * Pure Node (>=20) — no browser deps, no external packages, runs in CI.
+ * Pure Node (>=20) - no browser deps, no external packages, runs in CI.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { loadAndFlattenDumps, dedupeRows, splitByRun } from './dump-loader.js';
+import { makeCoder, makeScrubber, resolveSalt } from './pseudonymise.js';
+import {
+  summariseParticipantRuns,
+  sampleClass,
+  summariseAttention,
+  evaluateRun,
+  SINGLE_TASK_FLOOR,
+  MAIN_BLOCK_LABELS,
+  EXPECTED_MAIN_TRIALS,
+} from './participant-rules.js';
 
 /* Sampling-plan numbers come from the pre-registration file so the rule has one source. */
 const PRE_REG = JSON.parse(
@@ -57,8 +83,7 @@ export const SAMPLING_PLAN = Object.freeze({
   maximum: PRE_REG.sampling_plan.max_recruitment_n,
 });
 
-/* pre-reg.json -> exclusion_rules -> single_task_floor: accuracy <= .55 in D_only or T_only. */
-export const SINGLE_TASK_FLOOR = 0.55;
+export { SINGLE_TASK_FLOOR };
 
 const GREEN = (s) => `\x1b[32m${s}\x1b[0m`;
 const RED = (s) => `\x1b[31m${s}\x1b[0m`;
@@ -86,15 +111,20 @@ export function parseArgs(argv) {
   const args = Array.isArray(argv) ? argv.slice(2) : [];
   const paths = [];
   let jsonOutput = false;
-  for (const a of args) {
+  let keepPid = false;
+  let saltFile = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a === '--json') jsonOutput = true;
+    else if (a === '--keep-pid') keepPid = true;
+    else if (a === '--salt-file') saltFile = args[++i] ?? null;
     else if (a.startsWith('--')) {
       throw new Error(`unknown flag: ${a}`);
     } else {
       paths.push(a);
     }
   }
-  return { paths, jsonOutput };
+  return { paths, jsonOutput, keepPid, saltFile };
 }
 
 /**
@@ -119,49 +149,119 @@ export function expandPaths(inputPaths, opts = {}) {
 }
 
 /**
- * Compute a per-participant summary from a parsed JSON dump.
+ * Per-participant summary from the runs of ONE Prolific PID.
  *
- * Accepts either a download-fallback export ({ session, n_rows, rows, ... })
- * or a chunk envelope ({ session_id, prolific_pid, ..., rows, ... }). Both
- * carry session-level fields and a `rows` array.
+ * @param {{run_id: string|null, rows: object[]}[]} runs  rows de-duplicated, in seq order
+ *        (see dump-loader.js)
+ * @param {{session?: object, sourceLabel?: string, nFiles?: number}} [meta]
  */
-export function summariseDump(parsed, { sourceLabel } = {}) {
-  /* Some dumps may bundle multiple chunks — flatten if `chunks` is present. */
-  const session = parsed.session ?? extractSessionFromChunkEnvelope(parsed);
-  const rows = parsed.rows ?? [];
+export function summariseParticipant(runs, { session, sourceLabel, nFiles } = {}) {
+  const rules = summariseParticipantRuns(runs);
+  const rows = rules.shown_rows;
 
   const phaseCounts = countByKey(rows, 'phase');
-  const attention = summariseAttentionChecks(rows);
-  const exclusions = summariseExclusions(rows, attention);
   const uploadSummaryRow = rows.find((r) => r.phase === 'upload_session_end');
   const completionRow = rows.find((r) => r.phase === 'completion_redirect');
   const nMainRows = rows.filter((r) => MAIN_BLOCK_LABELS.includes(r.block_label)).length;
   const nPracticeRows = rows.filter((r) => r.block_label === 'practice').length;
   const probeMatrix = summariseProbeMatrix(rows);
+  const exclusions = {
+    calibration_status: rules.calibration_status,
+    d_only_accuracy: rules.d_only_accuracy,
+    t_only_accuracy: rules.t_only_accuracy,
+    reasons: rules.reasons,
+    excluded: rules.excluded,
+    completed: rules.completed,
+    retained: rules.retained,
+  };
 
   return {
     source: sourceLabel,
-    prolific_pid: session?.params?.prolific_pid ?? parsed.prolific_pid ?? null,
-    build_id: session?.build_id ?? parsed.build_id ?? null,
-    schema_version: session?.schema_version ?? parsed.schema_version ?? null,
-    is_pilot_run: session?.is_pilot_run ?? parsed.is_pilot_run ?? false,
-    pilot_label: session?.pilot_label ?? parsed.pilot_label ?? null,
-    is_preview: session?.params?.is_preview ?? parsed.is_preview ?? null,
-    started_at_iso: session?.started_at_iso ?? parsed.started_at_iso ?? null,
+    n_files: nFiles ?? null,
+    prolific_pid: session?.params?.prolific_pid ?? null,
+    session_id: session?.params?.session_id ?? null,
+    build_id: session?.build_id ?? null,
+    schema_version: session?.schema_version ?? null,
+    is_pilot_run: session?.is_pilot_run ?? false,
+    pilot_label: session?.pilot_label ?? null,
+    is_preview: session?.params?.is_preview ?? null,
+    sample_class: sampleClass(session),
+    started_at_iso: session?.started_at_iso ?? null,
     session_duration_min: estimateSessionDurationMin(rows),
     n_total_rows: rows.length,
     n_main_rows: nMainRows,
     n_practice_rows: nPracticeRows,
     phase_counts: phaseCounts,
     probe_matrix: probeMatrix,
-    attention,
+    attention: rules.attention,
     exclusions,
-    completed: exclusions.completed,
-    retained: exclusions.retained,
-    upload_status: uploadSummaryRow?.status ?? null,
+    status: rules.status,
+    completed: rules.completed,
+    retained: rules.retained,
+    n_runs: rules.n_runs,
+    run_ids: rules.run_ids,
+    analysed_run_id: rules.analysed_run_id,
+    multiple_completed_runs: rules.multiple_completed_runs,
+    reload_after_main: rules.reload_after_main,
+    main_trials_present: rules.main_trials_present,
+    data_incomplete: rules.data_incomplete,
+    /* The LATEST upload status (a retry that delivered everything reads
+     * 'uploaded'); the end-of-session row keeps the first attempt's status. */
+    upload_status: rules.upload_status_final ?? uploadSummaryRow?.status ?? null,
+    upload_status_first: rules.upload_status_first ?? uploadSummaryRow?.status ?? null,
+    upload_retries: rules.upload_retries ?? 0,
     completion_was_placeholder: completionRow?.completion_was_placeholder ?? null,
     completion_redirect_url: completionRow?.completion_redirect_url ?? null,
   };
+}
+
+/**
+ * Summary of ONE parsed JSON dump treated as one participant (a download-fallback
+ * export, or any single envelope). A folder of bucket files must be read with
+ * `loadParticipants`, which pools the files of a participant first.
+ *
+ * Accepts either a download-fallback export ({ session, n_rows, rows, ... })
+ * or a chunk envelope ({ session_id, prolific_pid, ..., rows, ... }).
+ */
+export function summariseDump(parsed, { sourceLabel } = {}) {
+  const session = parsed.session ?? extractSessionFromChunkEnvelope(parsed);
+  const { rows } = dedupeRows(Array.isArray(parsed.rows) ? parsed.rows : []);
+  const runs = [...splitByRun(rows)].map(([runId, runRows]) => ({
+    run_id: runId === 'none' ? null : runId,
+    rows: runRows,
+  }));
+  return summariseParticipant(runs, { session, sourceLabel, nFiles: 1 });
+}
+
+/**
+ * Read a list of JSON files, pool all files of each participant (one Prolific
+ * PID) and summarise each participant once. Unreadable files are returned in
+ * `errors`; they are never silently skipped.
+ *
+ * @param {string[]} paths  absolute .json paths
+ * @returns {{participants: object[], errors: {path: string, error: string}[],
+ *            report: {rows_read: number, duplicates_dropped: number}}}
+ */
+export function loadParticipants(paths, opts = {}) {
+  const { perParticipant, errors, report } = loadAndFlattenDumps(paths, opts);
+  const byPid = new Map();
+  for (const entry of perParticipant) {
+    const pid = entry.source_pid;
+    if (!byPid.has(pid)) byPid.set(pid, { session: entry.session, runs: [], paths: [] });
+    const slot = byPid.get(pid);
+    slot.runs.push({ run_id: entry.run_id === 'none' ? null : entry.run_id, rows: entry.rows });
+    for (const p of entry.source_paths ?? []) if (!slot.paths.includes(p)) slot.paths.push(p);
+  }
+  const participants = [...byPid.entries()].map(([pid, slot]) => {
+    const summary = summariseParticipant(slot.runs, {
+      session: slot.session,
+      sourceLabel: slot.paths.length === 1 ? slot.paths[0] : `${pid} (${slot.paths.length} files)`,
+      nFiles: slot.paths.length,
+    });
+    if (summary.prolific_pid === null) summary.prolific_pid = pid;
+    return summary;
+  });
+  return { participants, errors, report };
 }
 
 function extractSessionFromChunkEnvelope(env) {
@@ -193,8 +293,6 @@ function countByKey(rows, key) {
   return out;
 }
 
-const MAIN_BLOCK_LABELS = Object.freeze(['main_a', 'main_b']);
-
 /**
  * Build a probe-type × phase matrix for spot-checking counterbalance integrity.
  *
@@ -219,62 +317,37 @@ export function summariseProbeMatrix(rows) {
 }
 
 /**
- * Aggregate attention-check pass/fail. Reads from `attention_check` rows directly
- * (not from the `attention_check_summary` row, which may be missing on aborted
- * sessions). Strict `>` comparator matches `evaluateAttentionChecks` in the
- * runtime; threshold defaults to 1
+ * Attention-check summary over DISTINCT checks (the practice loop can administer a
+ * check more than once). A check counts as failed if it was failed the first time
+ * it was shown; the count on the final administration is reported beside it.
+ * Strict `>` comparator, as in the runtime (`evaluateAttentionChecks`); threshold
+ * defaults to the pre-registered 1. Reads the `attention_check` rows directly (not
+ * the `attention_check_summary` row, which may be missing on aborted sessions).
  */
-export function summariseAttentionChecks(rows, { maxFailures = 1 } = {}) {
-  const checks = rows.filter((r) => r.phase === 'attention_check');
-  const total = checks.length;
-  const passed = checks.filter((r) => r.attention_check_passed === true).length;
-  const failed = checks.filter((r) => r.attention_check_passed === false).length;
-  return {
-    total,
-    passed,
-    failed,
-    threshold: maxFailures,
-    excluded: failed > maxFailures,
-  };
+export function summariseAttentionChecks(rows, { maxFailures } = {}) {
+  return summariseAttention(rows, maxFailures === undefined ? {} : { maxFailures });
 }
 
 /**
- * Participant-level exclusion status, as in pre-reg.json -> exclusion_rules:
- * `screen_calibration_inconsistent` (accepted calibration with status
- * `inconsistent_accepted`), `instructional_attention_checks` (more than one failed)
- * and `single_task_floor` (main-block accuracy <= .55 in D_only or in T_only).
- * `completed` means the session reached the completion redirect and did not end at a
- * collection-time screen-out; only completed sessions count toward the sample size.
- * `retained` is completed and not excluded by any of the three rules.
+ * Participant-level exclusion status for the rows of one run, as in
+ * pre-reg.json -> exclusion_rules: `screen_calibration_inconsistent` (last
+ * calibration outcome `inconsistent_accepted`), `instructional_attention_checks`
+ * (more than 1 of the 3 checks failed) and `single_task_floor` (main-block accuracy
+ * <= .55 in D_only or in T_only). `completed` means the run reached the completion
+ * redirect and did not end at a collection-time screen-out; only completed
+ * sessions count toward the sample size. `retained` is completed and not excluded
+ * by any of the three rules. The definitions live in participant-rules.js.
  */
 export function summariseExclusions(rows, attention = summariseAttentionChecks(rows)) {
-  const outcomes = rows.filter((r) => r.phase === 'screen_calibration_outcome' && r.accepted);
-  const calibrationStatus = outcomes.length > 0 ? outcomes[outcomes.length - 1].status : null;
-  const accuracy = (phase) => {
-    const probes = rows.filter(
-      (r) => r.phase === phase && MAIN_BLOCK_LABELS.includes(r.block_label)
-    );
-    if (probes.length === 0) return null;
-    return probes.filter((r) => r.probe_correct === true).length / probes.length;
-  };
-  const dOnly = accuracy('d_only_probe');
-  const tOnly = accuracy('t_only_probe');
-  const reasons = [];
-  if (calibrationStatus === 'inconsistent_accepted')
-    reasons.push('screen_calibration_inconsistent');
-  if (attention.excluded) reasons.push('instructional_attention_checks');
-  const belowFloor = (a) => a !== null && a <= SINGLE_TASK_FLOOR;
-  if (belowFloor(dOnly) || belowFloor(tOnly)) reasons.push('single_task_floor');
-  const screenedOut = rows.some((r) => r.exit_reason);
-  const completed = !screenedOut && rows.some((r) => r.phase === 'completion_redirect');
+  const ev = evaluateRun(rows, { attention });
   return {
-    calibration_status: calibrationStatus,
-    d_only_accuracy: dOnly,
-    t_only_accuracy: tOnly,
-    reasons,
-    excluded: reasons.length > 0,
-    completed,
-    retained: completed && reasons.length === 0,
+    calibration_status: ev.calibration_status,
+    d_only_accuracy: ev.d_only_accuracy,
+    t_only_accuracy: ev.t_only_accuracy,
+    reasons: ev.reasons,
+    excluded: ev.excluded,
+    completed: ev.completed,
+    retained: ev.retained,
   };
 }
 
@@ -328,13 +401,29 @@ export function aggregate(perParticipant, opts = {}) {
     perParticipant.map((s) => s.schema_version).filter((x) => x !== null && x !== undefined)
   );
   const pilotFlags = new Set(perParticipant.map((s) => Boolean(s.is_pilot_run)));
-  const nExcluded = perParticipant.filter((s) => s.attention.excluded).length;
-  const exclusionRate = perParticipant.length > 0 ? nExcluded / perParticipant.length : null;
-  const completedSessions = perParticipant.filter((s) => s.completed);
+  /* Which sessions count toward the sampling plan: real participants, plus pilot
+   * sessions only when this batch is itself a pilot batch (expectPilot === true).
+   * Previews (no Prolific PID: the researcher testing the live link, LOCAL_ ids)
+   * never count. Everything left out is reported, never dropped silently. */
+  const classOf = (s) => s.sample_class ?? 'real';
+  const isCounted = (s) =>
+    classOf(s) === 'real' || (expectPilot === true && classOf(s) === 'pilot');
+  const sampled = perParticipant.filter(isCounted);
+  const notCountedPilot = perParticipant.filter((s) => !isCounted(s) && classOf(s) === 'pilot');
+  const notCountedPreview = perParticipant.filter((s) => !isCounted(s) && classOf(s) === 'preview');
+  const nExcluded = sampled.filter((s) => s.attention.excluded).length;
+  const exclusionRate = sampled.length > 0 ? nExcluded / sampled.length : null;
+  const completedSessions = sampled.filter((s) => s.completed);
   const nCompleted = completedSessions.length;
   const nRetained = completedSessions.filter((s) => s.retained).length;
   const nExcludedAny = nCompleted - nRetained;
   const decision = samplingDecision(nCompleted, nRetained);
+  const nIncomplete = sampled.filter((s) => s.status === 'incomplete').length;
+  const nScreenedOut = sampled.filter((s) => s.status === 'screened_out').length;
+  const reloaded = sampled.filter((s) => s.reload_after_main);
+  const dataIncomplete = sampled.filter((s) => s.data_incomplete);
+  const multiCompleted = sampled.filter((s) => s.multiple_completed_runs);
+  const previewFlagWithPid = sampled.filter((s) => s.is_preview === true);
   const durations = perParticipant
     .map((s) => s.session_duration_min)
     .filter((v) => Number.isFinite(v))
@@ -376,8 +465,57 @@ export function aggregate(perParticipant, opts = {}) {
         'expected main batch but some sessions have is_pilot_run=true — exclude before analysis',
     });
   }
+  if (notCountedPilot.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'PILOT_SESSIONS_NOT_COUNTED',
+      message: `${notCountedPilot.length} pilot session(s) (is_pilot_run=true; ${notCountedPilot.filter((x) => x.completed).length} completed) are not counted toward the sampling plan of this main batch`,
+    });
+  }
+  if (notCountedPreview.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'PREVIEW_SESSIONS_NOT_COUNTED',
+      message: `${notCountedPreview.length} session(s) without a Prolific PID (previews, LOCAL_ ids, test visits; ${notCountedPreview.filter((x) => x.completed).length} reached the completion row) are not counted`,
+    });
+  }
+  if (previewFlagWithPid.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'PREVIEW_FLAG_WITH_PID',
+      message: `${previewFlagWithPid.length} session(s) carry a Prolific PID but is_preview=true (a Prolific URL parameter, usually SESSION_ID, was missing); they ARE counted: check the study URL template`,
+    });
+  }
+  if (reloaded.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'RELOAD_AFTER_MAIN_TRIALS',
+      message: `${reloaded.length} participant(s) reloaded after main trials had begun (an earlier run holds main-trial rows; the completed run is analysed). The pre-registration has no rule for this: ${reloaded.map((s) => s.prolific_pid).join(', ')}`,
+    });
+  }
+  if (multiCompleted.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'MULTIPLE_COMPLETED_RUNS',
+      message: `${multiCompleted.length} participant(s) have more than one completed run (the run with the most rows is analysed): ${multiCompleted.map((s) => s.prolific_pid).join(', ')}`,
+    });
+  }
+  if (dataIncomplete.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'DATA_INCOMPLETE',
+      message: `${dataIncomplete.length} completed session(s) have fewer main trials than the ${EXPECTED_MAIN_TRIALS} planned (a bucket file may be missing): ${dataIncomplete.map((s) => `${s.prolific_pid} (${s.main_trials_present})`).join(', ')}`,
+    });
+  }
   return {
     n_participants: perParticipant.length,
+    n_counted_participants: sampled.length,
+    n_not_counted_pilot: notCountedPilot.length,
+    n_not_counted_preview: notCountedPreview.length,
+    n_incomplete: nIncomplete,
+    n_screened_out: nScreenedOut,
+    n_reloaded_after_main: reloaded.length,
+    n_data_incomplete: dataIncomplete.length,
     build_ids: [...buildIds],
     schema_versions: [...schemaVersions],
     n_excluded: nExcluded,
@@ -404,17 +542,35 @@ function renderPerParticipant(s) {
   );
   const excl = s.attention.excluded ? RED('EXCLUDED') : GREEN('included');
   const status = !s.completed
-    ? YELLOW('not completed (not counted)')
+    ? YELLOW(
+        s.status === 'screened_out'
+          ? 'screened out at collection (not counted)'
+          : 'incomplete: no completion row (not counted)'
+      )
     : s.retained
       ? GREEN('retained')
       : RED(`excluded: ${s.exclusions.reasons.join(', ')}`);
   lines.push(
-    `  attention: ${s.attention.passed}/${s.attention.total} pass, ${s.attention.failed} fail (>${s.attention.threshold} ⇒ exclude) → ${excl}`
+    `  attention: ${s.attention.passed}/${s.attention.total} checks passed first time, ${s.attention.failed_first} failed first time (${s.attention.failed_final} on the final administration; >${s.attention.threshold} ⇒ exclude) → ${excl}`
   );
+  if (s.n_runs > 1) {
+    lines.push(
+      `  runs: ${s.n_runs}${s.reload_after_main ? YELLOW('  [reloaded after main trials]') : ''}`
+    );
+  }
+  if (s.data_incomplete) {
+    lines.push(
+      `  ${YELLOW('main trials present:')} ${s.main_trials_present} of ${EXPECTED_MAIN_TRIALS}`
+    );
+  }
   lines.push(`  sample status: ${status}`);
   if (s.upload_status) {
     const colour = s.upload_status === 'uploaded' ? GREEN : YELLOW;
-    lines.push(`  upload: ${colour(s.upload_status)}`);
+    const retried =
+      s.upload_retries > 0
+        ? ` (after ${s.upload_retries} retr${s.upload_retries === 1 ? 'y' : 'ies'}; first attempt: ${s.upload_status_first ?? 'unknown'})`
+        : '';
+    lines.push(`  upload: ${colour(s.upload_status)}${retried}`);
   }
   if (s.completion_was_placeholder === true) {
     lines.push(`  completion: ${YELLOW('placeholder URL — no Prolific redirect')}`);
@@ -426,6 +582,9 @@ function renderAggregate(agg) {
   const lines = [];
   lines.push(BOLD('\n=== Batch summary ==='));
   lines.push(`  participants:        ${agg.n_participants}`);
+  lines.push(
+    `  counted in sample:   ${agg.n_counted_participants}  (not counted: ${agg.n_not_counted_pilot} pilot, ${agg.n_not_counted_preview} preview / no Prolific PID)`
+  );
   lines.push(`  build_id:            ${agg.build_ids.join(', ')}`);
   lines.push(`  schema_version:      ${agg.schema_versions.join(', ')}`);
   lines.push(`  median duration:     ${formatMin(agg.median_duration_min)}`);
@@ -434,6 +593,9 @@ function renderAggregate(agg) {
   );
   lines.push(
     `  attention-excluded:  ${agg.n_excluded}/${agg.n_participants} (${formatPct(agg.exclusion_rate)})`
+  );
+  lines.push(
+    `  not counted:         ${agg.n_incomplete} incomplete (no completion row), ${agg.n_screened_out} screened out at collection`
   );
   const d = agg.sampling_decision;
   const plan = SAMPLING_PLAN;
@@ -479,16 +641,55 @@ async function main(argv) {
     process.exit(2);
   }
 
-  const perParticipant = expanded.map((p) => {
-    const parsed = JSON.parse(readFileSync(p, 'utf-8'));
-    return summariseDump(parsed, { sourceLabel: p });
-  });
+  /* One summary per participant (Prolific PID): the files of a session are
+   * pooled first. A file is not a participant. */
+  const { participants: perParticipant, errors, report } = loadParticipants(expanded);
+  for (const e of errors) console.error(`pilot-summary: cannot read ${e.path}: ${e.error}`);
+  if (perParticipant.length === 0) {
+    console.error('pilot-summary: no participant data could be read');
+    process.exit(1);
+  }
 
   /* Auto-detect pilot vs main: if the majority of dumps carry is_pilot_run
    * we'll flag the minority as anomalous. */
   const pilotShare = perParticipant.filter((s) => s.is_pilot_run).length / perParticipant.length;
   const expectPilot = perParticipant.length === 0 ? null : pilotShare >= 0.5 ? true : false;
   const agg = aggregate(perParticipant, { expectPilot });
+  for (const e of errors) {
+    agg.issues.push({
+      severity: 'error',
+      code: 'UNREADABLE_FILE',
+      message: `${e.path}: ${e.error}`,
+    });
+  }
+  agg.files_read = expanded.length - errors.length;
+  agg.rows_read = report.rows_read;
+  agg.duplicate_rows_dropped = report.duplicates_dropped;
+
+  /* Show codes, not Prolific ids or file names (see the header). */
+  if (!opts.keepPid) {
+    const { salt } = resolveSalt({ saltFile: opts.saltFile });
+    const coder = makeCoder(salt);
+    const replacements = new Map();
+    for (const s of perParticipant) {
+      const pid = s.prolific_pid;
+      if (pid) replacements.set(pid, coder.participant(pid));
+      if (s.session_id) replacements.set(s.session_id, coder.session(s.session_id));
+    }
+    for (const [i, e] of errors.entries()) replacements.set(e.path, `input file ${i + 1}`);
+    const scrub = makeScrubber(replacements);
+    for (let i = 0; i < perParticipant.length; i++) {
+      const s = perParticipant[i];
+      const code = s.prolific_pid ? coder.participant(s.prolific_pid) : '(unknown)';
+      perParticipant[i] = scrub({ ...s, source: `${code} (${s.n_files ?? '?'} file(s))` });
+    }
+    for (const [i, e] of errors.entries()) {
+      errors[i] = { ...e, path: `input file ${i + 1}`, error: scrub(e.error) };
+    }
+    const scrubbed = scrub(agg);
+    for (const k of Object.keys(agg)) delete agg[k];
+    Object.assign(agg, scrubbed);
+  }
 
   if (opts.jsonOutput) {
     console.log(JSON.stringify({ perParticipant, aggregate: agg }, null, 2));

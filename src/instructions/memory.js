@@ -6,11 +6,14 @@
  * recognise this tone", etc., avoiding jargon like "set size", "encoding
  * stream", "probe", "retention", "imagery", etc.
  *
- * Importantly, NEITHER screen mentions a rotation cue: rotation is an
- * imagery-only construct. The grid layout that would be rotated still
- * exists in the abstract design, but on D-only and T-only trials the
- * participant is not asked to imagine anything, so no arrow appears on
- * the screen and no rotation step occurs in the trial sequence.
+ * Importantly, NEITHER deck mentions a rotation cue: rotation is an
+ * imagery-only construct for the participant. On D-only and T-only trials
+ * nothing is to be imagined, so no arrow appears. (D-only dots are still
+ * drawn on the invisible grid at the same random angle scheme as the star
+ * conditions, turned before encoding exactly as in I+D, so a participant
+ * never sees a rotation: only the dot positions differ from trial to
+ * trial. The deck therefore says only "different locations inside the
+ * circle", which stays true. T-only has no visual stimuli and no angle.)
  *
  * Visual frame language: the participant only ever sees the bull's-eye
  * circle — the underlying 5×5
@@ -29,7 +32,7 @@ import jsPsychInstructions from '@jspsych/plugin-instructions';
 import { config } from '../config.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { slideStimulusPage } from '../visuals/slide-layout.js';
-import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../conditions/shared.js';
+import { FEEDBACK_GREEN, FEEDBACK_RED } from './feedback-words.js';
 
 /* Each page uses the shared text-slide wrapper from `slide-layout.js`,
  * which pins the H2 title at the top and lets body copy fill whatever
@@ -41,8 +44,6 @@ import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../condi
  * body HTML. */
 /* Match the exact feedback green/red the participant sees on a live trial
  * and in the demo animation — same #0BC926 / #FF1818 hex at full opacity. */
-const FEEDBACK_GREEN = `<span style="color: ${FEEDBACK_COLOR_CORRECT_TEXT};"><strong>green</strong></span>`;
-const FEEDBACK_RED = `<span style="color: ${FEEDBACK_COLOR_WRONG_TEXT};"><strong>red</strong></span>`;
 
 const NAV_OPTS = Object.freeze({
   key_forward: ' ',

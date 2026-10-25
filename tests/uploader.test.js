@@ -485,12 +485,14 @@ describe('buildDataPipeEnvelope', () => {
     expect(env.experimentID).toBe('exp-abc');
   });
 
-  it('builds a deterministic filename from session_id, run_id and bucket_label', () => {
+  it('builds a deterministic filename from session_id, run_id, bucket_label and the seq range', () => {
     const env = buildDataPipeEnvelope({
       bucketEnvelope: fakeBucketEnvelope({ bucket_label: '07_i_d_dual_dot_star' }),
       experimentId: 'exp-abc',
     });
-    expect(env.filename).toBe('sess-123__ab12cd34__07_i_d_dual_dot_star.json');
+    /* the seq range makes a bucket that grew between two attempts a new file
+     * (tests/upload-retry-growth.test.js) */
+    expect(env.filename).toBe('sess-123__ab12cd34__07_i_d_dual_dot_star_s1-10.json');
   });
 
   it('packs the full bucket envelope into the data string', () => {
@@ -859,11 +861,12 @@ describe('uploadPendingData', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it('returns partial when a later bucket permanently fails – earlier buckets count', async () => {
+  it('returns partial when one bucket permanently fails – every other bucket is still tried', async () => {
     await seedAllTenBuckets();
-    /* First 7 bucket-POSTs succeed; the 8th (music_questionnaire) fails
-     * permanently after retries. With retryMax=5 (default), one bucket can
-     * fire up to 6 fetches before giving up. */
+    /* The 8th bucket (music_questionnaire) fails permanently after retries.
+     * With retryMax=5 (default), one bucket can fire up to 6 fetches before
+     * giving up. The buckets after it (strategy, meta) are still sent: each is
+     * a separate file, and one that arrives is data saved. */
     const bucketCallTracker = [];
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
       const body = JSON.parse(opts.body);
@@ -886,9 +889,41 @@ describe('uploadPendingData', () => {
       sleepImpl: instantSleep,
     });
     expect(result.status).toBe('partial');
-    expect(result.uploadedBuckets).toBe(7);
+    expect(result.uploadedBuckets).toBe(9);
     expect(result.totalBuckets).toBe(10);
+    expect(result.failedBuckets).toEqual(['music_questionnaire']);
     expect(result.lastError).toMatch(/gave up/);
+    /* The buckets after the failing one were attempted (at least one POST each). */
+    const tried = new Set(bucketCallTracker);
+    expect(tried.has('strategy_questionnaire')).toBe(true);
+    expect(tried.has('meta')).toBe(true);
+  });
+
+  it('an outage costs one retry sequence, not one per bucket: later buckets get a single attempt each', async () => {
+    await seedAllTenBuckets();
+    const calls = [];
+    const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
+      calls.push(JSON.parse(opts.body).bucket_id);
+      return Promise.resolve({
+        ok: false,
+        status: 503,
+        statusText: 'Unavailable',
+        text: async () => 'down',
+      });
+    });
+    const result = await uploadPendingData({
+      session: fakeSession(),
+      endpoint: 'http://x',
+      provider: 'raw',
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
+    expect(result.status).toBe('partial');
+    expect(result.uploadedBuckets).toBe(0);
+    expect(result.failedBuckets).toHaveLength(10);
+    /* The first bucket uses the full default retries (6 attempts); each of the other nine, one. */
+    expect(fetchImpl).toHaveBeenCalledTimes(6 + 9);
+    expect(new Set(calls).size).toBe(10);
   });
 
   it('does NOT advance the cursor on a partial – re-run re-POSTs everything', async () => {
@@ -1092,7 +1127,7 @@ describe('uploadPendingData', () => {
         expect(c.body.experimentID).toBe('exp-abc');
         expect(typeof c.body.filename).toBe('string');
         expect(c.body.filename).toMatch(
-          new RegExp(`^sess-123__${getRunId()}__\\d{2}_[a-z_]+\\.json$`)
+          new RegExp(`^sess-123__${getRunId()}__\\d{2}_[a-z_]+_s\\d+-\\d+\\.json$`)
         );
         expect(typeof c.body.data).toBe('string');
         /* Inner bucket envelope round-trips through the data string. */

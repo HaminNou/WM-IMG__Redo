@@ -1,10 +1,11 @@
 /**
  * Gray-pattern overlay (the 13-cell `grayPattern` from `cond_ii1.html`).
  *
- * Rendered into the frame's `.grid-pattern` group at 33 % opacity
- *. The overlay is built once per frame and toggled visible
- * during pattern-presentation phases (block start + every 8 trials,
- * config.pattern.pattern_phase_frequency_trials).
+ * Rendered into the frame's `.grid-pattern` group with the frame's palette
+ * (`frame.pattern_colour`, `frame.pattern_opacity`: 33 % white on the dark
+ * theme, fully opaque in the trial-shade palettes). The overlay is built once per frame and toggled visible
+ * during pattern-reminder phases (windowed and condition-balanced; see
+ * scheduler/pattern-reminders.js).
  *
  * The overlay rotates with the rest of the rotor `<g>`, so the pattern stays
  * locked to the rotated grid while the participant judges star positions.
@@ -16,15 +17,19 @@
  * on-/off-pattern pools). Rendering the centre cell here means it joins the
  * pattern's visual gestalt; when the pattern is hidden between trials, the
  * whole `patternLayer` group toggles off via `visibility="hidden"`, so the
- * centre cell disappears just like the other 12 pattern cells. The bull's-
- * eye dot sits underneath the rotor in z-order and becomes visible again the
- * moment the pattern goes away.
+ * centre cell disappears just like the other 12 pattern cells.
+ *
+ * Fixation while the pattern is shown. The frame's bull's-eye dot sits under
+ * the rotor in z-order, so the centre pattern square would dim it. While the
+ * pattern is visible, a copy of that dot (same position, size and colour as
+ * the frame's own, never a different ink) is drawn above the overlay and the
+ * original is hidden, so the participant sees the same bull's-eye as in every
+ * other phase. `hidePattern` swaps them back.
  */
 import { svgEl } from './svg.js';
 import { config } from '../config.js';
-import { cellTopLeftMm, gridSizeMm } from '../grid.js';
+import { cellTopLeftMm } from '../grid.js';
 
-const REFERENCE_DOT_DIAMETER_MM = 1.3;
 const REFERENCE_DOT_CLASS = 'pattern-reference-dot';
 
 export function buildPatternOverlay(frame) {
@@ -52,19 +57,22 @@ export function buildPatternOverlay(frame) {
 
 export function showPattern(frame) {
   frame.patternLayer.setAttribute('visibility', 'visible');
-  if (!frame._patternRefDot) {
-    const mid = gridSizeMm() / 2;
+  /* A demo replay's `clearStimuli` detaches the copy but leaves it cached:
+   * re-create it whenever it is no longer a child of the stimuli layer. */
+  if (!frame._patternRefDot || frame._patternRefDot.parentNode !== frame.stimuliLayer) {
+    const src = frame.centerDot;
     frame._patternRefDot = svgEl('circle', {
-      cx: mid,
-      cy: mid,
-      r: REFERENCE_DOT_DIAMETER_MM / 2,
-      fill: '#000',
+      cx: src.getAttribute('cx'),
+      cy: src.getAttribute('cy'),
+      r: src.getAttribute('r'),
+      fill: src.getAttribute('fill'),
       'shape-rendering': 'geometricPrecision',
       class: REFERENCE_DOT_CLASS,
     });
     frame.stimuliLayer.appendChild(frame._patternRefDot);
   }
   frame._patternRefDot.setAttribute('visibility', 'visible');
+  frame.centerDot.setAttribute('visibility', 'hidden');
 }
 
 export function hidePattern(frame) {
@@ -72,4 +80,5 @@ export function hidePattern(frame) {
   if (frame._patternRefDot) {
     frame._patternRefDot.setAttribute('visibility', 'hidden');
   }
+  frame.centerDot.setAttribute('visibility', 'visible');
 }

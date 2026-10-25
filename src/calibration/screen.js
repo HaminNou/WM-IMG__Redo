@@ -66,7 +66,7 @@ function buildHtml(startPx, pass) {
   <h2>Calibrate the screen (${pass} of 2)</h2>
   <p data-voiceover-target style="max-width: 40rem; margin: 0 auto 0.5rem;">
     First set your browser zoom to <strong>100%</strong> (press
-    <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + <kbd>0</kbd>). Then hold a
+    <kbd>Ctrl</kbd> or <kbd>Command</kbd> together with <kbd>0</kbd>). Then hold a
     <strong>credit card</strong> flat against the screen, long side
     horizontal. Drag the slider until the left and right edges of the blue
     rectangle line up with the edges of the card.

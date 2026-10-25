@@ -99,6 +99,9 @@ export async function finishScreenOut({ reasonHtml, flush, url, navigate = navig
  * @param {Function} opts.condition          conditional_function
  * @param {boolean}  [opts.flush]            upload pending rows before redirect
  * @param {Function} [opts.onFinish]         extra `data` stamping
+ * @param {boolean}  [opts.beforeConsent]    the exit happens before the consent form has been
+ *                                           shown (device gate), so the generic text must not
+ *                                           refer to "the consent form"
  * @returns {object} jsPsych conditional timeline node
  */
 export function screenOutExit({
@@ -108,6 +111,7 @@ export function screenOutExit({
   condition,
   flush = false,
   onFinish,
+  beforeConsent = false,
 }) {
   const url = buildScreenOutUrl();
   const isPlaceholder = isPlaceholderScreenOutUrl(url) || !url;
@@ -120,8 +124,11 @@ export function screenOutExit({
         stimulus: () => {
           const next = isPlaceholder
             ? '<p style="opacity: 0.7; font-size: 0.9em;">This is a test build. No Prolific action is required.</p>'
-            : '<p>This session has ended because of one of the checks described in the consent form. ' +
-              'Click the button below to submit the screen-out completion code to Prolific, ' +
+            : `<p>${
+                beforeConsent
+                  ? 'This session has ended.'
+                  : 'This session has ended because of one of the checks described in the consent form.'
+              } Click the button below to submit the screen-out completion code to Prolific, ` +
               'where your submission will be recorded.</p>';
           return `<div style="max-width: 38rem; margin: 0 auto; text-align: center; line-height: 1.6;">${resolveReason()}${next}</div>`;
         },

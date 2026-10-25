@@ -119,6 +119,22 @@ describe('uploadProgressNode', () => {
     expect(mocks.downloadAsJson).toHaveBeenCalledTimes(1);
   });
 
+  it('offers the download when the upload throws instead of resolving, and records why', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.uploadPendingData.mockRejectedValue(new Error('session_id is required'));
+    const node = uploadProgressNode({ session });
+    node.on_load();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.downloadAsJson).toHaveBeenCalledTimes(1);
+    expect(document.getElementById(MOUNT).textContent).toContain('Upload incomplete');
+    space();
+    expect(window.jsPsych.finishTrial).toHaveBeenCalledTimes(1);
+    const data = {};
+    node.on_finish(data);
+    expect(data).toMatchObject({ status: 'partial', downloadFallback: true });
+    expect(data.last_error).toContain('session_id is required');
+  });
+
   it('shows the download after a partial upload and still lets the participant continue', async () => {
     mocks.uploadPendingData.mockResolvedValue({
       status: 'partial',
@@ -135,12 +151,13 @@ describe('uploadProgressNode', () => {
     expect(window.jsPsych.finishTrial).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an error and still opens the gate when the upload throws', async () => {
+  it('still opens the gate when the upload throws, and saves a copy to the device instead of losing the data', async () => {
     mocks.uploadPendingData.mockRejectedValue(new Error('network down'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     uploadProgressNode({ session }).on_load();
     await vi.advanceTimersByTimeAsync(0);
-    expect(document.getElementById(MOUNT).textContent).toContain('network down');
+    expect(document.getElementById(MOUNT).textContent).toContain('Upload incomplete');
+    expect(mocks.downloadAsJson).toHaveBeenCalledTimes(1);
     space();
     expect(window.jsPsych.finishTrial).toHaveBeenCalledTimes(1);
   });

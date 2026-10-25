@@ -22,12 +22,13 @@
  * The rotation cue is mentioned ONLY here and in `imagery.js` (I-only).
  * D-only and T-only screens deliberately do not mention it: in those
  * trials no rotation arrow is shown to the participant, because there
- * is nothing to picture or turn. The grid layout that would be rotated
- * still exists in the abstract experimental design across all five
- * trial types, but the participant only ever sees the arrow on
- * imagery-bearing trials. The specific rotation angle is NOT written
- * into the copy — the arrow alone does the job, mirroring the
- * reference experiment.
+ * is nothing to picture or turn (D-only dots do sit on the invisible grid
+ * at a random angle drawn exactly as in the star conditions, but nothing
+ * about it is cued or shown). The participant only ever sees the arrow on
+ * imagery-bearing trials. The specific rotation angle is NOT written into
+ * the copy; the arrow alone shows it, and `shared-copy.js` states what the
+ * arrow's tilt means (straight up = no turn, right = clockwise, left =
+ * counterclockwise, at most a quarter turn).
  *
  * Pagination: the long instruction text is delivered as a sequence of
  * short pages through the jsPsych instructions plugin so the participant
@@ -39,7 +40,8 @@ import jsPsychInstructions from '@jspsych/plugin-instructions';
 import { config } from '../config.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { slideStimulusPage } from '../visuals/slide-layout.js';
-import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../conditions/shared.js';
+import { FEEDBACK_GREEN, FEEDBACK_RED } from './feedback-words.js';
+import { ARROW_MEANING_HTML, ARROW_MEANING_TEXT } from './shared-copy.js';
 
 /* See `slide-layout.js` for the unification rationale — the H2 title
  * and the plugin's Previous/Next nav land at the same y across every
@@ -47,8 +49,6 @@ import { FEEDBACK_COLOR_CORRECT_TEXT, FEEDBACK_COLOR_WRONG_TEXT } from '../condi
  * demo screens) because every wrapper shares the same `min-height`. */
 /* Match the exact feedback green/red the participant sees on a live trial
  * and in the demo animation — same #0BC926 / #FF1818 hex at full opacity. */
-const FEEDBACK_GREEN = `<span style="color: ${FEEDBACK_COLOR_CORRECT_TEXT};"><strong>green</strong></span>`;
-const FEEDBACK_RED = `<span style="color: ${FEEDBACK_COLOR_WRONG_TEXT};"><strong>red</strong></span>`;
 const CALLOUT_OPEN = `<p style="border-left: 3px solid #772139; padding: 0.5rem 0.75rem; margin: 1rem 0; background: rgba(119, 33, 57, 0.08);">`;
 
 const NAV_OPTS = Object.freeze({
@@ -75,10 +75,10 @@ export function iDInstructionNode() {
         <p>Task 4 combines Task 3 (the pattern) with Task 1 (the dots).
         Each trial begins with the <strong>arrow</strong>: turn the
         pattern in your mind and hold the turned pattern for the whole
-        trial. You'll have <strong>5 seconds</strong> to imagine and
-        turn it.</p>
+        trial. ${ARROW_MEANING_HTML} After the arrow goes away you'll have
+        about <strong>5 seconds</strong> to imagine and turn it.</p>
       `,
-      narration: `Task 4 combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. You'll have 5 seconds to imagine and turn it.`,
+      narration: `Task 4 combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. ${ARROW_MEANING_TEXT} After the arrow goes away you'll have about 5 seconds to imagine and turn it.`,
       exemplar: ['arrow'],
     }),
     slideStimulusPage({
@@ -156,10 +156,10 @@ export function iTInstructionNode() {
         <p>Task 5 combines Task 3 (the pattern) with Task 2 (the tones).
         Each trial begins with the <strong>arrow</strong>: turn the
         pattern in your mind and hold the turned pattern for the whole
-        trial. You'll have <strong>5 seconds</strong> to imagine and
-        turn it.</p>
+        trial. ${ARROW_MEANING_HTML} After the arrow goes away you'll have
+        about <strong>5 seconds</strong> to imagine and turn it.</p>
       `,
-      narration: `Task 5 combines Task 3, the pattern, with Task 2, the tones. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. You'll have 5 seconds to imagine and turn it.`,
+      narration: `Task 5 combines Task 3, the pattern, with Task 2, the tones. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. ${ARROW_MEANING_TEXT} After the arrow goes away you'll have about 5 seconds to imagine and turn it.`,
       exemplar: ['arrow'],
     }),
     slideStimulusPage({

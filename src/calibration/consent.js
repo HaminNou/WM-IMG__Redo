@@ -67,7 +67,7 @@ export function consentGate() {
         stimulus: `
           <h2>Thank you</h2>
           <p>You declined consent, so the study will not continue and no data from this session will be kept.</p>
-          <p>To withdraw, please close this window, go back to Prolific, and select &ldquo;Stop without completing&rdquo;, which returns your submission. You will not be penalised for declining.</p>
+          <p>To withdraw, please close this window, go back to Prolific, and select &ldquo;Stop without completing&rdquo;, which returns your submission. You will not be penalized for declining.</p>
         `,
         choices: ['Close'],
         data: { phase: 'consent_declined', exit_reason: 'consent_declined' },

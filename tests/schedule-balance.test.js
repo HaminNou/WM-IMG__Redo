@@ -125,8 +125,9 @@ describe('per-condition pool, 24 trials', () => {
         if (type === 'd_only') {
           const angles = pool.map((p) => p.display_rotation_deg);
           expect(new Set(angles).size).toBe(24);
-          expect(angles.filter((a) => a > 0)).toHaveLength(12);
-          expect(angles.every((a) => a >= -90 && a <= 90 && a !== 0)).toBe(true);
+          expect(angles.filter((a) => a < 0)).toHaveLength(12);
+          expect(angles.filter((a) => a >= 0)).toHaveLength(12);
+          expect(angles.every((a) => Number.isInteger(a) && a >= -90 && a <= 90)).toBe(true);
           const perStratum = Array(6).fill(0);
           angles.forEach((a) => perStratum[rotationStratumIndex(a)]++);
           expect(perStratum).toEqual(Array(6).fill(4));
@@ -152,8 +153,9 @@ describe('per-condition pool, 24 trials', () => {
 
           const angles = pool.map((p) => p.rotation_deg);
           expect(new Set(angles).size).toBe(24);
-          expect(angles.filter((a) => a > 0)).toHaveLength(12);
-          expect(angles.every((a) => a >= -90 && a <= 90 && a !== 0)).toBe(true);
+          expect(angles.filter((a) => a < 0)).toHaveLength(12);
+          expect(angles.filter((a) => a >= 0)).toHaveLength(12);
+          expect(angles.every((a) => Number.isInteger(a) && a >= -90 && a <= 90)).toBe(true);
           const perStratum = Array(6).fill(0);
           angles.forEach((a) => perStratum[rotationStratumIndex(a)]++);
           expect(perStratum).toEqual(Array(6).fill(4));

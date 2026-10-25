@@ -263,7 +263,7 @@ function formatFeedbackHtml({ acc, passed, willRetry, criterion }) {
       : `<h2 style="color:#b3261e;">Practice – below criterion</h2>`;
   const body = passed
     ? `<p>You got <strong>${acc.correct} / ${acc.total}</strong> correct
-       (${pct}%), above the ${critPct}% criterion.</p>
+       (${pct}%), at or above the ${critPct}% criterion.</p>
        ${continueHintHtml('Press <kbd>Space</kbd> to start the main task.')}`
     : willRetry
       ? `<p>You got <strong>${acc.correct} / ${acc.total}</strong> correct

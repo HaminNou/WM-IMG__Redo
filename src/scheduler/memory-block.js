@@ -20,8 +20,9 @@
  *     not within every individual trial: across 24 trials each
  *     (probe_type × probe_position) cell hits exactly 6 times
  *     (4 types × 3 positions = 12 cells; 24 × 3 / 12 = 6 per cell).
- *   - Probe presentation order from `generateProbeOrders` (3 of 4 types per
- *     trial, balanced per position over 24 trials).
+ *   - Probe presentation order from `generateProbeOrders` (3 probes per
+ *     trial drawn from the four labels T_on/T_off/F_on/F_off, types may
+ *     repeat within a trial, balanced per position over 24 trials).
  *   - 3 dummy events per trial (open squares, slot-matched to where stars
  *     would appear in the dual-task version) — cells drawn from non-centre
  *     cells not already used by the trial's memory items.

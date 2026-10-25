@@ -56,10 +56,27 @@
  *                               in long format (19 items per participant,
  *                               spread across the five condition-specific
  *                               pages — see src/questionnaire/strategy.js)
- *   ATTENTION_CHECKS.csv        one row per (participant × instruction check)
+ *   PARTICIPANT_SUMMARY.csv     one row per participant: completed / excluded / retained per pre-reg.json,
+ *                               with Sample_Class (real / pilot / preview) and diagnostic counts
+ *   ATTENTION_CHECKS.csv        one row per (participant × instruction check × administration)
+ *   DIAGNOSTICS.csv             one row per runtime_error / runtime_error_fatal /
+ *                               audio_state_change row (the error net and the
+ *                               AudioContext state log); counts per participant are
+ *                               in PARTICIPANT_SUMMARY (Runtime_Errors, …)
  *   EXPORT_MANIFEST.json        provenance record (build_id, source files,
  *                               row counts, heterogeneity flags, generator
  *                               version)
+ *
+ * Column notes:
+ *   rotation_sign (tidy tables): -1 counter-clockwise, 0 no rotation (0 degrees),
+ *   1 clockwise. The scheduler's angle bands put 0 with the non-negative group
+ *   (the 0..30 band: 12 negative / 12 non-negative angles per condition per
+ *   session), so a design tally of 12 / 12 counts 0 as positive, whereas this
+ *   column keeps 0 apart.
+ *   Upload_Status is the status of the end-of-session upload (the first attempt).
+ *   Upload_Status_Final (and, in PARTICIPANT_SUMMARY, Upload_Status_First / _Final /
+ *   Upload_Retries) is the status of the LATEST upload row, so a retry that
+ *   delivered every file reads 'uploaded' even when the first attempt was 'partial'.
  *
  * Rationale for diverging from the original experiment's per-block file split:
  *   Follow-up has 5 trial types interleaved within 2 main blocks (rather than
@@ -71,6 +88,31 @@
  *   node scripts/csv-export.js --out out/ path/to/dumps/
  *   node scripts/csv-export.js --out out/ a.json b.json c.json
  *   node scripts/csv-export.js --out out/ --json-manifest dumps/   # also stdout the manifest
+ *   node scripts/csv-export.js --out out/ --salt-file ~/my-salt --private-dir ~/private/ dumps/
+ *   node scripts/csv-export.js --out out/ --keep-pid dumps/   # INTERNAL ONLY: raw Prolific ids
+ *
+ * Privacy (pseudonymisation, on by default; scheme in pseudonymise.js).
+ *   The consent says the Prolific ID "is replaced with a code before analysis or
+ *   sharing". This exporter makes that true: in every output file, the column
+ *   `Participant_ID` (and `participant_id` in the tidy tables, `Table_Participant_ID`,
+ *   `Session_ID`, the manifest) holds a pseudonymous code - "P"/"S" plus 12 hex
+ *   characters of an HMAC of the id under a secret salt - never the Prolific PID or
+ *   Prolific session id. Codes are stable for one salt, so repeated exports and all
+ *   tables join. The salt comes from --salt-file, else $CSV_EXPORT_SALT, else a
+ *   per-user file (~/.wm-img-pseudonym-salt) created on first use; it is never
+ *   written to an output. csv-export.js and pilot-summary.js must use the SAME
+ *   salt (the default file, or the same --salt-file / $CSV_EXPORT_SALT) for their
+ *   codes to match: with a different salt each tool writes different codes for the
+ *   same participant.
+ *   The link between code and person is PID_KEY.csv, written to a PRIVATE directory
+ *   (default: a sibling of the export folder named <out>_PRIVATE; --private-dir to
+ *   choose; refused inside the export folder). NEVER share PID_KEY.csv, the salt, or
+ *   the raw uploaded JSON files (they carry the PID: they live in the DataPipe /
+ *   Google Drive folder and must be treated as private).
+ *   Before anything is written, every output text is scanned for every raw PID and
+ *   session id; a hit aborts the export (exit 4). --keep-pid exports the raw ids for
+ *   internal payment reconciliation and is refused together with --share.
+ *   --share asserts that the folder is meant to be shared: it refuses --keep-pid.
  *
  * Pure exports (unit-tested in `tests/csv-export.test.js`):
  *   parseExportArgs, cellToRowCol, formatCell, trialTypeFromPhase,
@@ -81,10 +123,27 @@
  *
  * Pure Node (>=20) — no browser deps, no third-party packages.
  */
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { resolve, join, basename } from 'node:path';
+import { readdirSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createHash } from 'node:crypto';
+import { loadAndFlattenDumps } from './dump-loader.js';
+import {
+  makeCoder,
+  resolveSalt,
+  pseudonymisePerParticipant,
+  findLeaks,
+  writeKeyFile,
+  isInside,
+  defaultPrivateDir,
+} from './pseudonymise.js';
+import {
+  summariseParticipantRuns,
+  uploadStatuses,
+  sampleClass,
+  SINGLE_TASK_FLOOR,
+  ATTENTION_MAX_FAILURES,
+  EXPECTED_MAIN_TRIALS,
+} from './participant-rules.js';
 
 import {
   composeTidyTables,
@@ -165,12 +224,22 @@ const KEYBOARD_RECTY = 1;
  *                        Off by default: R's readr::read_csv drops the BOM, but
  *                        base read.csv keeps it in the first column name unless
  *                        fileEncoding = "UTF-8-BOM".
- *   --neutralise-formulas  Prefix text cells that start with = + - @ (tab, CR)
- *                        with an apostrophe so spreadsheets cannot run them as
- *                        formulas. Off by default (it changes the text of those
- *                        cells); numeric cells are never touched. Use it for
- *                        files you will open in Excel/Sheets; analyse with R from
- *                        the default output.
+ *   --neutralise-formulas  Prefix EVERY text cell that starts with = + - @ (tab, CR)
+ *                        with an apostrophe so spreadsheets cannot run it as a
+ *                        formula; numeric cells are never touched.
+ *   --no-neutralise-formulas  Switch the protection off entirely.
+ *                        By default only the columns that can hold typed text
+ *                        (glasses note, attention-check input, diagnostics message
+ *                        and source: FREE_TEXT_COLUMNS) are protected, so
+ *                        `=HYPERLINK(...)` typed by a participant cannot run when
+ *                        a file is opened in Excel/Sheets, while codes and numbers
+ *                        stay exactly as they are for R.
+ *   --salt-file <path>   Salt for the pseudonymous codes (see the header; default:
+ *                        $CSV_EXPORT_SALT, then ~/.wm-img-pseudonym-salt).
+ *   --private-dir <dir>  Where PID_KEY.csv is written (never inside --out; default
+ *                        <out>_PRIVATE next to the export folder).
+ *   --keep-pid           Export raw Prolific ids instead of codes (internal use).
+ *   --share              The export folder will be shared: refuses --keep-pid.
  *
  * Anything that isn't a flag is treated as an input path (file or dir).
  */
@@ -181,6 +250,11 @@ export function parseExportArgs(argv) {
   let jsonManifest = false;
   let excelBom = false;
   let neutraliseFormulas = false;
+  let noNeutralise = false;
+  let saltFile = null;
+  let privateDir = null;
+  let keepPid = false;
+  let share = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--out') {
@@ -191,13 +265,40 @@ export function parseExportArgs(argv) {
       excelBom = true;
     } else if (a === '--neutralise-formulas') {
       neutraliseFormulas = true;
+    } else if (a === '--no-neutralise-formulas') {
+      noNeutralise = true;
+    } else if (a === '--salt-file') {
+      saltFile = args[++i] ?? null;
+    } else if (a === '--private-dir') {
+      privateDir = args[++i] ?? null;
+    } else if (a === '--keep-pid') {
+      keepPid = true;
+    } else if (a === '--share') {
+      share = true;
     } else if (a.startsWith('--')) {
       throw new Error(`unknown flag: ${a}`);
     } else {
       inputs.push(a);
     }
   }
-  return { inputs, outputDir, jsonManifest, excelBom, neutraliseFormulas };
+  if (keepPid && share) {
+    throw new Error('--keep-pid exports raw Prolific ids and cannot be combined with --share');
+  }
+  if (neutraliseFormulas && noNeutralise) {
+    throw new Error('--neutralise-formulas and --no-neutralise-formulas cannot be combined');
+  }
+  return {
+    inputs,
+    outputDir,
+    jsonManifest,
+    excelBom,
+    neutraliseFormulas,
+    neutraliseMode: neutraliseFormulas ? 'all' : noNeutralise ? 'none' : 'free_text',
+    saltFile,
+    privateDir,
+    keepPid,
+    share,
+  };
 }
 
 /**
@@ -330,7 +431,7 @@ export function starResCodes(row) {
 
 /**
  * RT extractor — both probe and star rows. Probes carry RT in jsPsych's
- * built-in `rt` field; stars are written via `jsPsych.data.write` and carry
+ * built-in `rt` field; star rows are emitted by `emitAuxDataRow` and carry
  * `response_rt_ms`. We accept either; if neither is present, returns null.
  */
 export function extractRtMs(row) {
@@ -341,7 +442,7 @@ export function extractRtMs(row) {
 
 /**
  * Raw response-key extractor — stars stamp `response_key` (via
- * `jsPsych.data.write`); probes carry the key in jsPsych's built-in
+ * `emitAuxDataRow`); probes carry the key in jsPsych's built-in
  * `response`. Returns NA when no response was made.
  */
 export function extractResponseKey(row) {
@@ -378,7 +479,9 @@ function slotOnsetMs(encodingRow, slotIdx) {
  * Format one cell value for CSV emission per the original experiment's quoting style:
  *   strings → double-quoted with embedded quotes doubled
  *   integers / finite numbers → bare digits
- *   booleans → unquoted `true` / `false`
+ *   booleans → unquoted `TRUE` / `FALSE` (base R's read.csv, readr and pandas all read
+ *     these as logical; lowercase `true` / `false` come back as character in base R,
+ *     where mean() then returns NA)
  *   null / undefined → NA (unquoted)
  *   "NA" sentinel string → NA (unquoted) — for downstream R's read.csv default
  */
@@ -389,7 +492,7 @@ export function formatCsvValue(v, opts = {}) {
     if (!Number.isFinite(v)) return NA;
     return String(v);
   }
-  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
   /* Everything else gets stringified + quoted. Embedded quotes double up. */
   let s = String(v);
   /* Optional spreadsheet-safety (--neutralise-formulas): Excel and Sheets
@@ -409,13 +512,36 @@ const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
  * read both transparently).
  */
 export function serializeRowsToCsv(rows, columns, opts = {}) {
+  const mode = opts.neutraliseMode ?? (opts.neutraliseFormulas === true ? 'all' : 'free_text');
+  /* Per column: protect every text cell ('all'), only the columns that can hold typed
+   * text ('free_text', the default), or none. */
+  const protect = columns.map(
+    (c) => mode === 'all' || (mode === 'free_text' && FREE_TEXT_COLUMNS.has(c))
+  );
   const lines = [];
   lines.push(columns.map((c) => `"${c}"`).join(','));
   for (const r of rows) {
-    lines.push(columns.map((c) => formatCsvValue(r[c], opts)).join(','));
+    lines.push(
+      columns.map((c, i) => formatCsvValue(r[c], { neutraliseFormulas: protect[i] })).join(',')
+    );
   }
   return lines.join('\n') + '\n';
 }
+
+/**
+ * Columns whose text can come from a participant or the browser: the optional
+ * glasses/contacts note, the typed answer to an attention check, and the error
+ * message and source of the runtime diagnostics. A spreadsheet runs a cell that
+ * begins with = + - @ (tab, CR) as a formula, so these get a leading apostrophe by
+ * default (see `formatCsvValue`). Every other column is a number or a fixed code and
+ * is never altered.
+ */
+export const FREE_TEXT_COLUMNS = new Set([
+  'Glasses_Contacts_Note',
+  'Raw_Input',
+  'Message',
+  'Source',
+]);
 
 /** UTF-8 byte-order mark; prepended on request so Excel reads the file as UTF-8. */
 export const UTF8_BOM = '\uFEFF';
@@ -1200,6 +1326,7 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Attention_Failed',
   'Attention_Excluded',
   'Upload_Status',
+  'Upload_Status_Final',
   'Completion_Was_Placeholder',
   'User_Agent',
   'Exit_Reason',
@@ -1219,8 +1346,6 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Inner_Width_Px',
   'Inner_Height_Px',
   'Device_Pixel_Ratio',
-  'Hardware_Concurrency',
-  'Device_Memory_Gb',
   'Audio_Sample_Rate_Hz',
   'Audio_State',
   'Audio_Base_Latency_Ms',
@@ -1228,6 +1353,8 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Headphone_Pass',
   'Headphone_N_Correct',
   'Headphone_N_Trials',
+  'Headphone_N_Chose_Anti',
+  'Headphone_Chosen_Kinds',
   'Pitch_Attempts',
   'Pitch_Pass',
   'Pitch_N_Correct',
@@ -1342,6 +1469,7 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
           : 0
         : NA,
     Upload_Status: uploadSummary?.status ?? NA,
+    Upload_Status_Final: uploadStatuses(rows).final ?? NA,
     Completion_Was_Placeholder:
       typeof completion?.completion_was_placeholder === 'boolean'
         ? completion.completion_was_placeholder
@@ -1441,9 +1569,9 @@ function extractSessionEnvironment(rows) {
   const pitchMargin = pitchRows.filter((v) => v.label === 'pitch_margin_minus12').pop();
   const timingRows = rows.filter((r) => r.phase === 'timing_probe');
   const timing = timingRows[timingRows.length - 1];
-  const snapshot = [...timingRows, ...rows.filter((r) => r.phase === 'display_guard_event')].find(
-    (r) => Number.isFinite(r.hardware_concurrency)
-  );
+  /* The last headphone block's trials (one row per trial), for the chosen-kind string. */
+  const headphoneTrials = rows.filter((r) => r.phase === 'headphone_check_trial');
+  const headphoneBlock = headphoneTrials.slice(-(Number(headphone?.n_trials) || 0));
 
   const visibility = rows.filter(
     (r) => r.phase === 'visibility_event' && r.kind === 'visibilitychange'
@@ -1479,8 +1607,6 @@ function extractSessionEnvironment(rows) {
     Inner_Width_Px: numOrNA(info.inner_width_px),
     Inner_Height_Px: numOrNA(info.inner_height_px),
     Device_Pixel_Ratio: numOrNA(info.device_pixel_ratio),
-    Hardware_Concurrency: numOrNA(snapshot?.hardware_concurrency),
-    Device_Memory_Gb: numOrNA(snapshot?.device_memory_gb),
     Audio_Sample_Rate_Hz: numOrNA(audio.sample_rate_hz),
     Audio_State: audio.state ?? NA,
     Audio_Base_Latency_Ms: numOrNA(audio.base_latency_ms),
@@ -1488,6 +1614,14 @@ function extractSessionEnvironment(rows) {
     Headphone_Pass: flagOrNA(headphone?.headphones_pass),
     Headphone_N_Correct: numOrNA(headphone?.n_correct),
     Headphone_N_Trials: numOrNA(headphone?.n_trials),
+    /* Times the anti-phase sound was called quietest (loudspeaker signature: it cancels in the
+     * room) and the kind chosen on each trial in order, so speaker listening can be told from
+     * guessing. NA when the summary row predates the field. */
+    Headphone_N_Chose_Anti: numOrNA(headphone?.n_chose_anti),
+    Headphone_Chosen_Kinds:
+      headphoneBlock.length > 0 && headphoneBlock.every((r) => typeof r.chosen_kind === 'string')
+        ? headphoneBlock.map((r) => r.chosen_kind).join(';')
+        : NA,
     Pitch_Attempts: pitchUser.length > 0 ? pitchUser.length : NA,
     Pitch_Pass: flagOrNA(pitchUserLast?.passed),
     Pitch_N_Correct: numOrNA(pitchUserLast?.n_correct),
@@ -1665,23 +1799,250 @@ export function extractStrategyScoreRow(participantId, rows) {
   return out;
 }
 
-const ATTENTION_COLUMNS = Object.freeze(['Participant_ID', 'Check_Id', 'Raw_Input', 'Passed']);
+const ATTENTION_COLUMNS = Object.freeze([
+  'Participant_ID',
+  'Check_Id',
+  'Raw_Input',
+  'Passed',
+  'Administration',
+  'Is_First_Administration',
+  'Is_Final_Administration',
+]);
 
 export { ATTENTION_COLUMNS };
 
 /**
- * One row per (participant × instruction-attention check). Mirrors the
- * runtime contract from §11.4 (frozen-text checks; strict-`>` threshold).
+ * One row per (participant x instruction-attention check x administration).
+ * Mirrors the runtime contract from §11.4 (frozen-text checks; strict-`>`
+ * threshold). The practice loop repeats the three checks when practice accuracy is
+ * below criterion, so a check can appear more than once: `Administration` numbers
+ * the appearances of one check (1 = first time shown). The exclusion rule counts a
+ * check as failed if it was failed on its first administration
+ * (`Is_First_Administration` = 1); `Is_Final_Administration` marks the last one.
  */
 export function extractAttentionRows(participantId, rows) {
-  return rows
-    .filter((r) => r.phase === 'attention_check')
-    .map((r) => ({
+  const checks = rows.filter((r) => r.phase === 'attention_check');
+  const idOf = (r) => r.attention_check_id ?? NA;
+  const totals = new Map();
+  for (const r of checks) totals.set(idOf(r), (totals.get(idOf(r)) ?? 0) + 1);
+  const seen = new Map();
+  return checks.map((r) => {
+    const id = idOf(r);
+    const n = (seen.get(id) ?? 0) + 1;
+    seen.set(id, n);
+    return {
       Participant_ID: participantId,
-      Check_Id: r.attention_check_id ?? NA,
+      Check_Id: id,
       Raw_Input: r.attention_check_raw ?? NA,
       Passed: r.attention_check_passed === true ? 1 : r.attention_check_passed === false ? 0 : NA,
+      Administration: n,
+      Is_First_Administration: n === 1 ? 1 : 0,
+      Is_Final_Administration: n === totals.get(id) ? 1 : 0,
+    };
+  });
+}
+
+/* ---------- Diagnostics: runtime errors and AudioContext state changes ---------- */
+
+const DIAGNOSTIC_PHASES = Object.freeze([
+  'runtime_error',
+  'runtime_error_fatal',
+  'audio_state_change',
+]);
+
+const DIAGNOSTIC_COLUMNS = Object.freeze([
+  'Participant_ID',
+  'Run_Id',
+  'Seq',
+  'Phase',
+  'Kind',
+  'Error_Name',
+  'Message',
+  'Source',
+  'Trial_Phase',
+  'Stage',
+  'Audio_State',
+  'Wall_Ms',
+]);
+
+export { DIAGNOSTIC_COLUMNS };
+
+/**
+ * Rows of the error net (`runtime_error`, `runtime_error_fatal`) and of the
+ * AudioContext state log (`audio_state_change`) of one table participant. The
+ * message text has already passed the pseudonymisation scrubber when the exporter
+ * runs through its CLI, so a PID typed into an error message cannot leak.
+ */
+export function extractDiagnosticRows(participantId, rows) {
+  return rows
+    .filter((r) => DIAGNOSTIC_PHASES.includes(r.phase))
+    .map((r) => ({
+      Participant_ID: participantId,
+      Run_Id: r.run_id ?? NA,
+      Seq: Number.isFinite(r.seq) ? r.seq : NA,
+      Phase: r.phase,
+      Kind: r.kind ?? NA,
+      Error_Name: r.error_name ?? NA,
+      Message: r.message ?? NA,
+      Source: r.source ?? NA,
+      Trial_Phase: r.trial_phase ?? NA,
+      Stage: r.stage ?? NA,
+      Audio_State: r.audio_state ?? NA,
+      Wall_Ms: Number.isFinite(r.wall_ms) ? r.wall_ms : NA,
     }));
+}
+
+/** Per-participant counts over ALL runs of the participant (a fatal error in a run that was then reloaded still counts). */
+function diagnosticCounts(rows) {
+  const n = (phase) => rows.filter((r) => r.phase === phase).length;
+  const states = rows.filter((r) => r.phase === 'audio_state_change');
+  return {
+    Runtime_Errors: n('runtime_error'),
+    Runtime_Error_Fatal: n('runtime_error_fatal'),
+    Audio_State_Changes: states.length,
+    Audio_Interruptions: states.filter(
+      (r) => r.audio_state === 'suspended' || r.audio_state === 'interrupted'
+    ).length,
+  };
+}
+
+/* ---------- Participant summary: who is completed, excluded, retained ---------- */
+
+const PARTICIPANT_COLUMNS = Object.freeze([
+  'Participant_ID',
+  'Session_ID',
+  'Build_ID',
+  'Pilot_Run',
+  'Pilot_Label',
+  'Sample_Class',
+  'Status',
+  'Completed',
+  'Retained',
+  'Excluded_Participant_Level',
+  'Exclusion_Reasons',
+  'Run_Count',
+  'Analysed_Run_Id',
+  'Table_Participant_ID',
+  'Reload_After_Main_Trials',
+  'Multiple_Completed_Runs',
+  'Main_Trials_Present',
+  'Main_Trials_Expected',
+  'Data_Incomplete',
+  'Upload_Status_First',
+  'Upload_Status_Final',
+  'Upload_Retries',
+  'Screen_Cal_Status',
+  'Exclude_Screen_Cal_Inconsistent',
+  'Attention_Checks_N',
+  'Attention_Checks_Failed_First',
+  'Attention_Checks_Failed_Final',
+  'Attention_Administrations',
+  'Attention_Threshold',
+  'Exclude_Attention_Checks',
+  'Exclude_Attention_Checks_Final_Administration',
+  'D_Only_Accuracy',
+  'D_Only_N_Probes',
+  'T_Only_Accuracy',
+  'T_Only_N_Probes',
+  'Single_Task_Floor_Threshold',
+  'D_Only_At_Or_Below_Floor',
+  'T_Only_At_Or_Below_Floor',
+  'Exclude_Single_Task_Floor',
+  'Runtime_Errors',
+  'Runtime_Error_Fatal',
+  'Audio_State_Changes',
+  'Audio_Interruptions',
+]);
+
+export { PARTICIPANT_COLUMNS };
+
+/**
+ * One row per PARTICIPANT (Prolific PID), not per run: the runs of a participant who
+ * reloaded are pooled and the completed run is analysed. The definitions of completed,
+ * excluded and retained are those of pre-reg.json (sampling_plan, exclusion_rules)
+ * and are computed from the raw rows by participant-rules.js, the same code
+ * pilot-summary.js uses for the batch decision. `Exclude_*` columns are 1/0 for a
+ * completed session and NA otherwise (a session that is not completed is not in the
+ * sample). `Reload_After_Main_Trials` flags a reload after main-block trials had
+ * begun: the pre-registration has no rule for it, so it does not change `Retained`.
+ *
+ * @param {{participant_id: string, source_pid?: string, run_id?: string|null,
+ *          rows: object[], session?: object}[]} perParticipant  run-split entries
+ */
+/**
+ * The Participant_ID the trial-level tables use for the analysed run: the bare PID,
+ * or `<pid>__run_<run_id>` for a participant who reloaded. NA if no run was analysed.
+ * Join the trial tables to this column, not to `Participant_ID`.
+ */
+function analysedTableId(runs, analysedRunId) {
+  if (analysedRunId === null || analysedRunId === undefined) return NA;
+  return runs.find((run) => run.run_id === analysedRunId)?.table_id ?? NA;
+}
+
+export function buildParticipantSummaryRows(perParticipant) {
+  const byPid = new Map();
+  for (const p of perParticipant) {
+    const pid = p.source_pid ?? p.participant_id;
+    if (!byPid.has(pid)) byPid.set(pid, { session: p.session ?? {}, runs: [] });
+    byPid.get(pid).runs.push({
+      run_id: p.run_id === 'none' ? null : (p.run_id ?? null),
+      rows: p.rows,
+      table_id: p.participant_id,
+    });
+  }
+  const flag = (v) => (v === true ? 1 : v === false ? 0 : NA);
+  const rows = [];
+  for (const [pid, { session, runs }] of byPid) {
+    const r = summariseParticipantRuns(runs);
+    const att = r.attention;
+    const done = r.completed;
+    const exclusionFlag = (v) => (done ? flag(v) : NA);
+    rows.push({
+      Participant_ID: pid,
+      Session_ID: session?.params?.session_id ?? NA,
+      Build_ID: session?.build_id ?? NA,
+      Pilot_Run: flag(Boolean(session?.is_pilot_run)),
+      Pilot_Label: session?.pilot_label ?? NA,
+      Sample_Class: sampleClass(session),
+      Status: r.status,
+      Completed: flag(r.completed),
+      Retained: flag(r.retained),
+      Excluded_Participant_Level: done ? flag(r.excluded) : NA,
+      Exclusion_Reasons: done ? r.reasons.join(';') : NA,
+      Run_Count: r.n_runs,
+      Analysed_Run_Id: r.analysed_run_id ?? NA,
+      Table_Participant_ID: analysedTableId(runs, r.analysed_run_id),
+      Reload_After_Main_Trials: flag(r.reload_after_main),
+      Multiple_Completed_Runs: flag(r.multiple_completed_runs),
+      Main_Trials_Present: r.main_trials_present,
+      Main_Trials_Expected: EXPECTED_MAIN_TRIALS,
+      Data_Incomplete: done ? flag(r.data_incomplete) : NA,
+      Upload_Status_First: r.upload_status_first ?? NA,
+      Upload_Status_Final: r.upload_status_final ?? NA,
+      Upload_Retries: r.upload_retries,
+      Screen_Cal_Status: r.calibration_status ?? NA,
+      Exclude_Screen_Cal_Inconsistent: exclusionFlag(
+        r.calibration_status === null ? undefined : r.calibration_status === 'inconsistent_accepted'
+      ),
+      Attention_Checks_N: att.total,
+      Attention_Checks_Failed_First: att.failed_first,
+      Attention_Checks_Failed_Final: att.failed_final,
+      Attention_Administrations: att.administrations,
+      Attention_Threshold: ATTENTION_MAX_FAILURES,
+      Exclude_Attention_Checks: exclusionFlag(att.excluded),
+      Exclude_Attention_Checks_Final_Administration: exclusionFlag(att.excluded_final),
+      D_Only_Accuracy: r.d_only_accuracy ?? NA,
+      D_Only_N_Probes: r.d_only_n,
+      T_Only_Accuracy: r.t_only_accuracy ?? NA,
+      T_Only_N_Probes: r.t_only_n,
+      Single_Task_Floor_Threshold: SINGLE_TASK_FLOOR,
+      D_Only_At_Or_Below_Floor: r.d_only_accuracy === null ? NA : flag(r.d_only_floor),
+      T_Only_At_Or_Below_Floor: r.t_only_accuracy === null ? NA : flag(r.t_only_floor),
+      Exclude_Single_Task_Floor: exclusionFlag(r.d_only_floor || r.t_only_floor),
+      ...diagnosticCounts(runs.flatMap((run) => run.rows ?? [])),
+    });
+  }
+  return rows.sort((a, b) => String(a.Participant_ID).localeCompare(String(b.Participant_ID)));
 }
 
 const DEMOGRAPHICS_COLUMNS = Object.freeze([
@@ -1743,6 +2104,7 @@ export function buildExportManifest({
   generatorVersion,
   fileSha256ByPath = {},
   loadReport = null,
+  pseudonymised = false,
 }) {
   const buildIds = [...new Set(perParticipant.map((p) => p.session.build_id).filter(Boolean))];
   const schemaVersions = [
@@ -1769,21 +2131,27 @@ export function buildExportManifest({
     duplicate_rows_dropped: loadReport?.duplicates_dropped ?? null,
     runs: perParticipant.map((p) => ({
       participant_id: p.participant_id,
-      prolific_pid: p.source_pid ?? p.participant_id,
+      [pseudonymised ? 'participant_code' : 'prolific_pid']: p.source_pid ?? p.participant_id,
       run_id: p.run_id ?? null,
       n_rows: p.rows.length,
     })),
-    reloaded_participants: reloadedParticipants(perParticipant),
-    source_files: inputPaths.map((p) => ({
-      path: p,
-      sha256: fileSha256ByPath[p] ?? null,
-    })),
+    reloaded_participants: reloadedParticipants(perParticipant, pseudonymised),
+    /* A pseudonymised manifest must not name input files: their names carry session
+     * ids and their paths the local folder layout. The sha256 still identifies them. */
+    source_files: inputPaths.map((p, i) =>
+      pseudonymised
+        ? {
+            path: `input_${String(i + 1).padStart(3, '0')}.json`,
+            sha256: fileSha256ByPath[p] ?? null,
+          }
+        : { path: p, sha256: fileSha256ByPath[p] ?? null }
+    ),
     output_files: fileList,
   };
 }
 
 /** Participants whose rows come from more than one run, with the run ids and row counts. */
-function reloadedParticipants(perParticipant) {
+function reloadedParticipants(perParticipant, pseudonymised = false) {
   const byPid = new Map();
   for (const p of perParticipant) {
     const pid = p.source_pid ?? p.participant_id;
@@ -1792,138 +2160,15 @@ function reloadedParticipants(perParticipant) {
   }
   return [...byPid.entries()]
     .filter(([, runs]) => runs.length > 1)
-    .map(([prolific_pid, runs]) => ({ prolific_pid, runs }));
+    .map(([id, runs]) => ({ [pseudonymised ? 'participant_code' : 'prolific_pid']: id, runs }));
 }
 
 /* ---------- Dump loading & flattening ---------- */
 
-/**
- * Load + flatten a list of dump JSON paths into a per-participant rows map
- * and a per-participant session-meta map. Handles both download-fallback and
- * bucket-envelope shapes (matching pilot-summary.js).
- *
- * Bucket, checkpoint and tail files of one session overlap, so the rows of
- * all files of a participant are pooled and duplicates are dropped on
- * (run_id, seq). The remaining rows are ordered by seq within each run. A
- * participant whose rows come from more than one run (a reload in the same
- * browser) is split into one entry per run, named `<pid>__run_<run_id>`.
- */
-export function loadAndFlattenDumps(paths, opts = {}) {
-  const fs = opts.fs ?? { readFileSync };
-  const perParticipant = [];
-  const errors = [];
-  const byPid = new Map();
-  const fileSha256ByPath = {};
-  for (const p of paths) {
-    let parsed;
-    try {
-      const contents = fs.readFileSync(p, 'utf-8');
-      fileSha256ByPath[p] = sha256(contents);
-      parsed = JSON.parse(contents);
-    } catch (err) {
-      errors.push({ path: p, error: err.message });
-      continue;
-    }
-    const session = parsed.session ?? extractSessionFromEnvelope(parsed);
-    const pid = session?.params?.prolific_pid ?? parsed.prolific_pid ?? `unknown_${basename(p)}`;
-    const rows = Array.isArray(parsed.rows) ? parsed.rows : [];
-    if (!byPid.has(pid))
-      byPid.set(pid, { participant_id: pid, session, rows: [], source_paths: [] });
-    const slot = byPid.get(pid);
-    slot.rows.push(...rows);
-    slot.source_paths.push(p);
-    slot.session = mergeSessionMeta(slot.session, session);
-  }
-  const report = { rows_read: 0, duplicates_dropped: 0 };
-  for (const slot of byPid.values()) {
-    const { rows, duplicates } = dedupeRows(slot.rows);
-    report.rows_read += slot.rows.length;
-    report.duplicates_dropped += duplicates;
-    const runs = splitByRun(rows);
-    for (const [runId, runRows] of runs) {
-      perParticipant.push({
-        participant_id:
-          runs.size > 1 ? `${slot.participant_id}__run_${runId}` : slot.participant_id,
-        source_pid: slot.participant_id,
-        run_id: runId,
-        session: slot.session,
-        rows: runRows,
-        source_paths: slot.source_paths,
-      });
-    }
-  }
-  return { perParticipant, errors, fileSha256ByPath, report };
-}
-
-const NO_RUN = 'none';
-
-/** Drop rows repeated across files; rows without a seq cannot be matched and are kept. */
-function dedupeRows(rows) {
-  const seen = new Set();
-  const kept = [];
-  for (const r of rows) {
-    if (Number.isFinite(r?.seq)) {
-      const key = `${r.run_id ?? NO_RUN}:${r.seq}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-    }
-    kept.push(r);
-  }
-  return { rows: kept, duplicates: rows.length - kept.length };
-}
-
-/** Rows by run, runs in order of first appearance, rows in seq order when every row has one. */
-function splitByRun(rows) {
-  const runs = new Map([[NO_RUN, []]]);
-  for (const r of rows) {
-    const id = r?.run_id ?? NO_RUN;
-    if (!runs.has(id)) runs.set(id, []);
-    runs.get(id).push(r);
-  }
-  if (runs.get(NO_RUN).length === 0 && runs.size > 1) runs.delete(NO_RUN);
-  for (const list of runs.values()) {
-    if (list.every((r) => Number.isFinite(r.seq))) list.sort((a, b) => a.seq - b.seq);
-  }
-  return runs;
-}
-
-function mergeSessionMeta(a, b) {
-  if (!a) return b;
-  if (!b) return a;
-  const merged = { ...a };
-  for (const [k, v] of Object.entries(b)) {
-    if (merged[k] === undefined || merged[k] === null) merged[k] = v;
-  }
-  if (a.params || b.params) {
-    merged.params = { ...(b.params ?? {}), ...(a.params ?? {}) };
-  }
-  return merged;
-}
-
-function extractSessionFromEnvelope(env) {
-  if (!env || env.session) return env?.session ?? null;
-  return {
-    params: {
-      session_id: env.session_id,
-      prolific_pid: env.prolific_pid,
-      study_id: env.study_id,
-      is_preview: env.is_preview,
-    },
-    build_id: env.build_id,
-    schema_version: env.schema_version,
-    prng_seed_uint32: env.prng_seed_uint32,
-    is_pilot_run: env.is_pilot_run,
-    pilot_label: env.pilot_label,
-    started_at_iso: env.started_at_iso,
-    user_agent: env.user_agent,
-  };
-}
-
-function sha256(s) {
-  return createHash('sha256').update(s).digest('hex');
-}
-
-/* ---------- Export driver ---------- */
+/* The loader (pooling of bucket / checkpoint / tail files, de-duplication on
+ * (run_id, seq), split by run) lives in `dump-loader.js`, shared with
+ * `pilot-summary.js`. Re-exported here for the callers that import it from the exporter. */
+export { loadAndFlattenDumps };
 
 const TRIAL_TYPE_BUILDERS = Object.freeze({
   d_only: { build: buildWideRowDOnly, columns: COLUMNS_D_ONLY, label: 'D_ONLY' },
@@ -1942,7 +2187,9 @@ const TRIAL_TYPE_BUILDERS = Object.freeze({
  */
 export function composeExport(perParticipant, opts = {}) {
   const criteria = opts.criteria ?? [1, 2];
-  const serOpts = { neutraliseFormulas: opts.neutraliseFormulas === true };
+  const neutraliseMode =
+    opts.neutraliseMode ?? (opts.neutraliseFormulas === true ? 'all' : 'free_text');
+  const serOpts = { neutraliseMode };
   const toCsv = (rows, columns) => serializeRowsToCsv(rows, columns, serOpts);
   const generatedAtIso = opts.generatedAtIso ?? new Date().toISOString();
   const generatorVersion = opts.generatorVersion ?? GENERATOR_VERSION;
@@ -2016,6 +2263,14 @@ export function composeExport(perParticipant, opts = {}) {
     columns: CALIBRATION_COLUMNS.length,
   });
 
+  const participantRows = buildParticipantSummaryRows(perParticipant);
+  files['PARTICIPANT_SUMMARY.csv'] = toCsv(participantRows, PARTICIPANT_COLUMNS);
+  fileList.push({
+    path: 'PARTICIPANT_SUMMARY.csv',
+    n_rows: participantRows.length,
+    columns: PARTICIPANT_COLUMNS.length,
+  });
+
   const strategyRows = perParticipant.flatMap((p) => extractStrategyRows(p.participant_id, p.rows));
   files['STRATEGY.csv'] = toCsv(strategyRows, STRATEGY_COLUMNS);
   fileList.push({
@@ -2039,6 +2294,14 @@ export function composeExport(perParticipant, opts = {}) {
   fileList.push({ path: 'MUSIC.csv', n_rows: musicRows.length, columns: MUSIC_COLUMNS.length });
 
   const attRows = perParticipant.flatMap((p) => extractAttentionRows(p.participant_id, p.rows));
+  const diagRows = perParticipant.flatMap((p) => extractDiagnosticRows(p.participant_id, p.rows));
+  files['DIAGNOSTICS.csv'] = toCsv(diagRows, DIAGNOSTIC_COLUMNS);
+  fileList.push({
+    path: 'DIAGNOSTICS.csv',
+    n_rows: diagRows.length,
+    columns: DIAGNOSTIC_COLUMNS.length,
+  });
+
   files['ATTENTION_CHECKS.csv'] = toCsv(attRows, ATTENTION_COLUMNS);
   fileList.push({
     path: 'ATTENTION_CHECKS.csv',
@@ -2064,7 +2327,19 @@ export function composeExport(perParticipant, opts = {}) {
     generatorVersion,
     fileSha256ByPath: opts.fileSha256ByPath ?? {},
     loadReport: opts.loadReport ?? null,
+    pseudonymised: opts.pseudonymised === true,
   });
+
+  manifest.participant_summary = {
+    n_participants: participantRows.length,
+    n_completed: participantRows.filter((r) => r.Completed === 1).length,
+    n_retained: participantRows.filter((r) => r.Retained === 1).length,
+    n_excluded: participantRows.filter((r) => r.Excluded_Participant_Level === 1).length,
+    n_incomplete: participantRows.filter((r) => r.Status === 'incomplete').length,
+    n_screened_out: participantRows.filter((r) => r.Status === 'screened_out').length,
+    n_reloaded_after_main_trials: participantRows.filter((r) => r.Reload_After_Main_Trials === 1)
+      .length,
+  };
 
   manifest.tidy_tables = {
     version: TIDY_VERSION,
@@ -2097,7 +2372,13 @@ export function dataProblems(manifest) {
 /* ---------- CLI ---------- */
 
 async function main(argv) {
-  const opts = parseExportArgs(argv);
+  let opts;
+  try {
+    opts = parseExportArgs(argv);
+  } catch (err) {
+    console.error(`csv-export: ${err.message}`);
+    process.exit(2);
+  }
   if (!opts.outputDir) {
     console.error('csv-export: missing --out <dir>');
     console.error(
@@ -2114,7 +2395,9 @@ async function main(argv) {
     console.error('csv-export: no .json files found under supplied paths');
     process.exit(2);
   }
-  const { perParticipant, errors, fileSha256ByPath, report } = loadAndFlattenDumps(expanded);
+  const loaded = loadAndFlattenDumps(expanded);
+  const { errors, fileSha256ByPath, report } = loaded;
+  let perParticipant = loaded.perParticipant;
   if (errors.length > 0) {
     for (const e of errors) console.error(`csv-export: failed to read ${e.path}: ${e.error}`);
   }
@@ -2122,25 +2405,74 @@ async function main(argv) {
     console.error('csv-export: no participants parsed from inputs');
     process.exit(2);
   }
+  const outDir = resolve(opts.outputDir);
+  const pseudonymised = opts.keepPid !== true;
+  let keyRows = [];
+  let identifiers = [];
+  if (pseudonymised) {
+    const privateDir = resolve(opts.privateDir ?? defaultPrivateDir(outDir));
+    if (isInside(privateDir, outDir)) {
+      console.error(
+        `csv-export: --private-dir ${privateDir} is inside the export folder; the key file must stay out of anything you share`
+      );
+      process.exit(2);
+    }
+    try {
+      const { salt } = resolveSalt({ saltFile: opts.saltFile });
+      const result = pseudonymisePerParticipant(perParticipant, makeCoder(salt));
+      perParticipant = result.perParticipant;
+      keyRows = result.keyRows;
+      identifiers = result.identifiers;
+    } catch (err) {
+      console.error(`csv-export: ${err.message}`);
+      process.exit(2);
+    }
+  } else {
+    console.error(
+      'csv-export: WARNING --keep-pid: the output carries raw Prolific ids. Use it only for internal payment reconciliation; never share this folder.'
+    );
+  }
   const { files, manifest } = composeExport(perParticipant, {
     inputPaths: expanded,
     fileSha256ByPath,
     loadReport: report,
+    neutraliseMode: opts.neutraliseMode,
     neutraliseFormulas: opts.neutraliseFormulas,
+    pseudonymised,
   });
   manifest.export_options = {
     excel_bom: opts.excelBom === true,
     neutralise_formulas: opts.neutraliseFormulas === true,
+    neutralise_mode:
+      opts.neutraliseMode ?? (opts.neutraliseFormulas === true ? 'all' : 'free_text'),
+    pseudonymised,
+    keep_pid: opts.keepPid === true,
   };
-  const outDir = resolve(opts.outputDir);
+  /* Defence in depth: nothing is written if a raw identifier survived anywhere. */
+  if (pseudonymised) {
+    const texts = { ...files, 'EXPORT_MANIFEST.json': JSON.stringify(manifest) };
+    const leaks = findLeaks(texts, identifiers);
+    if (leaks.length > 0) {
+      for (const l of leaks.slice(0, 20)) {
+        console.error(`csv-export: raw identifier found in ${l.file}; nothing was written`);
+      }
+      process.exit(4);
+    }
+  }
   if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
   for (const [rel, contents] of Object.entries(files)) {
     writeFileSync(join(outDir, rel), opts.excelBom ? UTF8_BOM + contents : contents, 'utf-8');
   }
   writeFileSync(join(outDir, 'EXPORT_MANIFEST.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+  if (pseudonymised) {
+    const keyPath = writeKeyFile({ keyRows, outDir, privateDir: opts.privateDir });
+    console.error(
+      `csv-export: Prolific ids replaced by codes. PRIVATE key file (never share): ${keyPath}`
+    );
+  }
   if (opts.jsonManifest) console.log(JSON.stringify(manifest, null, 2));
   console.log(
-    `csv-export: wrote ${Object.keys(files).length + 1} files to ${outDir} for ${perParticipant.length} participant(s)`
+    `csv-export: wrote ${Object.keys(files).length + 1} files to ${outDir} for ${manifest.participant_summary.n_participants} participant(s) in ${perParticipant.length} run(s)`
   );
   const problems = dataProblems(manifest);
   if (problems.length > 0) {

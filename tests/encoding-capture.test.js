@@ -88,7 +88,12 @@ function pickTrial(cond, lastKind) {
   setSessionPRNG(`harness-${cond}`);
   resetSequencePools();
   const block = CONDITIONS[cond].gen(24);
-  const t = block.find((p) => p.sequence[p.sequence.length - 1] === lastKind);
+  /* A trial whose angle is 0 has no rotation to observe: take one that turns. */
+  const t = block.find(
+    (p) =>
+      p.sequence[p.sequence.length - 1] === lastKind &&
+      (p.rotation_deg ?? p.display_rotation_deg ?? 1) !== 0
+  );
   if (!t) throw new Error(`no ${cond} trial ending in ${lastKind}`);
   return t;
 }
@@ -362,14 +367,15 @@ describe('rotation fields on the rows', () => {
     }
   }, 60000);
 
-  it('d_only draws the grid rotated by the display rotation during encoding', async () => {
+  it('d_only draws the grid like I+D: upright at encoding mount, turned to the display angle for retention and the probes', async () => {
     const params = pickTrial('d_only', 'M');
     const spy = vi.spyOn(frameModule, 'createGridFrame');
     await runTrial('d_only', params);
     const rotations = spy.mock.calls.map(([opts]) => opts.rotation_deg);
     spy.mockRestore();
-    /* Gate and ITI are upright; encoding, retention and the three probes use the display angle. */
-    expect(rotations).toEqual([0, ...Array(5).fill(params.display_rotation_deg), 0]);
+    /* Gate, encoding (mounted upright, then animated to the display angle exactly as in the
+     * imagery trials) and ITI are upright; retention and the three probes use the display angle. */
+    expect(rotations).toEqual([0, 0, ...Array(4).fill(params.display_rotation_deg), 0]);
   }, 60000);
 
   it.each(['i_d', 'i_t'])(
@@ -457,9 +463,9 @@ describe.each(Object.keys(CONDITIONS))(
       expect(enc.tone_error).toBe(false);
     });
 
-    it('stamps the start of the rotation on imagery trials only', () => {
+    it('stamps the start of the rotation on every rotating condition (imagery and D-only), not T-only', () => {
       const enc = run.rows.find((r) => phaseOf(r).endsWith('_encoding'));
-      if (imagery) {
+      if (imagery || cond === 'd_only') {
         expect(enc.rotation_start_ts_ms).toBeGreaterThanOrEqual(enc.encoding_onset_ts_ms);
         expect(enc.rotation_start_ts_ms - enc.encoding_onset_ts_ms).toBeLessThan(100);
       } else {

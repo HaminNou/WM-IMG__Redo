@@ -275,7 +275,7 @@ export async function playStereoSine(freqHz, opts = {}) {
  * not nameable as pitches. We preserve the same anchor band (200–3900 Hz,
  * within Sek & Moore 1995's similar-DLF range) and the same log-spacing
  * principle, but at 24 tones the step ratio becomes
- *   r = (highFreqHz / lowFreqHz)^(1 / (count − 1)) ≈ 1.139 (≈ 13.9 %)
+ *   r = (highFreqHz / lowFreqHz)^(1 / (count − 1)) ≈ 1.138 (≈ 13.8 %)
  * — distinct from any Western interval (semitone 5.9 %, whole-tone 12.25 %,
  * minor third 18.92 %, etc.). The companion test in `tests/tones.test.js`
  * pins the no-clean-harmonic invariant pairwise across the bank.

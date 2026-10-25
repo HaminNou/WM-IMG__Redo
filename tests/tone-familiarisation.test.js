@@ -88,6 +88,7 @@ vi.mock('../src/visuals/voiceover-slide.js', () => ({
 }));
 
 import { toneAudibilityAndComfortTrial } from '../src/calibration/tone-familiarisation.js';
+import { config } from '../src/config.js';
 
 /* Mount the combined trial node into jsdom — both the stimulus and the
  * Yes button so DOM lookups by id resolve as they would under jsPsych. */
@@ -347,5 +348,53 @@ describe('tone audibility + comfort Yes button and slider record', () => {
       base_latency_ms: 5,
       output_latency_ms: 15,
     });
+  });
+});
+
+describe('tone audibility + comfort: why the continue button is locked', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    elapsedMs = 0;
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('tells the participant, in the page, how long the wait is, derived from the sweep timing', () => {
+    const node = toneAudibilityAndComfortTrial();
+    mountTrial(node);
+    const note = document.getElementById('tac-wait-note');
+    expect(note).not.toBeNull();
+    /* one sweep = count x (tone + 200 ms gap), rounded up to whole seconds */
+    const seconds = Math.ceil((config.tones.count * (config.tones.duration_ms + 200)) / 1000);
+    expect(seconds).toBe(14);
+    expect(note.textContent).toContain(`${config.tones.count} tones`);
+    expect(note.textContent).toContain(`about ${seconds} seconds`);
+    /* kept out of the narrated block, so the narration strings are unchanged */
+    expect(note.closest('[data-voiceover-target]')).toBeNull();
+    expect(note.getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('replaces the wait note with a go-ahead when the first sweep has finished', async () => {
+    const node = toneAudibilityAndComfortTrial();
+    mountTrial(node);
+    const btn = document.getElementById('tac-yes-btn');
+    const loadPromise = node.on_load();
+    await vi.advanceTimersByTimeAsync(0);
+    elapsedMs = 60;
+    await vi.advanceTimersByTimeAsync(60);
+    expect(document.getElementById('tac-wait-note').textContent).toContain('unlocks after');
+
+    elapsedMs = 2000;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(btn.disabled).toBe(false);
+    expect(document.getElementById('tac-wait-note').textContent).toContain('You can continue now');
+
+    btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    elapsedMs = 1_000_000;
+    await vi.advanceTimersByTimeAsync(2000);
+    await loadPromise;
   });
 });

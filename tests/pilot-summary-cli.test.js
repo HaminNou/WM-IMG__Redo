@@ -24,10 +24,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts/pilot-summary.js');
 
+const TEST_SALT = 'pilot-summary-cli-test-salt-0123456789';
+
 function runCli(args) {
   return spawnSync('node', [SCRIPT_PATH, ...args], {
     encoding: 'utf-8',
     cwd: REPO_ROOT,
+    /* An explicit salt keeps every run off the per-user default salt file. */
+    env: { ...process.env, CSV_EXPORT_SALT: TEST_SALT },
   });
 }
 
@@ -63,11 +67,10 @@ describe('pilot-summary CLI smoke tests', () => {
   it('exits 0 and renders human-readable per-participant + aggregate sections', () => {
     const result = runCli([inputDir]);
     expect(result.status, `stderr: ${result.stderr}`).toBe(0);
-    /* Per-participant headers are formatted with the basename (PS_P001.json,
-     * etc). The aggregate header is the literal "=== Batch summary ===". */
-    expect(result.stdout).toContain('PS_P001.json');
-    expect(result.stdout).toContain('PS_P002.json');
-    expect(result.stdout).toContain('PS_P003.json');
+    /* Per-participant headers show the pseudonymous code and the file count, never the
+     * Prolific id or the file name. The aggregate header is "=== Batch summary ===". */
+    expect(result.stdout.match(/P[0-9a-f]{12} \(1 file\(s\)\)/g)).toHaveLength(3);
+    expect(result.stdout).not.toMatch(/PS_P00\d/);
     expect(result.stdout).toContain('=== Batch summary ===');
     expect(result.stdout).toContain('participants:');
     expect(result.stdout).toContain('attention-excluded:');
@@ -147,11 +150,16 @@ describe('pilot-summary CLI smoke tests', () => {
 
   it('accepts individual file paths as inputs (not just directories)', () => {
     const singleFile = join(inputDir, 'PS_P001.json');
-    const result = runCli(['--json', singleFile]);
+    const result = runCli(['--keep-pid', '--json', singleFile]);
     expect(result.status).toBe(0);
     const parsed = JSON.parse(result.stdout);
     expect(parsed.perParticipant.length).toBe(1);
     expect(parsed.perParticipant[0].prolific_pid).toBe('PS_P001');
+    /* Without --keep-pid the same run shows a code and no raw id anywhere. */
+    const coded = runCli(['--json', singleFile]);
+    expect(coded.status).toBe(0);
+    expect(coded.stdout).not.toContain('PS_P001');
+    expect(JSON.parse(coded.stdout).perParticipant[0].prolific_pid).toMatch(/^P[0-9a-f]{12}$/);
   });
 
   it('rejects unknown flags', () => {

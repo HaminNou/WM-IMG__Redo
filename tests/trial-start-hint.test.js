@@ -70,7 +70,7 @@ describe('trialStartGateNode end-of-trial hint overlay', () => {
     mountGateStimulus(node);
     node.on_load();
     const hint = document.querySelector('.trial-start-hint');
-    expect(hint?.textContent).toMatch(/press both left and right arrow keys/i);
+    expect(hint?.textContent).toMatch(/left and right arrow keys at the same time/i);
   });
 
   it('hint is positioned fixed at the bottom as a black-on-white pill', () => {

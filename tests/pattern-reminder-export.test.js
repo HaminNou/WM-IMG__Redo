@@ -187,14 +187,14 @@ describe('pattern-reminder fields in the tidy trials table', () => {
           ).length,
         0
       );
-      expect(mine.filter((r) => r.pattern_reminder === 'true')).toHaveLength(planned);
+      expect(mine.filter((r) => r.pattern_reminder === 'TRUE')).toHaveLength(planned);
       if (MEMORY_ONLY.includes(type)) {
         for (const r of mine) {
-          expect(r.pattern_reminder).toBe('false');
+          expect(r.pattern_reminder).toBe('FALSE');
           expect(r.trials_since_pattern_reminder).toBe('NA');
         }
       }
-      for (const r of mine.filter((x) => x.pattern_reminder === 'true'))
+      for (const r of mine.filter((x) => x.pattern_reminder === 'TRUE'))
         expect(r.trials_since_pattern_reminder).toBe('0');
     }
   });

@@ -13,7 +13,10 @@
  *     words; participants who type "blue." or "blue!" reveal sloppy reading
  *     and should fail (the design intent is to catch low-effort responding,
  *     not to be charitable about typing).
- *   - "Failure" count is the number of failed checks across the full set.
+ *   - "Failure" count is the number of DISTINCT checks failed the first time they
+ *     were shown. The practice loop repeats the checks when practice accuracy is
+ *     below criterion; a repeated miss of the same check counts once (see
+ *     `attention-scoring.js`).
  *   - Threshold is `config.attention_checks.instruction_max_failures` (= 1).
  *     Cumulative failures > threshold → flag the participant for analysis-
  *     level exclusion. **Do not** end the session early; the
@@ -26,6 +29,7 @@
  */
 import surveyHtmlForm from '@jspsych/plugin-survey-html-form';
 import { config } from '../config.js';
+import { scoreAttentionChecks } from '../attention-scoring.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
 
 /* The three items. Order is meaningful — they're interleaved through the
@@ -113,9 +117,14 @@ export function typedAttentionCheckNode(item) {
 }
 
 /**
- * Pure helper — tally results across the data rows of all attention checks.
- * Used by tests, by the runner's `on_finish` reporting, and by the post-pilot
- * analysis script.
+ * Pure helper — tally results across the data rows of all attention checks,
+ * over DISTINCT checks. The practice loop repeats the three checks whenever
+ * practice accuracy is below criterion, so a check can be administered more than
+ * once; each check id counts once and counts as failed if it was failed the first
+ * time it was shown (`failed`). The count on the final administration
+ * (`failedFinal`) and the number of administered rows (`administrations`) are
+ * reported beside it. Used by tests, by the runner's `on_finish` reporting, and by
+ * the post-pilot analysis scripts (through `scoreAttentionChecks`).
  *
  * @param {object[]} rows         array of jsPsych data rows (any phase)
  * @param {number}   [maxFailures] override config default
@@ -123,6 +132,8 @@ export function typedAttentionCheckNode(item) {
  *   total: number,
  *   passed: number,
  *   failed: number,
+ *   failedFinal: number,
+ *   administrations: number,
  *   exceededThreshold: boolean,
  *   threshold: number,
  *   ids: string[]
@@ -132,16 +143,16 @@ export function evaluateAttentionChecks(
   rows,
   maxFailures = config.attention_checks.instruction_max_failures
 ) {
-  const checks = (rows ?? []).filter((r) => r?.phase === 'attention_check');
-  const passed = checks.filter((r) => r.attention_check_passed === true).length;
-  const failed = checks.filter((r) => r.attention_check_passed === false).length;
+  const s = scoreAttentionChecks(rows, maxFailures);
   return {
-    total: checks.length,
-    passed,
-    failed,
-    exceededThreshold: failed > maxFailures,
+    total: s.total,
+    passed: s.passed,
+    failed: s.failed_first,
+    failedFinal: s.failed_final,
+    administrations: s.administrations,
+    exceededThreshold: s.excluded,
     threshold: maxFailures,
-    ids: checks.map((r) => r.attention_check_id),
+    ids: s.ids,
   };
 }
 
@@ -173,6 +184,8 @@ export function attentionCheckSummaryNode() {
       data.attention_total = summary.total;
       data.attention_passed = summary.passed;
       data.attention_failed = summary.failed;
+      data.attention_failed_final = summary.failedFinal;
+      data.attention_administrations = summary.administrations;
       data.attention_excluded = summary.exceededThreshold;
       data.attention_threshold = summary.threshold;
     },

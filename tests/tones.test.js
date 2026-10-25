@@ -7,7 +7,7 @@
  *      is avoided because every tone would land on a named pitch class,
  *      exposing the bank to note-name re-encoding by musically trained
  *      participants.
- *   2. The neighbour ratio `(3900/200)^(1/23)` ≈ 1.1379 (~ 13.9 %, ≈ 224
+ *   2. The neighbour ratio `(3900/200)^(1/23)` ≈ 1.1379 (~ 13.8 %, ≈ 224
  *      cents) sits in the gap *between* a Western whole-tone (200 cents)
  *      and a minor third (300 cents) — it is not a labelled musical
  *      interval in any 12-tet system.

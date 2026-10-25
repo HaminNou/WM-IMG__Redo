@@ -14,8 +14,54 @@
  * stimuli are all in the 200–3900 Hz band so any rate ≥ 8 kHz is fine.
  */
 
+import { rowClock } from '../clock.js';
+
 let audioCtx = null;
 let unlocked = false;
+
+/* Audio-state log. The context can leave `running` without any action by the
+ * participant: Safari sets `interrupted` after a call, a headset change or a
+ * tab switch, and Chrome suspends an idle context. Each change is written as
+ * one row (`audio_state_change`) so the analyst can see which sessions had
+ * silent stretches, and a suspended or interrupted context is resumed at once.
+ * The runner supplies the row writer; nothing here depends on storage. */
+const STATE_LOG_MAX = 50;
+let stateLogger = null;
+let stateLogged = 0;
+
+/** @param {((row: object) => unknown)|null} fn  writes one row; null stops logging */
+export function setAudioStateLogger(fn) {
+  stateLogger = typeof fn === 'function' ? fn : null;
+}
+
+function onStateChange() {
+  try {
+    const state = audioCtx?.state;
+    if (stateLogger && stateLogged < STATE_LOG_MAX) {
+      stateLogged += 1;
+      let clock = {};
+      try {
+        clock = rowClock();
+      } catch {
+        clock = {};
+      }
+      const written = stateLogger({
+        phase: 'audio_state_change',
+        audio_state: state ?? null,
+        ts: performance.now(),
+        ...clock,
+      });
+      if (written && typeof written.catch === 'function') written.catch(() => {});
+    }
+    if (state === 'suspended' || state === 'interrupted') {
+      /* Outside a user gesture this can be refused; the next tone's
+       * `ensureRunning()` and the next key press try again. */
+      Promise.resolve(audioCtx.resume()).catch(() => {});
+    }
+  } catch {
+    /* A state listener must never throw. */
+  }
+}
 
 export function getAudioContext() {
   if (!audioCtx) {
@@ -24,6 +70,7 @@ export function getAudioContext() {
       throw new Error('Web Audio API not available in this browser.');
     }
     audioCtx = new Ctor();
+    audioCtx.addEventListener?.('statechange', onStateChange);
   }
   return audioCtx;
 }
@@ -34,7 +81,7 @@ export function getAudioContext() {
  */
 export async function unlockAudio() {
   const ctx = getAudioContext();
-  if (ctx.state === 'suspended') {
+  if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
     await ctx.resume();
   }
   if (!unlocked) {
@@ -61,7 +108,7 @@ export async function unlockAudio() {
  */
 export async function ensureRunning() {
   if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') {
+  if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
     await audioCtx.resume();
   }
 }

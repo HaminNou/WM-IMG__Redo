@@ -58,5 +58,7 @@ export function desktopGateExit() {
       const result = last?.value;
       return result ? !result.isDesktop : false;
     },
+    /* the consent form has not been shown yet at this point */
+    beforeConsent: true,
   });
 }

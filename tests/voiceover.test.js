@@ -521,6 +521,32 @@ describe('audio-manifest playback', () => {
     for (const s of spansAfter) expect(s.classList.contains(CSS_WORD_REVEALED)).toBe(true);
   });
 
+  it('finishes silently (no hang, no Web Speech) when the audio element reports a decode/network error', async () => {
+    const text = 'A caption whose recording fails to load';
+    const hash = await hashOf(text);
+    __setVoiceoverManifestForTests({ version: 1, entries: { [hash]: { file: `${hash}.mp3` } } });
+    const ctrl = getVoiceover().narrate(document.createElement('div'), text);
+    await ctrl._started;
+    expect(createdAudios).toHaveLength(1);
+    createdAudios[0]._fireError();
+    expect(await ctrl.done).toBe('completed');
+    expect(mockSynth.spoken).toHaveLength(0);
+  });
+
+  it('finishes silently (no hang, no Web Speech) when play() is rejected, e.g. autoplay blocked', async () => {
+    const text = 'A caption whose playback is blocked';
+    const hash = await hashOf(text);
+    __setVoiceoverManifestForTests({ version: 1, entries: { [hash]: { file: `${hash}.mp3` } } });
+    window.Audio.prototype.play = function () {
+      this.played = true;
+      return Promise.reject(new DOMException('blocked', 'NotAllowedError'));
+    };
+    const ctrl = getVoiceover().narrate(document.createElement('div'), text);
+    await ctrl._started;
+    expect(await ctrl.done).toBe('completed');
+    expect(mockSynth.spoken).toHaveLength(0);
+  });
+
   it('reveals words progressively as `timeupdate` events fire (audio-clock-driven gray→white pacing)', async () => {
     const text = 'one two three four five';
     const hash = await hashOf(text);

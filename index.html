@@ -154,6 +154,16 @@
       .jspsych-content {
         max-width: 720px;
       }
+      /* Text slides (instruction decks, posture/hands pages) use a 50 rem
+       * (800 px) column that is wider than the 720 px cap above. Let the
+       * host grow to fit it so the column is centred, not pushed ~40 px to
+       * the right. Both the host and the slide wrapper cap at 94vw, so on
+       * narrow windows they shrink together instead of overflowing the
+       * viewport. Browsers without `:has()`
+       * keep the 720 px cap and the wrapper shrinks to it (centred). */
+      .jspsych-content:has(.slide-text) {
+        max-width: 94vw;
+      }
       /* Demo slides need the full viewport so (a) the longest task title
        * ("Demonstration of Task 5 – Tones and pattern together") stays on
        * one line and (b) the title/circle/hint can spread across the page
@@ -363,6 +373,84 @@
     </style>
   </head>
   <body>
+    <noscript>
+      <div
+        style="
+          max-width: 36rem;
+          margin: 4rem auto;
+          padding: 2rem;
+          text-align: center;
+          font-family: sans-serif;
+        "
+      >
+        <h2>JavaScript is turned off</h2>
+        <p>
+          This study needs JavaScript. Please turn it on in your browser settings and reload the
+          page.
+        </p>
+      </div>
+    </noscript>
+    <!-- Browser gate. A plain ES5 script (it must run in a browser that cannot run the
+         study itself): it checks the features the study uses and, if one is missing, shows
+         a plain message instead of a blank page. It sets window.__studyUnsupported, which
+         src/runner.js checks before it starts. The list comes from what the code uses:
+         JavaScript modules, Promise.allSettled (storage.js), fetch and AbortController
+         (uploader.js, rest.js), Web Audio, requestAnimationFrame, matchMedia (display
+         guard), Object.fromEntries (strategy.js), Blob URLs (data download) and
+         Object.hasOwn (called by jsPsych on every trial). Object.hasOwn is the newest of
+         them: Chrome/Edge 93, Firefox 92, Safari 15.4 (MDN browser-compat-data), so a
+         browser that passes this gate has all the others. -->
+    <script>
+      (function () {
+        var missing = [];
+        function need(ok, name) {
+          if (!ok) missing.push(name);
+        }
+        try {
+          need('noModule' in HTMLScriptElement.prototype, 'JavaScript modules');
+          need(
+            typeof window.Promise === 'function' && typeof Promise.allSettled === 'function',
+            'Promise.allSettled'
+          );
+          need(typeof window.fetch === 'function', 'fetch');
+          need(typeof window.AbortController === 'function', 'AbortController');
+          need(!!(window.AudioContext || window.webkitAudioContext), 'Web Audio');
+          need(typeof window.requestAnimationFrame === 'function', 'requestAnimationFrame');
+          need(typeof window.matchMedia === 'function', 'matchMedia');
+          need(typeof Object.fromEntries === 'function', 'Object.fromEntries');
+          need(typeof Object.hasOwn === 'function', 'Object.hasOwn');
+          need(
+            typeof window.Blob === 'function' && !!(window.URL && URL.createObjectURL),
+            'Blob URLs'
+          );
+        } catch (e) {
+          missing.push('feature check');
+        }
+        if (missing.length === 0) return;
+        window.__studyUnsupported = missing;
+        function show() {
+          var box = document.createElement('div');
+          box.setAttribute('role', 'alert');
+          box.style.cssText =
+            'max-width:36rem;margin:4rem auto;padding:2rem;text-align:center;font-family:sans-serif;';
+          var h = document.createElement('h2');
+          h.textContent = 'This browser cannot run the study';
+          var p = document.createElement('p');
+          p.textContent =
+            'This study needs a recent desktop browser: the current version of Chrome, Edge, Firefox or Safari (Chrome or Edge 93, Firefox 92 or Safari 15.4 at the oldest). Please open the same link in one of these.';
+          var small = document.createElement('p');
+          small.style.cssText = 'font-size:0.85em;opacity:0.7;';
+          small.textContent = 'Missing in this browser: ' + missing.join(', ');
+          box.appendChild(h);
+          box.appendChild(p);
+          box.appendChild(small);
+          document.body.textContent = '';
+          document.body.appendChild(box);
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show);
+        else show();
+      })();
+    </script>
     <script type="module" src="/src/runner.js"></script>
   </body>
 </html>

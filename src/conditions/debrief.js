@@ -22,6 +22,18 @@
  *      upload (the upload summary and the completion row) are sent in one
  *      short extra file, limited to a few seconds.
  *
+ * When the upload did NOT succeed (status partial, timed_out or no_endpoint)
+ * the completion node does not redirect on its own. The participant has
+ * finished the study, and a problem on our side must not cost them the
+ * completion code, but nobody should be moved on before their data is safe
+ * either. The screen therefore (a) says plainly what happened, (b) offers a
+ * new upload attempt and a second download of the data file, and (c) shows a
+ * "Continue to Prolific" button that the participant presses once the file is
+ * saved. Pressing it writes `redirect_after_failed_upload: true` into the
+ * completion row, tries one last upload for a few seconds, and then goes to
+ * Prolific. The researcher can compare Prolific submissions with the files that
+ * arrived to find who still needs to send a file.
+ *
  * Why these are separate nodes: the upload step is a network operation that
  * should be retryable / observable; the redirect is a one-way trip out of the
  * page. Splitting them lets the participant see "your data is saved" before
@@ -56,6 +68,11 @@ import { continueHintHtml } from '../visuals/continue-hint.js';
 const PROGRESS_MOUNT_ID = 'upload-progress-mount';
 const REDIRECT_DELAY_MS_DEFAULT = 5000;
 const REDIRECT_TICK_MS = 1000;
+/* Longest the "Continue to Prolific" button waits for one last upload. */
+const FINAL_UPLOAD_WAIT_MS = 6000;
+/* Upload outcomes that count as saved. Anything else sends the participant to the failure screen. */
+const UPLOAD_SAVED = ['uploaded', 'nothing_to_upload'];
+const UPLOAD_FAILED = ['partial', 'timed_out', 'no_endpoint'];
 /* Longest the redirect waits for the last upload. */
 const TAIL_WAIT_MS = 2500;
 
@@ -186,6 +203,18 @@ async function runUploadFlow({ session, endpoint, maxWaitMs }) {
   let result;
   try {
     result = await Promise.race([upload, limit]);
+  } catch (err) {
+    /* The upload threw instead of resolving (for example while building a
+     * file). That must not strand the data: report it as a partial upload so
+     * the download fallback below is offered. */
+    console.error('[debrief] upload failed', err);
+    result = {
+      status: 'partial',
+      uploadedBuckets,
+      totalBuckets,
+      uploadedRows: 0,
+      lastError: String(err?.message ?? err),
+    };
   } finally {
     clearTimeout(limitTimer);
   }
@@ -193,6 +222,7 @@ async function runUploadFlow({ session, endpoint, maxWaitMs }) {
   upload.catch(() => {});
 
   let downloadFallback = false;
+  let downloadName = null;
   if (['no_endpoint', 'partial', 'timed_out'].includes(result.status)) {
     /* Cases that land here:
      *   - no endpoint configured (before the upload endpoint is configured);
@@ -204,6 +234,7 @@ async function runUploadFlow({ session, endpoint, maxWaitMs }) {
       const rows = await getAllTrialRows();
       const dl = downloadAsJson({ session, rows });
       downloadFallback = true;
+      downloadName = dl.filename;
       update(renderDownloadFallback(result, dl));
     } catch (err) {
       update(renderError(err.message));
@@ -219,6 +250,8 @@ async function runUploadFlow({ session, endpoint, maxWaitMs }) {
     totalBuckets: result.totalBuckets,
     uploadedRows: result.uploadedRows,
     downloadFallback,
+    download_filename: downloadName,
+    failed_buckets: result.failedBuckets ?? null,
     last_error: result.lastError,
   };
 }
@@ -259,8 +292,8 @@ function renderDownloadFallback(result, dl) {
   return `
     ${head}
     <div style="margin-top: 0.5rem; opacity: 0.85;">
-      A file <code>${dl.filename}</code> (${(dl.sizeBytes / 1024).toFixed(1)} KB) has been
-      downloaded. Please email it to the experimenter if asked.
+      A copy of your data, <code>${escapeHtml(dl.filename)}</code> (${(dl.sizeBytes / 1024).toFixed(1)} KB),
+      has been downloaded to your device. The next screen explains what to do with it.
     </div>
     ${continueHintHtml('Press <kbd>Space</kbd> to continue.')}
   `;
@@ -296,7 +329,29 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
   const delayMs = redirectDelayMs ?? REDIRECT_DELAY_MS_DEFAULT;
   let redirectUrl = null;
   let trialFinished = false;
-
+  /* True when the upload before this screen did not succeed (see the header). */
+  let failedUpload = false;
+  let countdownTimer = null;
+  let removeSpaceBlock = null;
+  /* Upload attempts made on this screen after the end-of-session upload failed.
+   * Each one writes an `upload_retry_result` row, so the data show the LATEST
+   * outcome and not only the first (`upload_session_end` keeps the status of
+   * the first attempt, e.g. 'partial', even when a retry then delivered every
+   * file). The row is written before the next tail upload, so it travels. */
+  let uploadAttempts = 0;
+  const recordUploadAttempt = async (status, trigger) => {
+    uploadAttempts += 1;
+    const first = lastUploadRow();
+    await appendTrialRow({
+      phase: 'upload_retry_result',
+      status,
+      upload_attempt: uploadAttempts,
+      after_failure: true,
+      retry_trigger: trigger,
+      previous_status: first?.status ?? null,
+      ...rowClock(),
+    }).catch((err) => console.error('[debrief] upload retry row failed', err));
+  };
   /* Send the rows written since the end-of-session upload. Never waits longer
    * than TAIL_WAIT_MS, and a failure changes nothing for the participant. */
   const sendTail = async () => {
@@ -313,8 +368,27 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
       clearTimeout(timer);
     }
   };
-
-  const redirect = async (url) => {
+  /* After a failed upload: one more attempt, bounded, with the completion row
+   * already in storage so that it travels with the data if the attempt works. */
+  const finalUploadAttempt = async () => {
+    if (!session) return;
+    let timer = null;
+    const limit = new Promise((resolve) => {
+      timer = setTimeout(resolve, FINAL_UPLOAD_WAIT_MS);
+    });
+    let status = 'timed_out';
+    try {
+      const result = await Promise.race([uploadPendingData({ session }), limit]);
+      if (result && typeof result.status === 'string') status = result.status;
+    } catch (err) {
+      status = 'error';
+      console.error('[debrief] final upload attempt failed', err);
+    } finally {
+      clearTimeout(timer);
+    }
+    await recordUploadAttempt(status, 'continue_button');
+  };
+  const redirect = async (url, { afterFailedUpload = false } = {}) => {
     /* The page is about to be left, so the trial will not finish: write its
      * row here, unless the participant already ended the trial. */
     if (!trialFinished) {
@@ -322,12 +396,108 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
         phase: 'completion_redirect',
         completion_redirect_url: url,
         completion_was_placeholder: false,
+        redirect_after_failed_upload: afterFailedUpload,
         ...rowClock(),
       }).catch((err) => console.error('[debrief] completion row failed', err));
     }
+    if (afterFailedUpload) await finalUploadAttempt();
     await sendTail();
     markUploadDone();
     window.location.href = url;
+  };
+  const startCountdown = (mount, url) => {
+    blockSpaceOutsideControls();
+    let remainingS = Math.ceil(delayMs / 1000);
+    mount.innerHTML = renderRedirectCountdown(url, remainingS);
+    countdownTimer = setInterval(() => {
+      remainingS -= 1;
+      if (remainingS <= 0) {
+        clearInterval(countdownTimer);
+        void redirect(url);
+        return;
+      }
+      const node = document.getElementById('completion-countdown');
+      if (node) node.textContent = String(remainingS);
+      const unit = document.getElementById('completion-countdown-unit');
+      if (unit) unit.textContent = secondsWord(remainingS);
+    }, REDIRECT_TICK_MS);
+  };
+  /* While the failure screen or the countdown is up, Space must never reach
+   * jsPsych: this trial accepts [' '] as a response, and a Space that bubbles to
+   * the engine ends the trial, which empties the screen and leaves the
+   * participant with nothing (and no redirect). So the key is always stopped here.
+   * On a real button or link the default action is kept, because that is how the
+   * keyboard activates it (the click fires on keyup, after the trial could have
+   * been ended). Anywhere else the default is cancelled too. */
+  const blockSpaceOutsideControls = () => {
+    if (removeSpaceBlock) return;
+    const handler = (e) => {
+      if (e.key !== ' ' && e.code !== 'Space') return;
+      e.stopPropagation();
+      const t = e.target;
+      if (t && typeof t.closest === 'function' && t.closest('button, a')) return;
+      e.preventDefault();
+    };
+    document.addEventListener('keydown', handler, true);
+    removeSpaceBlock = () => {
+      document.removeEventListener('keydown', handler, true);
+      removeSpaceBlock = null;
+    };
+  };
+  const showUploadFailure = (mount, url, downloadName) => {
+    mount.innerHTML = renderUploadFailure({
+      downloadName,
+      canRetry: Boolean(session),
+    });
+    blockSpaceOutsideControls();
+    const status = document.getElementById('upload-failure-status');
+    const say = (text) => {
+      if (status) status.textContent = text;
+    };
+    const buttons = () => Array.from(mount.querySelectorAll('button'));
+    const setBusy = (busy) => buttons().forEach((b) => (b.disabled = busy));
+
+    document.getElementById('upload-download-again')?.addEventListener('click', async () => {
+      try {
+        const rows = await getAllTrialRows();
+        const dl = downloadAsJson({ session, rows });
+        say(`Saved ${dl.filename} to your downloads.`);
+      } catch {
+        say('The file could not be saved. Please message the researcher through Prolific.');
+      }
+    });
+
+    document.getElementById('upload-retry')?.addEventListener('click', async () => {
+      setBusy(true);
+      say('Sending… this can take up to a minute.');
+      let result;
+      try {
+        result = await uploadPendingData({
+          session,
+          onProgress: ({ bucketIndex: i, totalBuckets: n }) =>
+            say(`Sending file ${i + 1} of ${n}…`),
+        });
+      } catch {
+        result = { status: 'partial' };
+      }
+      await recordUploadAttempt(result.status, 'retry_button');
+      if (UPLOAD_SAVED.includes(result.status)) {
+        removeSpaceBlock?.();
+        failedUpload = false;
+        startCountdown(mount, url);
+        return;
+      }
+      say(
+        'We still could not reach our server. Please keep the downloaded file and use the button below.'
+      );
+      setBusy(false);
+    });
+
+    document.getElementById('upload-continue')?.addEventListener('click', () => {
+      setBusy(true);
+      say('Taking you back to Prolific…');
+      void redirect(url, { afterFailedUpload: true });
+    });
   };
   return {
     type: htmlKeyboardResponse,
@@ -345,29 +515,57 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
         redirectUrl = null;
         return;
       }
-      let remainingS = Math.ceil(delayMs / 1000);
-      mount.innerHTML = renderRedirectCountdown(url, remainingS);
-      const interval = setInterval(() => {
-        remainingS -= 1;
-        if (remainingS <= 0) {
-          clearInterval(interval);
-          void redirect(url);
-          return;
-        }
-        const node = document.getElementById('completion-countdown');
-        if (node) node.textContent = String(remainingS);
-      }, REDIRECT_TICK_MS);
       redirectUrl = url;
+      const outcome = lastUploadRow();
+      failedUpload = Boolean(outcome && UPLOAD_FAILED.includes(outcome.status));
+      if (failedUpload) {
+        showUploadFailure(mount, url, outcome.download_filename ?? null);
+        return;
+      }
+      startCountdown(mount, url);
     },
     on_finish: (data) => {
       trialFinished = true;
+      removeSpaceBlock?.();
       data.completion_redirect_url = redirectUrl;
       data.completion_was_placeholder = !redirectUrl;
+      data.redirect_after_failed_upload = failedUpload;
       /* The row is stored after this callback returns. */
       setTimeout(() => void sendTail(), 0);
     },
     data: { phase: 'completion_redirect' },
   };
+}
+
+/** The data row the upload screen wrote (`phase: 'upload_session_end'`), or null. */
+function lastUploadRow() {
+  try {
+    const rows = window.jsPsych?.data?.get?.().filter({ phase: 'upload_session_end' }).values();
+    return rows && rows.length > 0 ? rows[rows.length - 1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderUploadFailure({ downloadName, canRetry }) {
+  const fileLine = downloadName
+    ? `<p>A copy of your answers was downloaded to your device as <code>${escapeHtml(downloadName)}</code> (look in your Downloads folder). Please keep that file and send it to the researcher through Prolific messaging.</p>`
+    : `<p>Use the button below to save a copy of your answers to your device, then send that file to the researcher through Prolific messaging.</p>`;
+  const retry = canRetry
+    ? `<button id="upload-retry" type="button" style="font-size: 1rem; padding: 0.5rem 1rem;">Try sending my answers again</button>`
+    : '';
+  return `
+    <h2 style="margin: 0;">Thank you – one more step</h2>
+    <p style="margin: 0;">You have finished the study, but we could not send your answers to our server automatically.</p>
+    ${fileLine}
+    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; justify-content: center;">
+      ${retry}
+      <button id="upload-download-again" type="button" style="font-size: 1rem; padding: 0.5rem 1rem;">Download my data file again</button>
+    </div>
+    <p id="upload-failure-status" aria-live="polite" style="margin: 0; min-height: 1.5em;"></p>
+    <p style="margin: 0;">When your file is saved, press the button below. It takes you back to Prolific to record that you finished.</p>
+    <button id="upload-continue" type="button" style="font-size: 1.1rem; padding: 0.6rem 1.2rem;">Continue to Prolific</button>
+  `;
 }
 
 function renderTestBuildNotice(url) {
@@ -382,12 +580,22 @@ function renderTestBuildNotice(url) {
   `;
 }
 
+/** "second" for 1, "seconds" otherwise ("in 1 seconds" is wrong). */
+function secondsWord(n) {
+  return n === 1 ? 'second' : 'seconds';
+}
+
+/* Link colour on the light page backgrounds (#d3d3d3 grey, #ffffff white).
+ * #1e40af gives 5.8:1 on grey and 8.7:1 on white; the previous #60a5fa gave
+ * 1.7:1 and 2.5:1 (verifier V4-03). WCAG AA for normal text needs 4.5:1. */
+const COMPLETION_LINK_COLOUR = '#1e40af';
+
 function renderRedirectCountdown(url, remainingS) {
   return `
     <h2 style="margin: 0;">Thank you!</h2>
-    <p style="margin: 0;">Redirecting to Prolific in <span id="completion-countdown" style="font-weight: bold;">${remainingS}</span> seconds…</p>
+    <p style="margin: 0;">Redirecting to Prolific in <span id="completion-countdown" style="font-weight: bold;">${remainingS}</span> <span id="completion-countdown-unit">${secondsWord(remainingS)}</span>…</p>
     <p style="margin-top: 0.5rem; opacity: 0.85;">
-      If the redirect doesn't happen, <a href="${escapeHtml(url)}" style="color: #60a5fa;">click here</a>.
+      If the redirect doesn't happen, <a href="${escapeHtml(url)}" style="color: ${COMPLETION_LINK_COLOUR}; text-decoration: underline;">click here</a>.
     </p>
   `;
 }
@@ -395,4 +603,6 @@ function renderRedirectCountdown(url, remainingS) {
 export const _testHelpers = Object.freeze({
   REDIRECT_DELAY_MS_DEFAULT,
   PROGRESS_MOUNT_ID,
+  COMPLETION_LINK_COLOUR,
+  renderRedirectCountdown,
 });

@@ -25,6 +25,8 @@ import { simulateOne } from '../scripts/simulate-pilot.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const SCRIPT_PATH = join(REPO_ROOT, 'scripts/csv-export.js');
+const TEST_SALT = 'csv-export-cli-test-salt-0123456789';
+const CODE_RE = /^P[0-9a-f]{12}$/;
 
 /* Files composeExport always writes (5 trial types × 2 criteria + 5 aux + manifest). */
 const EXPECTED_FILES = Object.freeze([
@@ -39,10 +41,12 @@ const EXPECTED_FILES = Object.freeze([
   'I_T_Criterion1.csv',
   'I_T_Criterion2.csv',
   'CALIBRATION_SUMMARY.csv',
+  'PARTICIPANT_SUMMARY.csv',
   'STRATEGY.csv',
   'STRATEGY_SCORES.csv',
   'MUSIC.csv',
   'ATTENTION_CHECKS.csv',
+  'DIAGNOSTICS.csv',
   'DEMOGRAPHICS.csv',
   'EVENTS.csv',
   'trials.csv',
@@ -55,7 +59,8 @@ function runCli(args, opts = {}) {
   return spawnSync('node', [SCRIPT_PATH, ...args], {
     encoding: 'utf-8',
     cwd: opts.cwd ?? REPO_ROOT,
-    env: { ...process.env, ...(opts.env ?? {}) },
+    /* An explicit salt keeps every run off the per-user default salt file. */
+    env: { ...process.env, CSV_EXPORT_SALT: TEST_SALT, ...(opts.env ?? {}) },
   });
 }
 
@@ -115,7 +120,9 @@ describe('csv-export CLI smoke tests', () => {
         f !== 'STRATEGY_SCORES.csv' &&
         f !== 'MUSIC.csv' &&
         f !== 'ATTENTION_CHECKS.csv' &&
+        f !== 'DIAGNOSTICS.csv' &&
         f !== 'CALIBRATION_SUMMARY.csv' &&
+        f !== 'PARTICIPANT_SUMMARY.csv' &&
         f !== 'DEMOGRAPHICS.csv' &&
         f !== 'EVENTS.csv' &&
         f !== 'trials.csv' &&
@@ -172,7 +179,10 @@ describe('csv-export CLI smoke tests', () => {
     expect(manifest).toHaveProperty('generator');
     expect(manifest.generator.name).toBe('csv-export.js');
     expect(manifest.n_participants).toBe(3);
-    expect(manifest.participant_ids.sort()).toEqual(['CLI_P001', 'CLI_P002', 'CLI_P003']);
+    /* Pseudonymised by default: codes, never the Prolific ids. */
+    expect(manifest.participant_ids).toHaveLength(3);
+    for (const id of manifest.participant_ids) expect(id).toMatch(CODE_RE);
+    expect(JSON.stringify(manifest)).not.toMatch(/CLI_P00/);
     expect(manifest.build_ids).toEqual(['v1']);
     expect(manifest.schema_versions).toEqual(['1.2.0']);
     expect(manifest.is_pilot_run_flags).toEqual([true]);
@@ -307,7 +317,9 @@ describe('csv-export CLI smoke tests', () => {
       const manifest = JSON.parse(readFileSync(join(out, 'EXPORT_MANIFEST.json'), 'utf-8'));
       expect(manifest.n_participants).toBe(2);
       expect(manifest.reloaded_participants).toHaveLength(1);
-      expect(readFileSync(join(out, 'trials.csv'), 'utf-8')).toContain('P1__run_bbbb2222');
+      const trials = readFileSync(join(out, 'trials.csv'), 'utf-8');
+      expect(trials).toMatch(/P[0-9a-f]{12}__run_bbbb2222/);
+      expect(trials).not.toContain('P1__run');
     });
 
     it('exits 3 after writing the files when a main trial occurs twice in one run', () => {

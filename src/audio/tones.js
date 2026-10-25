@@ -3,8 +3,8 @@
  *
  * The bank is **24 sine tones logarithmically spaced from 200 Hz to 3900 Hz**. Frequencies are
  *   f_k = lowFreqHz × (highFreqHz / lowFreqHz)^((k−1) / (count−1))
- * which puts neighbouring tones at a ratio of (3900/200)^(1/23) ≈ 1.139
- * (~13.9 % per step) — a non-Western interval that adapts Li, Cowan &
+ * which puts neighbouring tones at a ratio of (3900/200)^(1/23) ≈ 1.138
+ * (~13.8 % per step) — a non-Western interval that adapts Li, Cowan &
  * Saults (2013, *APP* 75(1), p. 150) to a 24-tone variant. A
  * chromatic ladder (220 × 2^((k−1)/12)) is avoided because every tone
  * would land on a named pitch class, exposing the bank to note-name

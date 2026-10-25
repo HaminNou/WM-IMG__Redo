@@ -18,7 +18,8 @@ export const PROLIFIC_PRESCREEN_SUMMARY = Object.freeze([
   'Vision: normal or corrected-to-normal vision (glasses or contacts)',
   'Hearing: normal hearing',
   'Language: fluent in English',
-  'Device: a desktop or laptop computer, used with headphones',
+  'Prolific approval rate: 95% or higher',
+  'Device: a desktop or laptop computer',
 ]);
 
 function deepFreeze(value) {
@@ -73,7 +74,7 @@ export const config = deepFreeze({
    * range so all 24 tones sit in a regime of comparable pitch acuity, and
    * (ii) Li et al. demonstrated this band can be filled with non-musical sine
    * tones that resist octave-equivalence chunking (Shepard 1982). At 24
-   * tones the neighbour ratio is `(3900/200)^(1/23) ≈ 1.139` (~13.9 %),
+   * tones the neighbour ratio is `(3900/200)^(1/23) ≈ 1.138` (~13.8 %),
    * distinct from any Western interval (semitone 5.9 %, whole-tone 12.25 %,
    * minor third 18.92 %, major third 25.99 %, fifth 49.83 %); see
    * `tests/tones.test.js` for the no-near-harmonic and no-near-musical-step
@@ -142,7 +143,14 @@ export const config = deepFreeze({
    *
    * Imagination period (`imagination_duration_ms`):
    * the empty-circle hold between the arrow cue and the encoding rotation
-   * is fixed at 3500 ms. During this window the participant has the
+   * is fixed at 3500 ms. The circle (with its bull's-eye) stays blank through
+   * the encoding node's own rotation (500 ms) and stabilisation (1000 ms), so
+   * from the end of the arrow cue to the first stimulus the participant faces
+   * 3500 + 500 + 1000 = 5000 ms of blank circle: the "5,000-ms imagination
+   * period" of the manuscript and thesis, and the "5 seconds" of the
+   * instructions (pinned by tests/instruction-claims.test.js). Do not raise
+   * `imagination_duration_ms` to 5000: that would make the interval 6500 ms.
+   * During this window the participant has the
    * rotation angle in mind from the arrow cue and uses the time to
    * pre-imagine the rotated 13-cell pattern. The window is fixed (no
    * input, no auto-pass-on-keypress) so encoding-onset is identical
@@ -221,15 +229,17 @@ export const config = deepFreeze({
 
     /* Completion code Prolific issues for participants screened out by an
      * in-study check (desktop check, screen-size calibration, tone audibility, pitch check, timing check, practice criterion).
-     * Create it as a separate completion code on the Prolific study page
-     * and replace this placeholder before launch. */
+     * Prolific generates it when a completion path labelled "Screened out"
+     * is added in the study editor's Data collection section; the value here
+     * must equal the generated code. */
     screen_out_completion_code: 'CED70N6J',
 
-    /* Statement shown in the consent form about payment for time spent before
-     * an in-study check ends the session. Replace the bracketed placeholder
-     * with the study's actual policy before launch. */
+    /* Statement shown in the consent form about what is paid when an in-study
+     * check ends the session. Prolific pays every screened-out participant the
+     * single fixed screen-out reward set on the study, so this text names one
+     * amount; it must equal the screen-out reward in the Prolific editor. */
     payment_policy_text:
-      '$0.14 if the session ends at the device or sound check; later exits are paid in proportion to time',
+      'a fixed screen-out payment of $0.14 through Prolific, the same whichever of these checks ends the session',
   },
 
   /* Data egress — DataPipe (https://pipe.jspsych.org), jsPsych's free
@@ -237,7 +247,9 @@ export const config = deepFreeze({
    * captured rows into the canonical 10-bucket layout
    * (`src/uploader.js#BUCKETS`) and POSTs one DataPipe envelope per
    * non-empty bucket. DataPipe writes one file per envelope, named
-   * `<session_id>__<NN_label>.json` (e.g. `<sid>__03_d_only.json`). A
+   * `<session_id>__<run_id>__<NN_label>_s<seqMin>-<seqMax>.json` (e.g.
+   * `<sid>__<run>__03_d_only_s20-740.json`; the seq range makes a bucket that
+   * grew between two upload attempts a new file). A
    * complete session therefore yields up to 10 bucket files: consent +
    * demographics, practice, d_only, i_only (= "star-only"), t_only, i_t
    * (= "dual tone+star"), i_d (= "dual dot+star"), music questionnaire,
@@ -247,9 +259,16 @@ export const config = deepFreeze({
    * canonical reading order without manual sort.
    *
    * Timeline of uploads: the consent and practice buckets are sent at the
-   * inter-block rest, a checkpoint file (`<sid>__ckpt_<seqMin>-<seqMax>.json`)
-   * is sent at every rest screen, and the remaining buckets are sent at the
-   * end of the session (or when a check ends the session). Every row is also
+   * inter-block rest, a checkpoint file
+   * (`<session_id>__<run_id>__ckpt_<seqMin>-<seqMax>.json`) is sent at every
+   * rest screen, and the remaining buckets are sent at the end of the session
+   * (or when a check ends the session). The rows written after that upload go
+   * out in a tail file (`<session_id>__<run_id>__tail_<seqMin>-<seqMax>.json`),
+   * and a best-effort flush when the page is hidden or closed sends a partial
+   * file (`<session_id>__<run_id>__partial_<seqMin>-<seqMax>.json`). The file
+   * names are built from sanitised ids; the loaders read the rows inside the
+   * files and de-duplicate them on (run, seq), so a row present in a partial
+   * and in a regular file is counted once. Every row is also
    * persisted to IndexedDB immediately, so a crash before upload still
    * yields a recoverable local download.
    *

@@ -9,7 +9,9 @@
  *      turn of the frame. Mounted only AFTER the gate fires, so the
  *      arrow presentation is unambiguously part of the trial.
  *   3. Imagination period (3500 ms): empty circle
- *      with no arrow. Fixed-duration window in which the participant
+ *      with no arrow (the invisible rotation, 500 ms, and the 1000 ms
+ *      stabilisation that follow keep the circle blank, so 5000 ms pass
+ *      between arrow offset and the first stimulus). Fixed-duration window in which the participant
  *      pre-imagines the rotated pattern; no input is accepted.
  *   4. Encoding node (single jsPsych trial; async on_load schedule so the
  *      grid frame mounts once and we avoid between-event flicker):
@@ -36,7 +38,7 @@
  *      probe (probes run back-to-back).
  *   7. Final ITI 800 ms.
  *
- * Per-star data rows are emitted via `jsPsych.data.write({...})` so each
+ * Per-star data rows are emitted via `emitAuxDataRow({...})` (shared.js: pushes the row into jsPsych's in-memory data and the storage backend) so each
  * star produces an `i_d_star` row alongside the encoding node. Probe data
  * is captured on the probe nodes (`i_d_probe` phase) — both stream into the
  * uploader uniformly.

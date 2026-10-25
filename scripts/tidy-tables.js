@@ -27,6 +27,7 @@
 import { config } from '../src/config.js';
 import { onPatternCells } from '../src/grid.js';
 import { toneForCell } from '../src/audio/tones.js';
+import { ROTATION_STRATA } from '../src/scheduler/rotation-balance.js';
 
 export const TIDY_VERSION = '1.0.0';
 export const RT_FLOOR_MS = 250;
@@ -197,6 +198,7 @@ export const TRIALS_COLUMNS = [
   'n_stars_anticipatory',
   'n_stars_missing_row',
   'trial_star_excluded',
+  'star_correct_all',
   'n_probes_correct',
   'n_probes_no_response',
   'n_probes_anticipatory',
@@ -263,6 +265,7 @@ export const STARS_COLUMNS = [
   'excluded_anticipatory',
   'star_onset_ms',
   'trial_star_excluded',
+  'star_correct_all',
   'position_matches_runtime',
   'early_keypresses',
   'late_keypresses',
@@ -336,6 +339,7 @@ export const PROBES_COLUMNS = [
   'excluded_anticipatory',
   'probe_onset_ms',
   'trial_star_excluded',
+  'star_correct_all',
   'position_matches_runtime',
   'early_keypresses',
   'late_keypresses',
@@ -356,7 +360,8 @@ export const PROBES_COLUMNS = [
 
 /** Column documentation, used to generate schemas/tidy-tables.schema.json. */
 export const COLUMN_DOCS = {
-  participant_id: 'Prolific participant id.',
+  participant_id:
+    'Participant id used in this table: a pseudonymous code ("P" + 12 hex) in the default export, never the Prolific id; the raw Prolific id only with --keep-pid. A reloaded run is suffixed __run_<run_id>.',
   trial_seq_session:
     'Running number of trial-start gates in the session (practice included), in presentation order. Unique per participant.',
   trial_uid:
@@ -376,9 +381,9 @@ export const COLUMN_DOCS = {
   rotation_deg:
     'Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only.',
   rotation_abs_deg: 'Absolute rotation.',
-  rotation_sign: '-1 counter-clockwise, 1 clockwise.',
+  rotation_sign: '-1 counter-clockwise, 0 no rotation, 1 clockwise.',
   rotation_stratum:
-    'Index 1-6 of the 30-degree stratum the angle was drawn from (-90..-61 = 1 ... 61..90 = 6).',
+    'Index 1-6 of the stratum the angle was drawn from (-90..-61 = 1, -60..-31 = 2, -30..-1 = 3, 0..30 = 4, 31..60 = 5, 61..90 = 6).',
   background_shade: 'white or gray.',
   sequence: 'Six-slot sequence, M = memory-item slot, S = star slot.',
   n_stars_planned: 'Stars planned for the trial (3 in imagery conditions, 0 otherwise).',
@@ -401,6 +406,8 @@ export const COLUMN_DOCS = {
   n_stars_missing_row: 'Planned stars with no recorded row.',
   trial_star_excluded:
     'True if any planned star of the trial was incorrect, unanswered, answered faster than 250 ms, or has no recorded row. False for conditions without stars. Computed per trial, so it cannot collide across conditions.',
+  star_correct_all:
+    'True if every planned star of the trial has a recorded row and was answered correctly (accuracy only: the 250 ms anticipatory rule is not applied). False if any star was incorrect, unanswered or has no recorded row; NA for conditions without stars. Nothing is filtered on it. Use it for the star-contingent SENSITIVITY analysis of memory accuracy; the primary analysis uses all trials.',
   n_probes_correct: 'Probes answered correctly.',
   n_probes_no_response: 'Probes with no response (recorded rows only).',
   n_probes_anticipatory: 'Probes answered faster than 250 ms.',
@@ -524,14 +531,8 @@ function rel(ts, t0) {
   return Number.isFinite(ts) && Number.isFinite(t0) ? Math.round(ts - t0) : null;
 }
 
-const STRATA = [
-  [-90, -61],
-  [-60, -31],
-  [-30, -1],
-  [1, 30],
-  [31, 60],
-  [61, 90],
-];
+/* The scheduler's strata (0 is in stratum 4), so the export and the design cannot drift. */
+const STRATA = ROTATION_STRATA;
 function stratumOf(angle) {
   if (!Number.isFinite(angle)) return null;
   const i = STRATA.findIndex(([lo, hi]) => angle >= lo && angle <= hi);
@@ -703,10 +704,22 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       s.rt_ms < RT_FLOOR_MS ||
       s.star_correct !== true;
     const trialStarExcluded = starRecords.some(starBad);
+    /* Pure accuracy of the star task in this trial: every planned star has a
+     * recorded row and was answered correctly. Unlike `trial_star_excluded` it ignores
+     * the 250 ms anticipatory rule, and it is null (NA) for conditions without stars.
+     * No table is filtered on it; it exists so a star-contingent subset can be run
+     * as a sensitivity analysis. */
+    const starCorrectAll =
+      starRecords.length > 0 && starRecords.every((s) => s.row_recorded && s.star_correct === true)
+        ? true
+        : starRecords.length > 0
+          ? false
+          : null;
     starRecords.forEach((s) => {
       s.rotation_sign = Number.isFinite(rotation) ? Math.sign(rotation) : null;
       s.rotation_stratum = stratumOf(rotation);
       s.trial_star_excluded = trialStarExcluded;
+      s.star_correct_all = starCorrectAll;
       stars.push(s);
     });
 
@@ -771,6 +784,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         excluded_anticipatory: row ? responded === true && rt !== null && rt < RT_FLOOR_MS : null,
         probe_onset_ms: rel(row?.probe_onset_ts_ms, t0),
         trial_star_excluded: trialStarExcluded,
+        star_correct_all: starCorrectAll,
         early_keypresses: row?.early_keypresses ?? null,
         late_keypresses: row?.late_keypresses ?? null,
         extra_keypresses: row?.extra_keypresses ?? null,
@@ -855,6 +869,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       n_stars_anticipatory: cnt(starRecords, (s) => s.excluded_anticipatory === true),
       n_stars_missing_row: cnt(starRecords, (s) => !s.row_recorded),
       trial_star_excluded: trialStarExcluded,
+      star_correct_all: starCorrectAll,
       n_probes_correct: cnt(probeRecords, (p) => p.probe_correct === true),
       n_probes_no_response: cnt(probeRecords, (p) => p.row_recorded && p.responded !== true),
       n_probes_anticipatory: cnt(probeRecords, (p) => p.excluded_anticipatory === true),
@@ -1024,6 +1039,7 @@ const BOOLEAN_COLUMNS = new Set([
   'rest_before_trial',
   'trial_has_stars',
   'trial_star_excluded',
+  'star_correct_all',
   'is_on_pattern',
   'row_recorded',
   'responded',

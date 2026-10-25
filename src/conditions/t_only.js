@@ -4,11 +4,12 @@
  * Sequence (mirrors d_only.js, with tones replacing dots):
  *   1. Trial-start gate: participant presses both arrow keys together to
  *      arm the trial.
- *   2. Pre-stimulus pad (1500 ms): empty circle
- *      with no fixation. The same temporal envelope as the rotation
- *      animation + stabilisation in imagery trials, applied here even
- *      though there is no rotation, so that the gap between gate-pass
- *      and the first encoding stimulus is matched across trial types.
+ *   2. Pre-stimulus pad (1500 ms): the empty circle with its bull's-eye.
+ *      The same temporal envelope as the rotation animation + stabilisation
+ *      in the rotating conditions, applied here even though nothing is
+ *      drawn on screen that could rotate (tones have no screen position), so
+ *      that the gap between gate-pass and the first encoding stimulus is
+ *      matched across trial types.
  *   3. Encoding (length-6 sequence): for each event,
  *        M-slot → tone (350 ms) at the assigned cell's paired frequency
  *                  (analytic mapping; participant hears only the tone),

@@ -35,8 +35,13 @@ import { getSessionObject } from '../storage.js';
 
 const COUNTDOWN_ID = 'rest-countdown';
 const TICK_MS = 1000;
-const DEFAULT_INTER_BLOCK_MESSAGE = 'Take a short break. The next block will start automatically.';
-const DEFAULT_INTRA_BLOCK_MESSAGE = 'Take a 30-second rest. The task will resume automatically.';
+/* The copy states what happens when the timer ends. After the inter-block rest
+ * the Block 2 intro waits for Space (`mainBIntroNode`); after an intra-block
+ * rest `resumeAfterRestGateNode` waits for both arrow keys. Neither advances by
+ * itself, so neither message says "automatically". */
+const DEFAULT_INTER_BLOCK_MESSAGE =
+  'Take a short break. When the timer ends, you will press Space to start the next block.';
+const DEFAULT_INTRA_BLOCK_MESSAGE = `Take a ${config.blocks.rest_duration_s}-second rest. When the timer ends, press both arrow keys to continue.`;
 
 /* Uploads started at a rest are cancelled when the rest ends, so no request
  * is in flight while a trial runs. Anything not sent is included in the next

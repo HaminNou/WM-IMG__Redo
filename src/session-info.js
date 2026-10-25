@@ -60,6 +60,7 @@ export function buildSessionInfo(session, calibration, env = {}) {
   return {
     phase: 'session_info',
     session_id: session.params.session_id ?? null,
+    session_id_source: session.params.session_id_source ?? null,
     prolific_pid: session.params.prolific_pid ?? null,
     study_id: session.params.study_id ?? null,
     is_preview: session.params.is_preview === true,

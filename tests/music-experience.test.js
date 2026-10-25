@@ -4,37 +4,37 @@
  * Tests for the post-experiment music-experience questionnaire
  * (`src/questionnaire/music-experience.js`).
  *
- * The questionnaire is now an
- * 8-item instrument: the 7-item Goldsmiths Musical Sophistication
- * Index — Musical Training (MT) subscale verbatim (Müllensiefen,
- * Gingras, Musil & Stewart 2014, *PLOS ONE* 9(2) e89642) plus one
- * absolute-pitch item kept from the prior scale because AP poses a
- * design-specific risk for our tone bank that Gold-MSI does not cover.
+ * The questionnaire is an 8-item instrument: the 7-item Goldsmiths Musical
+ * Sophistication Index (Gold-MSI) v1.0 Musical Training (MT) subscale
+ * (Müllensiefen, Gingras, Musil & Stewart 2014, *PLOS ONE* 9(2) e89642,
+ * File S1: "Musical Training (7 items, alpha = .903)") plus one
+ * absolute-pitch item, because AP poses a design-specific risk for our tone
+ * bank that Gold-MSI does not cover.
  *
  * Locked invariants exercised:
  *   1. Exactly 8 items; ids are me_q01..me_q08 in fixed order; the first
- *      seven map to Gold-MSI MT01..MT07 in the published Müllensiefen
- *      et al. order.
- *   2. Each item carries ≥ 2 options, each with non-empty value+label.
- *      Gold-MSI MT items (1..7) carry numeric scores 1..7 (item 7
- *      carries 5 anchored levels mapped linearly to {1, 2.5, 4, 5.5, 7}).
- *      The AP item (me_q08) carries `score: null` so it is excluded from
- *      the composite.
- *   3. The form-node's stimulus markup contains a labelled `<select>`
- *      control for every item, with `name` matching the item id and a
- *      blank-default option that forces the participant to choose.
- *   4. `on_finish` mirrors the form's `response` object onto
- *      `data.music_experience_responses` keyed by item id, as strings or
- *      null.
- *   5. `goldMsiMtComposite` computes the sum of item scores 1..7
- *      (range 7..49) and returns null when any of the seven items is
- *      blank. The AP item is reported separately.
- *   6. `scoreMusicExperience` extracts per-item codes, computes the
- *      composite, flags `complete` only when all 8 items are answered,
- *      and ignores rows whose phase is not `music_experience`.
- *   7. The composer wires the music-experience pair (`music_experience_intro`
- *      then `music_experience`) into `assembleQuestionnaireChain` AFTER
- *      every strategy-questionnaire section.
+ *      seven map to Gold-MSI MT01..MT07 in the order of File S1.
+ *   2. The seven item texts equal the File S1 wording (checked below against
+ *      the strings printed in S1, after the documented spelling and
+ *      punctuation normalisation; the hours item is a documented reword).
+ *   3. All seven MT items score on one 1..7 scale with both endpoints. The
+ *      two negatively phrased items ("never been complimented", "would not
+ *      consider myself a musician") are reverse-keyed: raw 1 scores 7, 4
+ *      scores 4, 7 scores 1 (Gold-MSI documentation, section 2.3). The AP
+ *      item carries `score: null` so it is excluded from the composite.
+ *   4. The form-node's markup contains a labelled `<select>` control for
+ *      every item, with a blank-default option that forces a choice.
+ *   5. `on_finish` mirrors the form's `response` object onto
+ *      `data.music_experience_responses` keyed by item id (raw option
+ *      values, strings or null).
+ *   6. `goldMsiMtComposite` sums the seven item scores (reversal applied),
+ *      range 7..49, and returns null when any of the seven is blank.
+ *   7. `scoreMusicExperience` extracts per-item codes, computes the
+ *      composite, flags `complete` only when all 8 items are answered, and
+ *      ignores rows whose phase is not `music_experience`.
+ *   8. The composer wires the music-experience pair into
+ *      `assembleQuestionnaireChain` AFTER every strategy-questionnaire
+ *      section.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
@@ -44,6 +44,67 @@ import {
   goldMsiMtComposite,
 } from '../src/questionnaire/music-experience.js';
 import { assembleQuestionnaireChain } from '../src/questionnaire/index.js';
+
+/* The seven Musical Training items exactly as printed in File S1 of
+ * Müllensiefen et al. (2014), in S1 order. Source: the paper's supplementary
+ * File S1 (pone.0089642.s001.docx), "Musical Training (7 items, α=.903)". */
+const S1_MT_ITEMS = Object.freeze([
+  'I engaged in regular, daily practice of a musical instrument (including voice) for ___ years',
+  'I can play the following number of musical instruments (including voice)',
+  'I have never been complimented for my talents as a musical performer',
+  'At the peak of my interest, I practised ___ hours on my primary instrument (including voice)',
+  'I have had formal training in music theory for ___ years',
+  'During my life time I have had formal training on a musical instrument (including voice) for ___ years',
+  'I would not consider myself a musician',
+]);
+const NEGATIVELY_PHRASED = Object.freeze(['me_q03', 'me_q07']);
+
+/* Spelling/punctuation normalisation that the program applies on purpose:
+ * US 'practiced'; the blank '___' and trailing punctuation are layout. */
+const norm = (t) =>
+  t
+    .toLowerCase()
+    .replace(/<[^>]+>/g, '')
+    .replace(/practised/g, 'practiced')
+    .replace(/_+/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/* A valid full answer set (raw option values). */
+const RESP = Object.freeze({
+  me_q01: '4-5',
+  me_q02: '2',
+  me_q03: '3',
+  me_q04: '1.5',
+  me_q05: '2',
+  me_q06: '6-9',
+  me_q07: '2',
+  me_q08: 'no',
+});
+
+/* Response set that scores 1 on every MT item (the least musical profile):
+ * the lowest bin of each ranged item, and for the negatively phrased items
+ * complete agreement ('7'), which reverse-scores to 1. */
+const FLOOR = Object.freeze({
+  me_q01: '0',
+  me_q02: '0',
+  me_q03: '7',
+  me_q04: '0',
+  me_q05: '0',
+  me_q06: '0',
+  me_q07: '7',
+});
+/* Response set that scores 7 on every MT item. */
+const CEILING = Object.freeze({
+  me_q01: '10+',
+  me_q02: '6+',
+  me_q03: '1',
+  me_q04: '5+',
+  me_q05: '7+',
+  me_q06: '10+',
+  me_q07: '1',
+});
 
 beforeEach(() => {
   /* Some helpers that come along through hidden-nav register a window-level
@@ -70,9 +131,29 @@ describe('music-experience: item table', () => {
     ]);
   });
 
-  it('items 1..7 are tagged as Gold-MSI MT01..MT07 in the published order; item 8 is null (outside composite)', () => {
+  it('items 1..7 are tagged as Gold-MSI MT01..MT07 in File S1 order; item 8 is null (outside composite)', () => {
     const tags = MUSIC_EXPERIENCE_ITEMS.map((i) => i.gold_msi);
     expect(tags).toEqual(['MT01', 'MT02', 'MT03', 'MT04', 'MT05', 'MT06', 'MT07', null]);
+  });
+
+  it('the seven Musical Training item texts equal the File S1 wording (hours item: documented reword)', () => {
+    const mt = MUSIC_EXPERIENCE_ITEMS.slice(0, 7);
+    for (const i of [0, 1, 2, 4, 5, 6]) {
+      expect(norm(mt[i].text), `item ${i + 1}`).toBe(norm(S1_MT_ITEMS[i]));
+    }
+    /* Item 4 keeps S1's content but says 'per day', as the paper quotes it. */
+    const t = norm(mt[3].text);
+    expect(t).toContain('at the peak of my interest');
+    expect(t).toContain('practiced');
+    expect(t).toContain('primary instrument');
+    expect(t).toContain('hours per day');
+  });
+
+  it('does not contain the items that are not part of the published subscale', () => {
+    const all = MUSIC_EXPERIENCE_ITEMS.map((i) => norm(i.text)).join(' | ');
+    expect(all).not.toContain('i would consider myself a musician');
+    expect(all).not.toContain('play best');
+    expect(all).not.toContain('level of a');
   });
 
   it('every item has ≥ 2 options, and every option has non-empty value + label', () => {
@@ -97,22 +178,27 @@ describe('music-experience: item table', () => {
     }
   });
 
-  it('Gold-MSI MT items 1..6 carry integer scores spanning 1..7 across their bins', () => {
-    /* MT01..MT06 are the 7-bin items where every option's score is one
-     * of {1, 2, 3, 4, 5, 6, 7}, with both endpoints present. (MT07 is
-     * the 5-anchor named-level item — checked separately.) */
-    const mtBinned = MUSIC_EXPERIENCE_ITEMS.slice(0, 6);
-    for (const item of mtBinned) {
+  it('all seven MT items carry integer scores covering exactly 1..7 across their options', () => {
+    for (const item of MUSIC_EXPERIENCE_ITEMS.slice(0, 7)) {
       const scores = item.options.map((o) => o.score);
-      expect(new Set(scores)).toEqual(new Set([1, 2, 3, 4, 5, 6, 7]));
+      expect(new Set(scores), item.id).toEqual(new Set([1, 2, 3, 4, 5, 6, 7]));
+      expect(scores.every(Number.isInteger)).toBe(true);
     }
   });
 
-  it('MT07 (best-instrument level) maps the 5 named anchors onto {1, 2.5, 4, 5.5, 7}', () => {
-    /* Linear mapping of 5 anchors onto a 1..7 range so the composite
-     * stays in the canonical Gold-MSI 7..49 envelope. */
-    const mt07 = MUSIC_EXPERIENCE_ITEMS.find((i) => i.id === 'me_q07');
-    expect(mt07.options.map((o) => o.score)).toEqual([1, 2.5, 4, 5.5, 7]);
+  it('exactly the two negatively phrased items are reverse-keyed, and their scores run 7..1 with the raw value 1..7', () => {
+    const flagged = MUSIC_EXPERIENCE_ITEMS.filter((i) => i.reverse_keyed).map((i) => i.id);
+    expect(flagged).toEqual(NEGATIVELY_PHRASED);
+    for (const id of NEGATIVELY_PHRASED) {
+      const item = MUSIC_EXPERIENCE_ITEMS.find((i) => i.id === id);
+      expect(item.options.map((o) => o.value)).toEqual(['1', '2', '3', '4', '5', '6', '7']);
+      expect(item.options.map((o) => o.score)).toEqual([7, 6, 5, 4, 3, 2, 1]);
+    }
+    /* every other MT item scores in the direction of its option order */
+    for (const item of MUSIC_EXPERIENCE_ITEMS.slice(0, 7)) {
+      if (item.reverse_keyed) continue;
+      expect(item.options.map((o) => o.score)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    }
   });
 
   it('the absolute-pitch item (me_q08) carries score: null on every option (excluded from composite)', () => {
@@ -125,12 +211,14 @@ describe('music-experience: item table', () => {
     expect(ap.options.some((o) => o.value === 'yes')).toBe(true);
   });
 
-  it('MT06 (single self-rating) is a 7-point Likert anchored at "Completely disagree" and "Completely agree"', () => {
-    const mt06 = MUSIC_EXPERIENCE_ITEMS.find((i) => i.id === 'me_q06');
-    expect(mt06.options).toHaveLength(7);
-    expect(mt06.options[0].label.toLowerCase()).toContain('completely disagree');
-    expect(mt06.options[6].label.toLowerCase()).toContain('completely agree');
-    expect(mt06.options[3].label.toLowerCase()).toContain('neither');
+  it('the two agreement items are 7-point scales anchored at "Completely disagree" and "Completely agree"', () => {
+    for (const id of NEGATIVELY_PHRASED) {
+      const item = MUSIC_EXPERIENCE_ITEMS.find((i) => i.id === id);
+      expect(item.options).toHaveLength(7);
+      expect(item.options[0].label.toLowerCase()).toContain('completely disagree');
+      expect(item.options[6].label.toLowerCase()).toContain('completely agree');
+      expect(item.options[3].label.toLowerCase()).toContain('neither');
+    }
   });
 });
 
@@ -156,29 +244,11 @@ describe('music-experience: form-node markup + on_finish', () => {
   it('on_finish stamps phase="music_experience" and a per-item music_experience_responses map', () => {
     const [, formNode] = musicExperienceTimeline();
     const data = {
-      response: {
-        me_q01: '4-5',
-        me_q02: '1.5',
-        me_q03: '2',
-        me_q04: '6-9',
-        me_q05: '2',
-        me_q06: '5',
-        me_q07: 'intermediate',
-        me_q08: 'no',
-      },
+      response: { ...RESP },
     };
     formNode.on_finish(data);
     expect(data.phase).toBe('music_experience');
-    expect(data.music_experience_responses).toEqual({
-      me_q01: '4-5',
-      me_q02: '1.5',
-      me_q03: '2',
-      me_q04: '6-9',
-      me_q05: '2',
-      me_q06: '5',
-      me_q07: 'intermediate',
-      me_q08: 'no',
-    });
+    expect(data.music_experience_responses).toEqual({ ...RESP });
   });
 
   it('on_finish coerces blank/missing responses to null per item', () => {
@@ -190,8 +260,8 @@ describe('music-experience: form-node markup + on_finish', () => {
         /* me_q03 missing */
         me_q04: null,
         me_q05: undefined,
-        me_q06: '4',
-        me_q07: 'beginner',
+        me_q06: '3-5',
+        me_q07: '2',
         me_q08: 'no',
       },
     };
@@ -202,8 +272,8 @@ describe('music-experience: form-node markup + on_finish', () => {
       me_q03: null,
       me_q04: null,
       me_q05: null,
-      me_q06: '4',
-      me_q07: 'beginner',
+      me_q06: '3-5',
+      me_q07: '2',
       me_q08: 'no',
     });
   });
@@ -229,99 +299,79 @@ describe('music-experience: form-node markup + on_finish', () => {
 });
 
 describe('goldMsiMtComposite (Gold-MSI MT subscale)', () => {
-  it('returns the sum of item scores 1..7 across MT01..MT07 (range 7..49)', () => {
-    /* Walk the score map at the floor (every MT item at its lowest bin)
-     * and at the ceiling (every MT item at its highest bin). */
-    const minResp = {
-      me_q01: '0',
-      me_q02: '0',
-      me_q03: '0',
-      me_q04: '0',
-      me_q05: '0',
-      me_q06: '1',
-      me_q07: 'none',
-    };
-    expect(goldMsiMtComposite(minResp).gold_msi_mt_composite).toBe(7);
+  it('returns the sum of the seven item scores (reversal applied), range 7..49', () => {
+    expect(goldMsiMtComposite(FLOOR).gold_msi_mt_composite).toBe(7);
+    expect(goldMsiMtComposite(CEILING).gold_msi_mt_composite).toBe(49);
+  });
 
-    const maxResp = {
-      me_q01: '10+',
-      me_q02: '5+',
-      me_q03: '7+',
-      me_q04: '10+',
-      me_q05: '6+',
-      me_q06: '7',
-      me_q07: 'expert',
+  it('reverse-keys the two negatively phrased items: agreeing LOWERS the score by 1 per step', () => {
+    const base = { ...CEILING };
+    const score = (over) => goldMsiMtComposite({ ...base, ...over }).gold_msi_mt_composite;
+    for (const id of NEGATIVELY_PHRASED) {
+      /* raw 1 (completely disagree) = 7 points; raw 7 (completely agree) = 1 point */
+      expect(score({ [id]: '1' })).toBe(49);
+      expect(score({ [id]: '2' })).toBe(48);
+      expect(score({ [id]: '4' })).toBe(46);
+      expect(score({ [id]: '7' })).toBe(43);
+    }
+    /* and a ranged item still scores upward with its bin */
+    expect(score({ me_q01: '0' })).toBe(43);
+    expect(score({ me_q01: '4-5' })).toBe(47);
+  });
+
+  it('a profile that is neutral on both agreement items and mid-range elsewhere scores the 4-point midpoint on each', () => {
+    const mid = {
+      me_q01: '3',
+      me_q02: '3',
+      me_q03: '4',
+      me_q04: '1.5',
+      me_q05: '2',
+      me_q06: '2',
+      me_q07: '4',
     };
-    expect(goldMsiMtComposite(maxResp).gold_msi_mt_composite).toBe(49);
+    expect(goldMsiMtComposite(mid).gold_msi_mt_composite).toBe(28);
   });
 
   it('returns null composite + complete=false when any MT item is blank', () => {
-    const partial = {
-      me_q01: '4-5',
-      me_q02: '1.5',
-      me_q03: '2',
-      me_q04: null,
-      me_q05: '2',
-      me_q06: '5',
-      me_q07: 'intermediate',
-    };
-    const out = goldMsiMtComposite(partial);
+    for (const id of Object.keys(CEILING)) {
+      const partial = { ...CEILING, [id]: null };
+      const out = goldMsiMtComposite(partial);
+      expect(out.gold_msi_mt_composite, id).toBe(null);
+      expect(out.gold_msi_mt_complete, id).toBe(false);
+    }
+  });
+
+  it('an unknown option value counts as unanswered, not as zero', () => {
+    const out = goldMsiMtComposite({ ...CEILING, me_q03: 'maybe' });
     expect(out.gold_msi_mt_composite).toBe(null);
     expect(out.gold_msi_mt_complete).toBe(false);
   });
 
-  it('reports absolute_pitch from the AP item (me_q08), independent of MT completion', () => {
-    /* The AP item is OUTSIDE the composite — it should be reported even
-     * if the MT subscale is incomplete, and its presence/absence must not
-     * affect the MT score. */
-    const completeMt = {
-      me_q01: '4-5',
-      me_q02: '1.5',
-      me_q03: '2',
-      me_q04: '6-9',
-      me_q05: '2',
-      me_q06: '5',
-      me_q07: 'intermediate',
-      me_q08: 'yes',
-    };
-    const out = goldMsiMtComposite(completeMt);
-    expect(out.absolute_pitch).toBe('yes');
-    expect(out.gold_msi_mt_complete).toBe(true);
-    expect(typeof out.gold_msi_mt_composite).toBe('number');
+  it('reports absolute_pitch from the AP item (me_q08), independent of MT completion and of the composite', () => {
+    const withYes = goldMsiMtComposite({ ...RESP, me_q08: 'yes' });
+    const withNo = goldMsiMtComposite({ ...RESP, me_q08: 'no' });
+    expect(withYes.absolute_pitch).toBe('yes');
+    expect(withNo.absolute_pitch).toBe('no');
+    expect(withYes.gold_msi_mt_composite).toBe(withNo.gold_msi_mt_composite);
+    expect(typeof withYes.gold_msi_mt_composite).toBe('number');
+    expect(withYes.gold_msi_mt_complete).toBe(true);
+    /* incomplete MT, AP still reported */
+    expect(goldMsiMtComposite({ me_q08: 'unsure' }).absolute_pitch).toBe('unsure');
   });
 
-  it('a modest expert with high behavioural scores still scores high even if self-rating is "neutral"', () => {
-    /* Smoke test for the modesty-resistance property: high MT01..MT05
-     * + high MT07 + neutral MT06 = composite well above the population
-     * mean. With Müllensiefen et al.'s 7..49 envelope and a reported
-     * mean ≈ 26.5, this profile should sit at ≥ 35. */
-    const modestExpert = {
-      me_q01: '10+', // 7
-      me_q02: '5+', // 7
-      me_q03: '4-6', // 6
-      me_q04: '10+', // 7
-      me_q05: '3', // 4
-      me_q06: '4', // 4 (neutral self-rating despite expert behaviour)
-      me_q07: 'advanced', // 5.5
-    };
-    const out = goldMsiMtComposite(modestExpert);
-    expect(out.gold_msi_mt_composite).toBeGreaterThanOrEqual(35);
+  it('a modest expert (neutral on both agreement items) still scores well above the population mean (≈ 26.5)', () => {
+    const modestExpert = { ...CEILING, me_q03: '4', me_q07: '4' };
+    expect(goldMsiMtComposite(modestExpert).gold_msi_mt_composite).toBe(43);
   });
 
-  it('a confident novice with all-low behavioural scores cannot inflate the composite via self-rating alone', () => {
-    /* Symmetric smoke test: low MT01..MT05 + Beginner MT07 + max-self-rating
-     * stays well below the population mean (~26.5). */
-    const overclaimer = {
-      me_q01: '0', // 1
-      me_q02: '0', // 1
-      me_q03: '0', // 1
-      me_q04: '0', // 1
-      me_q05: '1', // 2
-      me_q06: '7', // 7 (max self-rating)
-      me_q07: 'beginner', // 2.5
-    };
+  it('a novice who strongly disagrees with the negative statements cannot inflate the composite far above the floor', () => {
+    /* Lowest bin on every ranged item, but "never complimented" and "would
+     * not consider myself a musician" both answered completely disagree
+     * (raw 1 → 7 points each): 5 × 1 + 7 + 7 = 19, well below the mean. */
+    const overclaimer = { ...FLOOR, me_q03: '1', me_q07: '1' };
     const out = goldMsiMtComposite(overclaimer);
-    expect(out.gold_msi_mt_composite).toBeLessThan(20);
+    expect(out.gold_msi_mt_composite).toBe(19);
+    expect(out.gold_msi_mt_composite).toBeLessThan(26.5);
   });
 });
 
@@ -340,23 +390,14 @@ describe('scoreMusicExperience', () => {
     const rows = [
       {
         phase: 'music_experience',
-        music_experience_responses: {
-          me_q01: '4-5',
-          me_q02: '1.5',
-          me_q03: '2',
-          me_q04: '6-9',
-          me_q05: '2',
-          me_q06: '5',
-          me_q07: 'intermediate',
-          me_q08: 'unsure',
-        },
+        music_experience_responses: { ...RESP, me_q08: 'unsure' },
       },
     ];
     const out = scoreMusicExperience(rows);
     expect(out.complete).toBe(true);
     expect(out.answered).toBe(8);
     expect(out.itemResponses.me_q01).toBe('4-5');
-    expect(out.itemResponses.me_q07).toBe('intermediate');
+    expect(out.itemResponses.me_q07).toBe('2');
     expect(out.absolute_pitch).toBe('unsure');
     expect(typeof out.gold_msi_mt_composite).toBe('number');
     expect(out.gold_msi_mt_composite).toBeGreaterThanOrEqual(7);

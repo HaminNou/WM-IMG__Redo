@@ -3,8 +3,18 @@
  *
  * `readDisplaySnapshot()` is a plain read of the values needed to interpret
  * the credit-card calibration (devicePixelRatio, screen and window sizes,
- * browser zoom proxies, platform). It is stamped onto the calibration rows
- * and onto the guard baseline.
+ * browser zoom proxies, platform, browser identification). It is stamped onto
+ * the calibration rows and onto the guard baseline.
+ *
+ * Data minimisation: only fields that the calibration, the desktop gate, the
+ * display lock or the timing check actually use are read, and every class of
+ * field is named in the consent form ("browser and operating system, screen
+ * and window size, display refresh rate and timing accuracy"). Battery state,
+ * device memory, processor count and display-preference queries (dark mode,
+ * reduced motion, forced colours, colour gamut) were removed because nothing
+ * in the analysis plan uses them and the consent does not name them.
+ * `DEVICE_SNAPSHOT_FIELDS` and `TIMING_PROBE_FIELDS` list what remains; a test
+ * pins them to the consent text and to the schema.
  *
  * `runTimingProbe()` samples requestAnimationFrame for a few seconds,
  * measures performance.now() granularity and setTimeout overshoot, and
@@ -29,16 +39,49 @@ export const TIMING_THRESHOLDS = Object.freeze({
 /** Longest the whole probe may take beyond its sampling time. */
 const PROBE_SLACK_MS = 8000;
 
+/** Every key `readDisplaySnapshot()` returns. Pinned by a test. */
+export const DEVICE_SNAPSHOT_FIELDS = Object.freeze([
+  'snap_iso',
+  'dpr',
+  'screen_w',
+  'screen_h',
+  'avail_w',
+  'avail_h',
+  'color_depth',
+  'inner_w',
+  'inner_h',
+  'outer_w',
+  'outer_h',
+  'zoom_proxy_outer_inner',
+  'visual_viewport_scale',
+  'is_fullscreen',
+  'orientation',
+  'platform',
+  'ua_mobile',
+  'user_agent',
+]);
+
+/** Every key `runTimingProbe()` adds beyond the thresholds. Pinned by a test. */
+export const TIMING_PROBE_FIELDS = Object.freeze([
+  'frame_n',
+  'frame_median_ms',
+  'frame_mean_ms',
+  'frame_sd_ms',
+  'frame_p95_ms',
+  'frame_max_ms',
+  'frame_dropped_frac',
+  'refresh_hz_est',
+  'clock_resolution_ms',
+  'timeout_overshoot_median_ms',
+  'timeout_overshoot_p95_ms',
+  'timeout_overshoot_max_ms',
+  'page_hidden_during_probe',
+  'cross_origin_isolated',
+]);
+
 export function readDisplaySnapshot() {
   const w = window;
   const vv = w.visualViewport;
-  const mm = (q) => {
-    try {
-      return w.matchMedia(q).matches;
-    } catch {
-      return null;
-    }
-  };
   return {
     snap_iso: new Date().toISOString(),
     dpr: w.devicePixelRatio,
@@ -60,12 +103,6 @@ export function readDisplaySnapshot() {
     platform: navigator.userAgentData?.platform ?? navigator.platform ?? null,
     ua_mobile: navigator.userAgentData?.mobile ?? null,
     user_agent: navigator.userAgent,
-    hardware_concurrency: navigator.hardwareConcurrency ?? null,
-    device_memory_gb: navigator.deviceMemory ?? null,
-    forced_colors: mm('(forced-colors: active)'),
-    prefers_dark: mm('(prefers-color-scheme: dark)'),
-    prefers_reduced_motion: mm('(prefers-reduced-motion: reduce)'),
-    display_gamut_p3: mm('(color-gamut: p3)'),
   };
 }
 
@@ -97,17 +134,21 @@ function sampleFrames(durationMs) {
 }
 
 function clockResolutionMs() {
-  const diffs = [];
+  /* Smallest observed tick of performance.now(). A running minimum, not
+   * Math.min(...array): a fine-grained clock yields hundreds of thousands of
+   * ticks in 50 ms, and spreading that many arguments overflows the stack. */
+  let smallest = null;
   let last = performance.now();
   const end = last + 50;
   while (last < end) {
     const now = performance.now();
     if (now !== last) {
-      diffs.push(now - last);
+      const d = now - last;
+      if (smallest === null || d < smallest) smallest = d;
       last = now;
     }
   }
-  return diffs.length ? Math.min(...diffs) : null;
+  return smallest;
 }
 
 async function timeoutOvershoot(n = 20, delayMs = 50) {
@@ -121,29 +162,48 @@ async function timeoutOvershoot(n = 20, delayMs = 50) {
   return { median: quantile(over, 0.5), p95: quantile(over, 0.95), max: over[over.length - 1] };
 }
 
-async function batteryInfo() {
-  try {
-    if (!navigator.getBattery) return { battery_api: false };
-    const b = await navigator.getBattery();
-    return { battery_api: true, battery_charging: b.charging, battery_level: b.level };
-  } catch {
-    return { battery_api: false };
-  }
-}
+/** True only for a real, finite measurement at or under its limit. A missing
+ * measure (null, undefined, NaN, Infinity) is NOT a pass: in JS `null <= 20.5`
+ * is true, so a bare `<=` would let an unmeasured probe through. */
+const within = (value, max) => Number.isFinite(value) && value <= max;
 
-/** Pure scoring function, exported so it can be unit-tested. */
+/** Pure scoring function, exported so it can be unit-tested. A probe that did
+ * not measure (no frames, hidden or frozen tab) fails with its own reasons, in
+ * addition to the per-threshold reasons. */
 export function scoreTiming(m, th = TIMING_THRESHOLDS) {
   const reasons = [];
-  if (!(m.frame_median_ms <= th.max_median_frame_ms)) reasons.push('low_refresh_rate');
-  if (!(m.frame_p95_ms <= th.max_p95_frame_ms)) reasons.push('frame_jitter');
-  if (!(m.frame_dropped_frac <= th.max_dropped_frac)) reasons.push('dropped_frames');
-  if (!(m.clock_resolution_ms <= th.max_clock_resolution_ms)) reasons.push('coarse_clock');
-  if (!(m.timeout_overshoot_p95_ms <= th.max_timeout_overshoot_p95_ms)) reasons.push('timer_lag');
+  if (!within(m.frame_median_ms, th.max_median_frame_ms)) reasons.push('low_refresh_rate');
+  if (!within(m.frame_p95_ms, th.max_p95_frame_ms)) reasons.push('frame_jitter');
+  if (!within(m.frame_dropped_frac, th.max_dropped_frac)) reasons.push('dropped_frames');
+  if (!within(m.clock_resolution_ms, th.max_clock_resolution_ms)) reasons.push('coarse_clock');
+  if (!within(m.timeout_overshoot_p95_ms, th.max_timeout_overshoot_p95_ms))
+    reasons.push('timer_lag');
+  const measured = [
+    m.frame_median_ms,
+    m.frame_p95_ms,
+    m.frame_dropped_frac,
+    m.clock_resolution_ms,
+    m.timeout_overshoot_p95_ms,
+  ].every(Number.isFinite);
+  if (!measured) reasons.push('not_measured');
+  if (m.page_hidden_during_probe === true) reasons.push('tab_hidden_during_probe');
   return { timing_ok: reasons.length === 0, timing_fail_reasons: reasons };
 }
 
 async function runTimingProbe(th = TIMING_THRESHOLDS) {
-  const stamps = await sampleFrames(th.probe_ms);
+  /* rAF stalls in a hidden tab, so note any time the page was hidden from
+   * the start to the end of the probe, not just its state at the end. */
+  let hiddenDuringProbe = document.hidden;
+  const onVisibility = () => {
+    if (document.hidden) hiddenDuringProbe = true;
+  };
+  document.addEventListener('visibilitychange', onVisibility);
+  let stamps;
+  try {
+    stamps = await sampleFrames(th.probe_ms);
+  } finally {
+    document.removeEventListener('visibilitychange', onVisibility);
+  }
   const deltas = [];
   for (let i = th.skip_first_frames + 1; i < stamps.length; i++)
     deltas.push(stamps[i] - stamps[i - 1]);
@@ -169,14 +229,40 @@ async function runTimingProbe(th = TIMING_THRESHOLDS) {
     timeout_overshoot_median_ms: to.median,
     timeout_overshoot_p95_ms: to.p95,
     timeout_overshoot_max_ms: to.max,
-    page_hidden_during_probe: document.hidden,
+    page_hidden_during_probe: hiddenDuringProbe || document.hidden,
     cross_origin_isolated: !!self.crossOriginIsolated,
-    ...(await batteryInfo()),
   };
   return { ...m, ...scoreTiming(m, th), thresholds: th };
 }
 
 /* ---------- jsPsych nodes ---------- */
+/**
+ * Text of the page shown before the timing check is run a second time. The advice depends on why
+ * the check failed: a hidden or interrupted tab needs different advice from a slow computer
+ * (the page used to say "running slowly" for every failure).
+ *
+ * @param {string[]} [reasons] `timing_fail_reasons` of the failed attempt
+ * @returns {string} HTML
+ */
+export function timingHintHtml(reasons = []) {
+  const list = Array.isArray(reasons) ? reasons : [];
+  if (list.includes('tab_hidden_during_probe')) {
+    return `<h2>The timing check was interrupted</h2>
+          <p style="max-width:38rem;margin:0 auto 1rem">The page was not in front for part of the
+          check. Please keep this tab in front and do not switch to another window while it runs.
+          Then press Continue to run the check again.</p>`;
+  }
+  if (list.includes('not_measured') || list.includes('probe_error')) {
+    return `<h2>The timing check could not finish</h2>
+          <p style="max-width:38rem;margin:0 auto 1rem">Please close other tabs and programs, keep
+          this tab in front, and press Continue to run the check again.</p>`;
+  }
+  return `<h2>Your browser is running slowly</h2>
+          <p style="max-width:38rem;margin:0 auto 1rem">Please close other tabs and
+          programs, plug in your laptop if it is on battery, and turn off any
+          battery-saver mode. Then press Continue to run the check again.</p>`;
+}
+
 /**
  * Timing probe node. Runs the probe; on a fail (including a probe that errors
  * or does not finish in time) it shows a hint and runs it once more (loop),
@@ -218,10 +304,7 @@ export function timingProbeNode({ maxAttempts = 2 } = {}) {
     timeline: [
       {
         type: htmlButtonResponse,
-        stimulus: `<h2>Your browser is running slowly</h2>
-          <p style="max-width:38rem;margin:0 auto 1rem">Please close other tabs and
-          programs, plug in your laptop if it is on battery, and turn off any
-          battery-saver mode. Then press Continue to run the check again.</p>`,
+        stimulus: () => timingHintHtml(last?.timing_fail_reasons),
         choices: ['Continue'],
         data: { phase: 'timing_probe_hint' },
       },

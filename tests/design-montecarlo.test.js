@@ -63,13 +63,10 @@ function auditPool(type, pool) {
   const angleKey = type === 'd_only' ? 'display_rotation_deg' : 'rotation_deg';
   if (type !== 't_only') {
     const angles = pool.map((t) => t[angleKey]);
-    if (
-      angles.some(
-        (a) => typeof a !== 'number' || a === 0 || Math.abs(a) > 90 || !Number.isInteger(a)
-      )
-    )
+    if (angles.some((a) => typeof a !== 'number' || Math.abs(a) > 90 || !Number.isInteger(a)))
       fail(`bad angle in ${angles}`);
     if (new Set(angles).size !== 24) fail('angle repeated within pool');
+    if (angles.filter((a) => a < 0).length !== 12) fail('not 12 counter-clockwise angles');
     const strata = new Map();
     for (const a of angles) count(strata, rotationStratumIndex(a));
     if (!allEqual(strata, 4, ROTATION_STRATA.length)) fail('strata not 4 each');
@@ -204,6 +201,9 @@ function auditPlan(plan) {
       if (p.trial_type !== block.schedule[i]) bad.push(`${label} trial ${i} type mismatch`);
     });
   }
+  /* the shade / rotation run limits hold across the Main A -> Main B boundary too */
+  if (orderViolations([...plan.mainA.trialParams, ...plan.mainB.trialParams]))
+    bad.push('order violations across the Main A / Main B boundary');
   /* each trial appears exactly once over the two blocks */
   const uids = new Set(
     [...plan.mainA.trialParams, ...plan.mainB.trialParams].map((t) => t.trial_meta.trial_uid)

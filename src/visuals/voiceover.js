@@ -86,6 +86,85 @@
 
 const WORD_REVEAL_MS_PER_WORD = 60_000 / 175; /* ≈343 ms – 175 WPM */
 const BOUNDARY_WATCHDOG_MS = 600;
+
+/* ---------- Audio watchdog ----------
+ * A recording that never fires `ended` or `error` (no audio output device, a
+ * stalled decode, a browser that accepts play() but never advances the clock)
+ * used to leave the screen waiting forever: a demo only continues when its
+ * caption finishes, so the participant had to switch Voice off to go on. The
+ * guard below ends such an utterance exactly as an `error` does: it finishes
+ * silently with the text revealed, and nothing is blocked.
+ *
+ *   - hard limit: expected duration + 3 s, never less than 5 s. The expected
+ *     duration is read from the manifest entry (the end of the last word
+ *     boundary, or the file size at the renderer's fixed 96 kbps, whichever is
+ *     longer; characters x 90 ms when neither is present), divided by the
+ *     playback rate;
+ *   - `abort`: the browser gave up fetching the file, so it ends at once;
+ *   - `stalled`: browsers also fire it during a short buffering pause, so it
+ *     only starts a 4 s grace period; the utterance ends only if the playback
+ *     position has not moved by then.
+ * Normal playback is unaffected: the guard is disposed when the utterance
+ * finishes for any reason. */
+export const AUDIO_WATCHDOG_MARGIN_MS = 3000;
+export const AUDIO_WATCHDOG_MIN_MS = 5000;
+export const AUDIO_STALL_GRACE_MS = 4000;
+const RENDER_BYTES_PER_MS = 12; /* 96 kbps mono MP3 = 12 000 bytes per second */
+const FALLBACK_MS_PER_CHAR = 90;
+
+/**
+ * Expected playing time of a manifest entry at rate 1, in ms (0 if unknown).
+ *
+ * @param {{bytes?: number, chars?: number, word_boundaries?: {offset_ms: number, duration_ms?: number}[]}} entry
+ */
+export function expectedAudioMs(entry) {
+  if (!entry || typeof entry !== 'object') return 0;
+  const wb = Array.isArray(entry.word_boundaries) ? entry.word_boundaries : [];
+  const last = wb[wb.length - 1];
+  const fromWords = last
+    ? (Number(last.offset_ms) || 0) + (Number.isFinite(last.duration_ms) ? last.duration_ms : 0)
+    : 0;
+  const fromBytes = Number.isFinite(entry.bytes) ? entry.bytes / RENDER_BYTES_PER_MS : 0;
+  const fromChars = Number.isFinite(entry.chars) ? entry.chars * FALLBACK_MS_PER_CHAR : 0;
+  return Math.max(fromWords, fromBytes) || fromChars;
+}
+
+/** Hard time limit for one recording, in ms. */
+export function audioWatchdogLimitMs(entry, rate = 1) {
+  const r = Number(rate) > 0 ? Number(rate) : 1;
+  return Math.max(AUDIO_WATCHDOG_MIN_MS, expectedAudioMs(entry) / r + AUDIO_WATCHDOG_MARGIN_MS);
+}
+
+function armAudioGuard(audio, entry, state, finish, rate) {
+  const hard = setTimeout(
+    () => {
+      if (!state.finished) finish('completed');
+    },
+    audioWatchdogLimitMs(entry, rate)
+  );
+  let stallTimer = null;
+  const onAbort = () => {
+    if (!state.finished) finish('completed');
+  };
+  const onStalled = () => {
+    if (stallTimer || state.finished) return;
+    const at = audio.currentTime;
+    stallTimer = setTimeout(() => {
+      stallTimer = null;
+      if (!state.finished && audio.currentTime === at) finish('completed');
+    }, AUDIO_STALL_GRACE_MS);
+  };
+  audio.addEventListener('abort', onAbort);
+  audio.addEventListener('stalled', onStalled);
+  state.audioGuardDispose = () => {
+    clearTimeout(hard);
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = null;
+    audio.removeEventListener?.('abort', onAbort);
+    audio.removeEventListener?.('stalled', onStalled);
+    state.audioGuardDispose = null;
+  };
+}
 const STORAGE_KEY = 'voiceover_enabled';
 
 /* Pre-rendered audio assets live under Vite's public root and are served
@@ -657,6 +736,7 @@ class VoiceoverEngine {
     const finish = (reason) => {
       if (state.finished) return;
       state.finished = true;
+      state.audioGuardDispose?.();
       stopAudio();
       if (this.current === controller) this.current = null;
       resolveDone(reason);
@@ -757,6 +837,7 @@ class VoiceoverEngine {
       audio.playbackRate = opts.rate ?? 1.0;
       audio.preload = 'auto';
       state.audioEl = audio;
+      armAudioGuard(audio, entry, state, finish, audio.playbackRate);
       audio.addEventListener('ended', () => {
         if (state.finished) return;
         finish('completed');
@@ -1085,6 +1166,7 @@ class VoiceoverEngine {
     audio.playbackRate = opts.rate ?? 1.0;
     audio.preload = 'auto';
     state.audioEl = audio;
+    armAudioGuard(audio, entry, state, finish, audio.playbackRate);
 
     /* Precompute the token indices of every word token so the time-based
      * cursor can jump straight to the right span without walking tokens
@@ -1240,6 +1322,7 @@ class VoiceoverEngine {
   }
 
   _stopAllTimers(state) {
+    state.audioGuardDispose?.();
     if (state.watchdogTimer) {
       clearTimeout(state.watchdogTimer);
       state.watchdogTimer = null;

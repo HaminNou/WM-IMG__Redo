@@ -88,6 +88,7 @@ export async function initStorage({ backend = 'auto' } = {}) {
 /** Reset the module-level backend handle. Used by tests. */
 export function _resetStorageForTests() {
   activeBackend = null;
+  recentRows.length = 0;
   pendingWrites.clear();
   writeFailures = 0;
   lastWriteFailureMessage = null;
@@ -125,9 +126,42 @@ function require_active() {
   return activeBackend;
 }
 
+/**
+ * A fresh run id: 8 lowercase hex characters, random. `crypto.randomUUID` where the
+ * browser has it (Chrome/Edge 92, Firefox 95, Safari 15.4); otherwise 32 random bits
+ * from `crypto.getRandomValues`; otherwise `Math.random` mixed with the clock. The
+ * last fallback used to be the first 8 DIGITS of `Date.now()` (a 13-digit number), which
+ * changes only every 100,000 ms, so a reload within about 100 seconds of the previous
+ * load (the usual case after a crash or an accidental refresh) reused the run id and
+ * the file names, cursors and (run, seq) de-duplication of the two runs collided (Firefox 92-94 has
+ * every API the study needs except `randomUUID`).
+ *
+ * @param {{crypto?: object, now?: number, random?: () => number}} [env]  injectable for tests
+ * @returns {string}
+ */
+export function makeRunId({
+  crypto: cr = globalThis.crypto,
+  now = Date.now(),
+  random = Math.random,
+} = {}) {
+  const hex8 = (n) => (n >>> 0).toString(16).padStart(8, '0');
+  if (typeof cr?.randomUUID === 'function') {
+    const id = String(cr.randomUUID()).replace(/-/g, '').slice(0, 8);
+    if (/^[0-9a-f]{8}$/.test(id)) return id;
+  }
+  if (typeof cr?.getRandomValues === 'function') {
+    const [n] = cr.getRandomValues(new Uint32Array(1));
+    return hex8(n);
+  }
+  /* No crypto at all: two random draws and the low bits of the clock. */
+  const mixed =
+    Math.floor(random() * 2 ** 32) ^ (now & 0xffff) ^ (Math.floor(random() * 2 ** 16) << 16);
+  return hex8(mixed);
+}
+
 /* One id per page load. A reload, or a second visit from the same browser,
  * appends to the same IndexedDB store; the id lets analysis separate runs. */
-const RUN_ID = (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`).slice(0, 8);
+const RUN_ID = makeRunId();
 
 /** Id of this page load. Uploads send only the rows of the current run. */
 export function getRunId() {
@@ -137,11 +171,32 @@ export function getRunId() {
 /* Writes that have been started and not yet finished. */
 const pendingWrites = new Set();
 
+/* The newest rows of this run, kept in memory as well. A page that is being
+ * closed cannot wait for an IndexedDB read, so the last-chance upload
+ * (`flushOnHide` in uploader.js) takes its rows from here. Bounded: the oldest
+ * rows drop out, and they are in storage anyway. */
+const RECENT_ROWS_MAX = 600;
+const recentRows = [];
+
+/** Copy of the newest rows written in this page load (each with its `seq`). */
+export function getRecentRows() {
+  return recentRows.slice();
+}
+
 export async function appendTrialRow(row) {
-  const write = require_active().appendTrialRow({ run_id: RUN_ID, wall_ms: Date.now(), ...row });
+  const full = { run_id: RUN_ID, wall_ms: Date.now(), ...row };
+  const write = require_active().appendTrialRow(full);
   pendingWrites.add(write);
   const settled = () => pendingWrites.delete(write);
   write.then(settled, settled);
+  write.then(
+    (seq) => {
+      if (!Number.isFinite(seq)) return;
+      recentRows.push({ seq, ...full });
+      if (recentRows.length > RECENT_ROWS_MAX) recentRows.shift();
+    },
+    () => {}
+  );
   return write;
 }
 
