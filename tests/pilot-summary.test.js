@@ -480,7 +480,8 @@ describe('summariseExclusions (participant-level rules)', () => {
 
   it('does not count a screen-out or an unfinished session as completed', () => {
     expect(
-      summariseExclusions([...base(), { phase: 'exit', exit_reason: 'audio_check_fail' }]).completed
+      summariseExclusions([...base(), { phase: 'exit', exit_reason: 'tones_not_audible' }])
+        .completed
     ).toBe(false);
     const unfinished = base().filter((r) => r.phase !== 'completion_redirect');
     expect(summariseExclusions(unfinished).completed).toBe(false);

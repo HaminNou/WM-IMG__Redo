@@ -23,7 +23,6 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config, PROLIFIC_PRESCREEN_SUMMARY } from '../src/config.js';
 import { TIMING_THRESHOLDS } from '../src/calibration/device-probe.js';
-import { AUDIO_CHECK } from '../src/calibration/audio-check.js';
 import { _testHelpers as screenCal } from '../src/calibration/screen.js';
 import { MAX_SWEEPS } from '../src/calibration/tone-familiarisation.js';
 import { ESCAPE_AFTER_MS } from '../src/calibration/display-guard.js';
@@ -211,26 +210,23 @@ describe('pre-reg.json matches the build', () => {
       'desktop_check',
       'screen_size_calibration',
       'tone_audibility',
-      'headphone_check',
-      'pitch_discrimination',
       'timing_probe',
       'practice_accuracy',
       'display_guard_escape',
     ]);
   });
 
-  it('pins the audio-check thresholds to the source constants', () => {
-    expect(rule('headphone_check')).toMatchObject({
-      n_trials: AUDIO_CHECK.headphone.n_trials,
-      pass_min: AUDIO_CHECK.headphone.pass_min,
-    });
-    expect(rule('pitch_discrimination')).toMatchObject({
-      n_trials: AUDIO_CHECK.pitch.n_trials,
-      pass_min: AUDIO_CHECK.pitch.pass_min,
-      max_attempts: AUDIO_CHECK.pitch.max_attempts,
-      margin_db: AUDIO_CHECK.pitch.margin_db,
-    });
+  it('pins the tone-audibility sweep limit to the source constant', () => {
     expect(rule('tone_audibility').max_sweeps).toBe(MAX_SWEEPS);
+  });
+
+  it('describes no headphone check and no pitch check (both removed)', () => {
+    const ids = preReg.collection_time_screen_outs.rules.map((r) => r.id);
+    expect(ids).not.toContain('headphone_check');
+    expect(ids).not.toContain('pitch_discrimination');
+    for (const r of preReg.collection_time_screen_outs.rules) {
+      expect(JSON.stringify(r)).not.toMatch(/headphone|pitch|audio-check/i);
+    }
   });
 
   it('pins the timing thresholds to device-probe.js', () => {

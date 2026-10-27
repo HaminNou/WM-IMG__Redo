@@ -93,11 +93,16 @@ describe('(a) no claim the program cannot back up', () => {
     }
   });
 
-  it('the headphone check is described as recorded only everywhere', () => {
-    expect(consentText).toMatch(/recorded only and never ends the session/);
-    if (txtParticipant !== null)
-      expect(txtParticipant).toMatch(/recorded only\. It never ends the session/);
-    expect(mdParticipant).toMatch(/recorded only\. It never ends the session/);
+  it('describes no headphone check and no pitch check anywhere (both removed)', () => {
+    for (const [name, text] of presentNamed([
+      ['consent', consentText],
+      ['listing (md)', mdParticipant],
+      ['listing (txt)', txtParticipant],
+    ])) {
+      expect(text, name).not.toMatch(/headphone check/i);
+      expect(text, name).not.toMatch(/pitch[- ]?(check|discrimination)/i);
+      expect(text, name).not.toMatch(/eight pairs of tones|higher or lower/i);
+    }
   });
 });
 
@@ -269,11 +274,11 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
     expect(txt).toBe(md);
   });
 
-  it('states the practice criterion and the pitch criterion that the build uses, in both listings', () => {
+  it('states the practice criterion that the build uses, in both listings', () => {
     const pct = `${Math.round(config.practice.accuracy_criterion * 100)}%`;
     for (const t of present([mdParticipant, txt])) {
       expect(t).toContain(`at least ${pct} correct`);
-      expect(t).toMatch(/7 of 8/);
+      expect(t).not.toMatch(/7 of 8/);
     }
   });
 

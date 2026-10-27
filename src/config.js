@@ -233,7 +233,7 @@ export const config = deepFreeze({
     completion_url: 'https://app.prolific.com/submissions/complete?cc=CQ6EH8Q1',
 
     /* Completion code Prolific issues for participants screened out by an
-     * in-study check (desktop check, screen-size calibration, tone audibility, pitch check, timing check, practice criterion).
+     * in-study check (desktop check, screen-size calibration, tone audibility, timing check, practice criterion).
      * Prolific generates it when a completion path labelled "Screened out"
      * is added in the study editor's Data collection section; the value here
      * must equal the generated code. */

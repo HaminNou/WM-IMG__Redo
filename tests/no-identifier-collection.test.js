@@ -111,7 +111,6 @@ describe('nothing can bring back date of birth, computed age or an age screen', 
 
   it('has no in-study exit for age or any demographic answer', () => {
     const ALLOWED_EXITS = new Set([
-      'audio_check_failed',
       'consent_declined',
       'desktop_required',
       'display_guard_escape',

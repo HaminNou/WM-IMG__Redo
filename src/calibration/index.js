@@ -13,7 +13,7 @@
  *   fullscreen → visibility-recorder →
  *   tone-audibility-and-comfort (24-box sweep + in-page playback-gain slider) →
  *   tone-audibility-exit (conditional, aborts if 10 sweeps elapsed without Yes) →
- *   headphone-check → pitch-check (+ exit) → timing-probe (+ exit)
+ *   timing-probe (+ exit)
  *
  * Failure paths:
  *   - mobile / tablet   → friendly exit + `jsPsych.abortExperiment()` so no
@@ -40,7 +40,6 @@ import { viewingDistanceTrial } from './viewing-distance.js';
 import { speakerVolumeInstructionTrial } from './volume.js';
 import { enterFullscreenTrial, attachVisibilityRecorder } from './fullscreen.js';
 import { toneAudibilityAndComfortTrial, toneAudibilityExit } from './tone-familiarisation.js';
-import { headphoneCheckBlock, pitchCheckChain } from './audio-check.js';
 import { timingProbeNode } from './device-probe.js';
 
 export function assembleCalibrationChain() {
@@ -80,10 +79,7 @@ export function assembleCalibrationChain() {
     toneAudibilityAndComfortTrial(),
     toneAudibilityExit(),
 
-    /* Objective listening checks at the chosen level, then the timing probe
-     * in the fullscreen condition the task will run in. */
-    headphoneCheckBlock(),
-    pitchCheckChain(),
+    /* Timing probe in the fullscreen condition the task will run in. */
     timingProbeNode(),
   ];
 }

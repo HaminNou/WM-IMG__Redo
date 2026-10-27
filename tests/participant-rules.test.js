@@ -167,7 +167,7 @@ describe('evaluateRun: the three participant-level rules', () => {
     expect(evaluateRun(t).reasons).toContain('single_task_floor');
   });
   it('a run that ended at a screen-out is not completed even with a completion row', () => {
-    const rows = [...cleanRows(), { phase: 'x', exit_reason: 'audio_check_failed' }];
+    const rows = [...cleanRows(), { phase: 'x', exit_reason: 'tones_not_audible' }];
     expect(evaluateRun(rows)).toMatchObject({
       completed: false,
       retained: false,

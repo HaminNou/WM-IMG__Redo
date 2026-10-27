@@ -1345,17 +1345,6 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Audio_State',
   'Audio_Base_Latency_Ms',
   'Audio_Output_Latency_Ms',
-  'Headphone_Pass',
-  'Headphone_N_Correct',
-  'Headphone_N_Trials',
-  'Headphone_N_Chose_Anti',
-  'Headphone_Chosen_Kinds',
-  'Pitch_Attempts',
-  'Pitch_Pass',
-  'Pitch_N_Correct',
-  'Pitch_N_Trials',
-  'Pitch_Margin_Pass',
-  'Pitch_Margin_N_Correct',
   'Timing_Attempts',
   'Timing_Ok',
   'Timing_Fail_Reasons',
@@ -1541,11 +1530,10 @@ function extractScreenCalDetail(outcome, passRows) {
 }
 
 const flagOrNA = (v) => (v === true ? 1 : v === false ? 0 : NA);
-const lastRow = (rows, phase) => rows.filter((r) => r.phase === phase).pop();
 
 /**
  * Columns of CALIBRATION_SUMMARY that come from the session_info row, the
- * check summaries, the visibility and display-guard events and the exit row.
+ * timing probe, the visibility and display-guard events and the exit row.
  */
 function extractSessionEnvironment(rows) {
   const info = rows.find((r) => r.phase === 'session_info') ?? {};
@@ -1554,19 +1542,8 @@ function extractSessionEnvironment(rows) {
   const decks = info.instruction_deck_sha256 ?? {};
   const exitRow = rows.filter((r) => typeof r.exit_reason === 'string').pop();
 
-  const headphone = lastRow(rows, 'headphone_check_summary')?.value;
-  const pitchRows = rows
-    .filter((r) => r.phase === 'pitch_check_summary')
-    .map((r) => r.value)
-    .filter(Boolean);
-  const pitchUser = pitchRows.filter((v) => v.label === 'pitch_user_level');
-  const pitchUserLast = pitchUser[pitchUser.length - 1];
-  const pitchMargin = pitchRows.filter((v) => v.label === 'pitch_margin_minus12').pop();
   const timingRows = rows.filter((r) => r.phase === 'timing_probe');
   const timing = timingRows[timingRows.length - 1];
-  /* The last headphone block's trials (one row per trial), for the chosen-kind string. */
-  const headphoneTrials = rows.filter((r) => r.phase === 'headphone_check_trial');
-  const headphoneBlock = headphoneTrials.slice(-(Number(headphone?.n_trials) || 0));
 
   const visibility = rows.filter(
     (r) => r.phase === 'visibility_event' && r.kind === 'visibilitychange'
@@ -1606,23 +1583,6 @@ function extractSessionEnvironment(rows) {
     Audio_State: audio.state ?? NA,
     Audio_Base_Latency_Ms: numOrNA(audio.base_latency_ms),
     Audio_Output_Latency_Ms: numOrNA(audio.output_latency_ms),
-    Headphone_Pass: flagOrNA(headphone?.headphones_pass),
-    Headphone_N_Correct: numOrNA(headphone?.n_correct),
-    Headphone_N_Trials: numOrNA(headphone?.n_trials),
-    /* Times the anti-phase sound was called quietest (loudspeaker signature: it cancels in the
-     * room) and the kind chosen on each trial in order, so speaker listening can be told from
-     * guessing. NA when the summary row predates the field. */
-    Headphone_N_Chose_Anti: numOrNA(headphone?.n_chose_anti),
-    Headphone_Chosen_Kinds:
-      headphoneBlock.length > 0 && headphoneBlock.every((r) => typeof r.chosen_kind === 'string')
-        ? headphoneBlock.map((r) => r.chosen_kind).join(';')
-        : NA,
-    Pitch_Attempts: pitchUser.length > 0 ? pitchUser.length : NA,
-    Pitch_Pass: flagOrNA(pitchUserLast?.passed),
-    Pitch_N_Correct: numOrNA(pitchUserLast?.n_correct),
-    Pitch_N_Trials: numOrNA(pitchUserLast?.n_trials),
-    Pitch_Margin_Pass: flagOrNA(pitchMargin?.passed),
-    Pitch_Margin_N_Correct: numOrNA(pitchMargin?.n_correct),
     Timing_Attempts: timingRows.length > 0 ? timingRows.length : NA,
     Timing_Ok: flagOrNA(timing?.timing_ok),
     Timing_Fail_Reasons: Array.isArray(timing?.timing_fail_reasons)

@@ -2,7 +2,7 @@
  * Screen-out exit path.
  *
  * Every in-study check that ends a session (desktop check, screen-size
- * calibration, tone audibility, pitch-discrimination check, timing check,
+ * calibration, tone audibility, timing check,
  * practice-accuracy criterion, and the display guard's end-the-session
  * button) ends through
  * `screenOutExit` or `finishScreenOut`. The participant sees a short, polite explanation, and the

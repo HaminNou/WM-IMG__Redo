@@ -20,7 +20,6 @@ vi.mock('../src/hidden-nav.js', () => ({
 import { consentGate, consentTrial } from '../src/calibration/consent.js';
 import { consentBodyHtml } from '../src/calibration/consent-text.js';
 import { PROLIFIC_PRESCREEN_SUMMARY, config } from '../src/config.js';
-import { AUDIO_CHECK } from '../src/calibration/audio-check.js';
 import { TIMING_THRESHOLDS } from '../src/calibration/device-probe.js';
 
 function mockConsentState(consented) {
@@ -85,7 +84,6 @@ describe('consentTrial disclosure', () => {
       'Device check',
       'Screen-size calibration',
       'Sound check',
-      'Pitch-discrimination check',
       'Timing check',
       'Practice-accuracy criterion',
       'Display lock',
@@ -96,13 +94,18 @@ describe('consentTrial disclosure', () => {
     expect(html).toContain('screen-out completion code');
   });
 
-  it('states the pitch-check threshold and attempts that the build uses', () => {
-    const { n_trials, pass_min } = AUDIO_CHECK.pitch;
-    expect(n_trials).toBe(8);
-    expect(body()).toContain('eight pairs of tones');
-    expect(body()).toContain(`at least ${pass_min} of ${n_trials} correct`);
-    expect(body()).toContain('try once more');
-    expect(AUDIO_CHECK.pitch.max_attempts).toBe(2);
+  it('does not describe a headphone check or a pitch-discrimination check (both removed)', () => {
+    const html = body();
+    for (const word of [
+      'Headphone check',
+      'Pitch-discrimination',
+      'pitch check',
+      'eight pairs of tones',
+      'higher or lower',
+      'try once more',
+    ]) {
+      expect(html, word).not.toContain(word);
+    }
   });
 
   it('states the timing refresh-rate limit that the build uses', () => {
@@ -116,11 +119,10 @@ describe('consentTrial disclosure', () => {
     );
   });
 
-  it('says the headphone check is recorded only; headphones are recommended, speakers acceptable', () => {
+  it('says headphones are recommended and speakers are acceptable (requirement, not a check)', () => {
     const html = body();
-    expect(html).toMatch(/Headphone check:<\/strong>[^<]*recorded only and never ends the session/);
     expect(html).toContain(
-      'Headphones are recommended, but built-in or external speakers are acceptable'
+      'built-in or external speakers, or headphones &ndash; your choice; headphones are recommended'
     );
     expect(html).not.toContain('strongly recommended');
   });

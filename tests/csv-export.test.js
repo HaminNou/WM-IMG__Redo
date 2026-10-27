@@ -1528,6 +1528,9 @@ describe('extractCalibrationRow: environment and checks', () => {
       inner_height_px: 960,
       device_pixel_ratio: 2,
     },
+    /* Rows of two steps that were removed from the study (headphone check and pitch
+     * check) are kept here on purpose: an old dump that still carries them must load and
+     * export without error, and the export must not contain any column for them. */
     ...['quiet', 'quiet', 'quiet', 'quiet', 'quiet', 'quiet'].map((chosen_kind, i) => ({
       phase: 'headphone_check_trial',
       trial_i: i,
@@ -1578,13 +1581,9 @@ describe('extractCalibrationRow: environment and checks', () => {
     expect(row.Device_Pixel_Ratio).toBe(2);
     expect(row.Audio_Sample_Rate_Hz).toBe(48000);
     expect(row.Audio_Output_Latency_Ms).toBe(20);
-    expect(row.Headphone_Pass).toBe(1);
-    expect(row.Headphone_N_Chose_Anti).toBe(0);
-    expect(row.Headphone_Chosen_Kinds).toBe('quiet;quiet;quiet;quiet;quiet;quiet');
-    expect(row.Pitch_Attempts).toBe(2);
-    expect(row.Pitch_Pass).toBe(1);
-    expect(row.Pitch_N_Correct).toBe(8);
-    expect(row.Pitch_Margin_Pass).toBe(0);
+    for (const col of Object.keys(row)) {
+      expect(col, 'no column for a removed step').not.toMatch(/^(Headphone|Pitch)_/);
+    }
     expect(row.Timing_Ok).toBe(1);
     expect(row.Timing_Fail_Reasons).toBe('');
     expect(row.Timing_Refresh_Hz_Est).toBe(60);
@@ -1607,23 +1606,20 @@ describe('extractCalibrationRow: environment and checks', () => {
     ]);
     expect(row.Clock_Time_Origin_Ms).toBe(99);
     expect(row.Build_Commit).toBe('NA');
-    expect(row.Pitch_Pass).toBe('NA');
     expect(row.Timing_Ok).toBe('NA');
-    expect(row.Headphone_N_Chose_Anti).toBe('NA');
-    expect(row.Headphone_Chosen_Kinds).toBe('NA');
   });
 
   it('gives a screened-out session a row with its exit reason', () => {
     const rows = [
       { phase: 'consent', consented: true },
-      { phase: 'audio_check_fail', exit_reason: 'audio_check_failed', response: 0 },
+      { phase: 'tone_audibility_fail', exit_reason: 'tones_not_audible', response: 0 },
     ];
     const { files } = composeExport([
       { participant_id: 'P9', session: sessionMeta(), rows, source_paths: [] },
     ]);
     const lines = files['CALIBRATION_SUMMARY.csv'].split('\n').filter(Boolean);
     expect(lines).toHaveLength(2);
-    expect(lines[1]).toContain('"audio_check_failed"');
+    expect(lines[1]).toContain('"tones_not_audible"');
     expect(lines[0]).toContain('"Exit_Reason"');
   });
 });
@@ -1755,38 +1751,50 @@ describe('EVENTS.csv and wide files: new fields', () => {
   });
 });
 
-describe('extractCalibrationRow: headphone check loudspeaker signature', () => {
+describe('old dumps that still contain rows of the removed headphone and pitch checks', () => {
   const meta = { session_id: 'S1', started_at_iso: '2000-01-01T00:00:00Z' };
-  const trial = (i, chosen_kind) => ({ phase: 'headphone_check_trial', trial_i: i, chosen_kind });
-  it('exports how often the anti-phase sound was called quietest, and the chosen kinds in order', () => {
-    const kinds = ['anti', 'anti', 'quiet', 'anti', 'ref', 'anti'];
+  /* One row of every phase that belonged to the two removed steps, plus the exit row of the
+   * pitch check, as an earlier build of the study wrote them. */
+  const REMOVED_PHASE_ROWS = [
+    { phase: 'headphone_check_intro' },
+    { phase: 'headphone_check_plan', value: { orders: [[0, 1, 2]] } },
+    { phase: 'headphone_check_trial', trial_i: 0, chosen_kind: 'anti', correct: false },
+    {
+      phase: 'headphone_check_summary',
+      value: { n_trials: 6, n_correct: 1, headphones_pass: false, n_chose_anti: 4 },
+    },
+    { phase: 'pitch_check_plan', value: {} },
+    { phase: 'pitch_check_trial', trial_i: 0, first_idx: 3, second_idx: 4, correct_resp: 1 },
+    { phase: 'pitch_check_summary', value: { label: 'pitch_user_level', passed: true } },
+    { phase: 'pitch_check_gate' },
+    { phase: 'pitch_check_retry_hint' },
+    { phase: 'audio_check_fail', exit_reason: 'audio_check_failed', response: 0 },
+  ];
+
+  it('still builds a calibration row, with no column for the removed steps', () => {
     const row = extractCalibrationRow('P1', meta, [
-      ...kinds.map((k, i) => trial(i, k)),
-      {
-        phase: 'headphone_check_summary',
-        value: { n_trials: 6, n_correct: 1, headphones_pass: false, n_chose_anti: 4 },
-      },
+      { phase: 'timing_probe', timing_ok: true, timing_fail_reasons: [] },
+      ...REMOVED_PHASE_ROWS,
     ]);
-    expect(row.Headphone_N_Chose_Anti).toBe(4);
-    expect(row.Headphone_Chosen_Kinds).toBe(kinds.join(';'));
-    expect(row.Headphone_Pass).toBe(0);
+    expect(row.Timing_Ok).toBe(1);
+    for (const col of Object.keys(row)) expect(col).not.toMatch(/^(Headphone|Pitch)_/);
+    /* the old exit row is still reported, as the generic exit reason it carried */
+    expect(row.Exit_Reason).toBe('audio_check_failed');
   });
-  it('uses only the last block when the check was repeated, and NA for old dumps', () => {
-    const row = extractCalibrationRow('P1', meta, [
-      ...Array.from({ length: 12 }, (_, i) => trial(i, i < 6 ? 'ref' : 'quiet')),
+
+  it('exports every table from such a dump without error and without removed columns', () => {
+    const { files } = composeExport([
       {
-        phase: 'headphone_check_summary',
-        value: { n_trials: 6, n_correct: 6, headphones_pass: true, n_chose_anti: 0 },
+        participant_id: 'P1',
+        session: meta,
+        rows: [{ phase: 'consent', consented: true }, ...REMOVED_PHASE_ROWS],
+        source_paths: [],
       },
     ]);
-    expect(row.Headphone_Chosen_Kinds).toBe('quiet;quiet;quiet;quiet;quiet;quiet');
-    const old = extractCalibrationRow('P1', meta, [
-      {
-        phase: 'headphone_check_summary',
-        value: { n_trials: 6, n_correct: 6, headphones_pass: true },
-      },
-    ]);
-    expect(old.Headphone_N_Chose_Anti).toBe('NA');
-    expect(old.Headphone_Chosen_Kinds).toBe('NA');
+    for (const [name, text] of Object.entries(files)) {
+      const header = text.split('\n')[0];
+      expect(header, name).not.toMatch(/Headphone|Pitch_/);
+    }
+    expect(files['CALIBRATION_SUMMARY.csv'].split('\n').filter(Boolean)).toHaveLength(2);
   });
 });

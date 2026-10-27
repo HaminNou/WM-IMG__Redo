@@ -208,56 +208,6 @@ export async function playSineTone(freqHz, opts = {}) {
 }
 
 /**
- * Schedules a two-channel sine tone for the headphone check. With
- * `antiphase` the right channel is inverted, so the two channels cancel when
- * both come out of one loudspeaker or leak into each other, and stay
- * distinct on headphones. Same level rules as `playSineTone`.
- *
- * @param {number} freqHz
- * @param {object} opts  { durationMs, rampMs, peak, gainDb, when, antiphase }
- */
-export async function playStereoSine(freqHz, opts = {}) {
-  if (audioMuted) return;
-  await ensureRunning();
-  const ctx = getAudioContext();
-  const durationSec = (opts.durationMs ?? 1000) / 1000;
-  const rampSec = (opts.rampMs ?? 25) / 1000;
-  const basePeak = opts.peak ?? DEFAULT_PEAK;
-  const gainLinear = opts.gainDb !== undefined ? Math.pow(10, opts.gainDb / 20) : 1;
-  const peak = basePeak * gainLinear * userPlaybackGain;
-  const when = opts.when ?? ctx.currentTime;
-
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.value = freqHz;
-
-  const envelope = ctx.createGain();
-  applyCosineRamp(envelope, ctx, when, durationSec, rampSec, peak);
-
-  const merger = ctx.createChannelMerger(2);
-  const left = ctx.createGain();
-  const right = ctx.createGain();
-  right.gain.value = opts.antiphase ? -1 : 1;
-
-  osc.connect(envelope);
-  envelope.connect(left).connect(merger, 0, 0);
-  envelope.connect(right).connect(merger, 0, 1);
-  merger.connect(ctx.destination);
-  osc.start(when);
-  osc.stop(when + durationSec + 0.05);
-
-  const entry = { sources: [osc], gains: [envelope] };
-  trackScheduledAudio(entry);
-
-  return new Promise((resolve) => {
-    osc.onended = () => {
-      untrackScheduledAudio(entry);
-      resolve();
-    };
-  });
-}
-
-/**
  * Builds the 24-tone bank as { index, freq_hz } for the analytic cell↔tone
  * mapping. Tones are *audio-only* — never rendered visually.
  *

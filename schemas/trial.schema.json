@@ -30,16 +30,6 @@
         "visibility_event",
         "tone_audibility_and_comfort",
         "tone_audibility_fail",
-        "headphone_check_intro",
-        "headphone_check_plan",
-        "headphone_check_trial",
-        "headphone_check_summary",
-        "pitch_check_plan",
-        "pitch_check_trial",
-        "pitch_check_summary",
-        "pitch_check_gate",
-        "pitch_check_retry_hint",
-        "audio_check_fail",
         "timing_probe",
         "timing_probe_hint",
         "timing_probe_fail",
@@ -294,11 +284,10 @@
         "consent_declined",
         "tones_not_audible",
         "screen_calibration_failed",
-        "audio_check_failed",
         "timing_check_failed",
         "practice_criterion_not_met"
       ],
-      "description": "Why the session ended early. Present only on the exit row (`desktop_gate_fail`, `consent_declined`, `tone_audibility_fail`, `screen_calibration_fail`, `audio_check_fail`, `timing_probe_fail`, `practice_disqualification`)."
+      "description": "Why the session ended early. Present only on the exit row (`desktop_gate_fail`, `consent_declined`, `tone_audibility_fail`, `screen_calibration_fail`, `timing_probe_fail`, `practice_disqualification`)."
     },
     "attention_excluded": {
       "type": "boolean",
@@ -357,7 +346,7 @@
       "type": "number",
       "minimum": 0,
       "maximum": 1,
-      "description": "Linear scalar (`user_playback_pct / 100`) applied to every subsequent tone the experiment plays via `playSineTone` / `playStereoSine` / `playPinkNoise`. Stamped on `tone_audibility_and_comfort` rows."
+      "description": "Linear scalar (`user_playback_pct / 100`) applied to every subsequent tone the experiment plays via `playSineTone` / `playPinkNoise`. Stamped on `tone_audibility_and_comfort` rows."
     },
     "sweeps_completed": {
       "type": "integer",
@@ -929,7 +918,9 @@
     },
     "failed_buckets": {
       "type": ["array", "null"],
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "`upload_session_end`: ids of the buckets that could not be sent (every bucket is tried)."
     },
     "ts": {
@@ -987,67 +978,6 @@
     "audio_context": {
       "type": ["object", "null"],
       "description": "State of the audio context when the row was written: `sample_rate_hz`, `state`, `base_latency_ms` (processing delay of the context) and `output_latency_ms` (delay to the audio device), each as reported by the browser."
-    },
-    "check": {
-      "type": "string",
-      "description": "Audio check rows: which check (`headphone` or `pitch`)."
-    },
-    "trial_i": {
-      "type": "integer",
-      "description": "Audio check rows: trial number within the check."
-    },
-    "order": {
-      "type": "array",
-      "description": "`headphone_check_trial`: order in which the three sounds were played."
-    },
-    "correct_pos": {
-      "type": "integer",
-      "description": "`headphone_check_trial`: position of the correct sound."
-    },
-    "chosen": {
-      "type": "integer",
-      "description": "Audio check rows: option chosen."
-    },
-    "chosen_kind": {
-      "type": ["string", "null"],
-      "enum": ["ref", "quiet", "anti", null],
-      "description": "`headphone_check_trial`: which kind of sound the participant called quietest (`ref` full level in phase, `quiet` 6 dB lower, `anti` phase-reversed across channels). Choosing `anti` repeatedly is the loudspeaker signature. The summary row's `value.n_chose_anti` counts these."
-    },
-    "correct": {
-      "type": "boolean",
-      "description": "Audio check rows: the choice was correct."
-    },
-    "playback_ok": {
-      "type": "boolean",
-      "description": "Audio check rows: playback completed before the response."
-    },
-    "rt_after_playback_ms": {
-      "type": ["number", "null"],
-      "description": "Audio check rows: response time after the end of playback, ms."
-    },
-    "level_db_rel_user": {
-      "type": "number",
-      "description": "`pitch_check_trial`: level of the trial relative to the participant's setting, dB."
-    },
-    "first_idx": {
-      "type": "integer",
-      "description": "`pitch_check_trial`: bank index of the first tone."
-    },
-    "second_idx": {
-      "type": "integer",
-      "description": "`pitch_check_trial`: bank index of the second tone."
-    },
-    "first_hz": {
-      "type": "number",
-      "description": "`pitch_check_trial`: frequency of the first tone, Hz."
-    },
-    "second_hz": {
-      "type": "number",
-      "description": "`pitch_check_trial`: frequency of the second tone, Hz."
-    },
-    "correct_resp": {
-      "type": "integer",
-      "description": "`pitch_check_trial`: the correct answer (1 = second tone higher, 0 = lower)."
     },
     "frame_n": {
       "type": "integer",
