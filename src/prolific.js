@@ -8,8 +8,9 @@
  * is replayable from the saved seed.
  *
  * If a participant lands here without those params (developer load, or someone
- * who copy-pasted a stale URL), we still let them in but flag the session as
- * `is_preview: true` so the analysis pipeline can drop them. We never silently
+ * who copy-pasted a stale URL, or a link opened with the template placeholders
+ * such as `{{%PROLIFIC_PID%}}` still in it), we still let them in but flag the
+ * session as `is_preview: true` so the analysis pipeline can drop them. We never silently
  * fabricate a fake PID — that would let preview data contaminate the main batch.
  * A missing SESSION_ID alone gets a locally generated `LOCAL_…` id
  * (`session_id_source: 'local_fallback'`) so uploads, file names and the
@@ -73,13 +74,30 @@ export function _resetLocalSessionIdForTests() {
   }
 }
 
-function readProlificParams(search = window.location.search) {
+/**
+ * A parameter value we accept as a real Prolific id: a non-empty run of letters,
+ * digits, underscores and hyphens (Prolific ids are 24-character hex strings).
+ * Anything else is treated as missing, so a link opened with the template
+ * placeholders left in (`{{%PROLIFIC_PID%}}`, `%PROLIFIC_PID%`, `${PROLIFIC_PID}`,
+ * `<PROLIFIC_PID>`, URL-encoded or not) or a bare `PROLIFIC_PID` becomes a
+ * preview and is never mistaken for a participant.
+ */
+function usableParam(key, value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (v === '' || v.length > 100) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(v)) return null;
+  if (v.toUpperCase().includes(key)) return null;
+  return v;
+}
+
+export function readProlificParams(search = window.location.search) {
   const params = new URLSearchParams(search);
   const out = {};
   for (const key of REQUIRED_PARAMS) {
-    out[key.toLowerCase()] = params.get(key);
+    out[key.toLowerCase()] = usableParam(key, params.get(key));
   }
-  out.is_preview = REQUIRED_PARAMS.some((k) => !params.get(k));
+  out.is_preview = REQUIRED_PARAMS.some((k) => !out[k.toLowerCase()]);
   return out;
 }
 
