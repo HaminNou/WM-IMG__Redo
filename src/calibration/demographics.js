@@ -3,10 +3,15 @@
  *
  * The fields collected here describe the analyzed sample (handedness,
  * education, English fluency, glasses or contacts). No health or medical
- * information is asked. Age,
- * sex, and primary language come from Prolific's demographic export.
- * Eligibility is decided by Prolific prescreeners and by the checks listed
- * in the consent form; nothing in this form excludes a participant.
+ * information is asked, and nothing that identifies a person: no name, email
+ * address, date of birth, age, address or phone number (Prolific's researcher
+ * terms forbid collecting direct identifiers). Age, sex, and primary language
+ * come from Prolific's demographic export. Eligibility is decided only by
+ * Prolific's filters, which are applied before the study is shown; nothing in
+ * this form excludes a participant. The one free-text box (the optional
+ * glasses note) is limited in length, tells participants not to enter
+ * identifying information, and cannot be submitted if it contains an email
+ * address, a phone number or a link.
  *
  * The post-experiment strategy questionnaire is administered at the very
  * end of the session (after all main blocks) so that asking participants
@@ -59,6 +64,35 @@ const FIELD_STYLE = `
     }
   </style>
 `;
+
+/**
+ * True when free text contains something that looks like a direct identifier:
+ * an email address, a phone number (seven or more digits, allowing spaces,
+ * dashes, dots, brackets and a leading +), or a web link. This is a guard
+ * against participants typing contact details into the optional note, not a
+ * full detector; the form also tells them not to.
+ */
+export function looksLikeIdentifier(text) {
+  const t = String(text ?? '');
+  const email = /[^\s@]+@[^\s@]+\.[^\s@]+/;
+  const link = /(https?:\/\/|www\.)\S+/i;
+  const phone = /(?:\+?\d[\s().-]?){7,}/;
+  return email.test(t) || link.test(t) || phone.test(t);
+}
+
+/** Blocks submission (native form validation) while the note looks like an identifier. */
+export function guardNoteAgainstIdentifiers(textarea) {
+  if (!textarea) return;
+  const check = () => {
+    textarea.setCustomValidity(
+      looksLikeIdentifier(textarea.value)
+        ? 'Please remove any email address, phone number or link. We do not collect identifying information.'
+        : ''
+    );
+  };
+  textarea.addEventListener('input', check);
+  check();
+}
 
 export function demographicsTrial() {
   const stepId = 'demographics';
@@ -131,9 +165,9 @@ export function demographicsTrial() {
               <option value="no">No</option>
               <option value="prefer_not">Prefer not to say</option>
             </select>
-            <span class="field-hint">If &ldquo;No&rdquo; but you normally wear corrective lenses, please add a note below.</span>
-            <textarea name="glasses_contacts_note"
-                      placeholder="Optional note"></textarea>
+            <span class="field-hint">If &ldquo;No&rdquo; but you normally wear corrective lenses, please add a note below. Please do not include your name, email address, or any other information that could identify you.</span>
+            <textarea name="glasses_contacts_note" maxlength="200"
+                      placeholder="Optional note (no identifying information)"></textarea>
           </div>
         </div>
 
@@ -141,6 +175,9 @@ export function demographicsTrial() {
     `,
     button_label: 'Continue',
     data: { phase: 'demographics' },
+    on_load: () => {
+      guardNoteAgainstIdentifiers(document.querySelector('[name="glasses_contacts_note"]'));
+    },
   };
   registerHiddenNavStep(stepId, demographicsTrial);
   return trackHiddenNavNode(node, stepId);
