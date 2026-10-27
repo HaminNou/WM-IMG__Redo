@@ -29,6 +29,7 @@ import {
 import { MUSIC_EXPERIENCE_ITEMS } from '../src/questionnaire/music-experience.js';
 import { STRATEGY_ITEMS } from '../src/questionnaire/strategy.js';
 import { consentBodyHtml } from '../src/calibration/consent-text.js';
+import { PROLIFIC_PRESCREEN_SUMMARY } from '../src/config.js';
 
 const ROOT = join(__dirname, '..');
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
@@ -193,33 +194,49 @@ describe('nothing can bring back date of birth, computed age or an age screen', 
   });
 });
 
-describe('eligibility is given only through Prolific filters', () => {
-  const EXTRA_SELF_SCREENING = [
-    /color blindness|colour blindness/i,
-    /cognitive impairment/i,
-    /traumatic brain injury/i,
-    /normal color vision|normal colour vision/i,
-    /please do not take part if you have a cognitive/i,
+describe('eligibility is given only through Prolific filters and the custom allowlist', () => {
+  const INVITATION = PROLIFIC_PRESCREEN_SUMMARY.find((i) =>
+    i.startsWith('Invitation: you reported')
+  );
+  /* Imperative self-screening is what Prolific objected to: asking people to
+   * judge themselves against requirements that no filter or allowlist enforces. */
+  const SELF_SCREENING = [
+    /please take part only if[^.]*(vision|hearing|colou?r|cognitive|english)/i,
+    /please do not take part if[^.]*(cognitive|colou?r|brain|vision|hearing)/i,
+    /do not (continue|take part) if you have (a )?(cognitive|colou?r|traumatic)/i,
   ];
   const md = read('prolific-study-description.md');
   const pasted = md.slice(
     md.indexOf('<!-- PASTE-BLOCK-START -->'),
     md.indexOf('<!-- PASTE-BLOCK-END -->')
   );
+  const consent = consentBodyHtml();
 
-  it('states no unenforced vision, cognitive or colour requirement in the consent', () => {
-    const consent = consentBodyHtml();
-    for (const re of EXTRA_SELF_SCREENING) expect(consent).not.toMatch(re);
+  it('has an invitation item in the config list', () => {
+    expect(INVITATION).toBeTruthy();
+    expect(INVITATION).toMatch(/separate Prolific screening study/);
   });
 
-  it('states no unenforced vision, cognitive or colour requirement in the pasted listing', () => {
+  it('gives the vision, colour, hearing and cognitive criteria only as the invitation, never as self-screening', () => {
+    for (const [name, text] of [
+      ['consent', consent],
+      ['listing', pasted],
+    ]) {
+      expect(text, name).toContain(INVITATION);
+      const withoutInvitation = text.split(INVITATION).join('');
+      for (const re of SELF_SCREENING) expect(withoutInvitation, `${name}: ${re}`).not.toMatch(re);
+      expect(withoutInvitation, name).not.toMatch(
+        /color blindness|colour blindness|traumatic brain injury/i
+      );
+    }
+  });
+
+  it('states in the pasted listing that eligibility comes only from the filters and the invitation', () => {
     expect(pasted.length).toBeGreaterThan(500);
-    for (const re of EXTRA_SELF_SCREENING) expect(pasted).not.toMatch(re);
-    expect(pasted).toMatch(/determined only by these Prolific filters/);
+    expect(pasted).toMatch(/determined only by these Prolific filters and by the invitation/);
   });
 
   it('tells participants no identifying information is asked for, in consent and listing', () => {
-    const consent = consentBodyHtml();
     for (const text of [consent, pasted]) {
       expect(text).toMatch(/does not ask for your name, email address/i);
       expect(text).toMatch(/date of birth/i);

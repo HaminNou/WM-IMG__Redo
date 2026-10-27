@@ -128,8 +128,11 @@ describe('consentTrial disclosure', () => {
 
   it('says eligibility is by the Prolific prescreeners and not re-tested', () => {
     const html = body();
-    expect(html).toContain('Eligibility is determined by the Prolific screening filters');
+    expect(html).toContain(
+      'Eligibility is determined by Prolific&rsquo;s screening filters and by an invitation list'
+    );
     expect(html).toContain('the study itself does not test your age, hearing, or vision');
+    expect(html).toContain('Invitation: you reported normal or corrected-to-normal vision');
     expect(html).toContain('task-capability checks');
     expect(html).not.toContain('We do not check your age, hearing, or vision again');
   });

@@ -34,16 +34,16 @@ Researchers at the University of Missouri Working Memory Lab invite you to parti
 - A quiet environment free of distractions for the duration of the session
 - A standard-size credit card or debit card (for screen-size calibration only; no financial information is collected)
 
-**Who can take part (Prolific screeners).** This study is available only to participants who meet all of the following Prolific screening criteria:
+**Who can take part (Prolific screeners).** This study is available only to participants who meet all of the following criteria, which Prolific applies before the study is shown:
 
 - Age: 18 to 40 years
-- Vision: normal or corrected-to-normal vision (glasses or contacts)
-- Hearing: normal hearing
-- Language: fluent in English
-- Prolific approval rate: 95% or higher
+- First language: English
+- Country of birth: United States
+- Prolific approval rate: 85% or higher
 - Device: a desktop or laptop computer
+- Invitation: you reported normal or corrected-to-normal vision (including normal color vision), normal or corrected-to-normal hearing, and no cognitive impairment or traumatic brain injury in a separate Prolific screening study, and were invited to this study from it
 
-Eligibility is determined only by these Prolific filters, which are applied before you see this study. The study itself does not test your age, hearing, or vision, and it does not ask for your name, email address, date of birth, or any other information that identifies you, or about your health or medical conditions. Your age and sex come from the information Prolific already holds. Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection and working audio output, and if you can attend to short tones and to brief visual items that flash or appear and disappear quickly without adverse effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). These points describe what the task requires; the study does not check them.
+Eligibility is determined only by these Prolific filters and by the invitation, which are applied before you see this study. The study itself does not test your age, hearing, or vision, and it does not ask for your name, email address, date of birth, or any other information that identifies you, or about your health or medical conditions. Your age and sex come from the information Prolific already holds. Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection and working audio output, and if you can attend to short tones and to brief visual items that flash or appear and disappear quickly without adverse effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). These points describe what the task requires; the study does not check them.
 
 **Checks that happen during the study.** The following checks are task-capability checks, not eligibility screening. They confirm that the task can be run accurately on your equipment, and most of them can end the session. They are described again in the consent form.
 
@@ -80,7 +80,7 @@ These codes are the payment mechanism. They must never appear in the pasted bloc
 
 ## Prolific study-page settings checklist
 
-- Screeners: set the filters listed above and no others that would exclude participants silently. "Approval rate" is a Prolific filter based on participants' recorded activity on the platform (a percentage range); set it to 95 to 100. The exact names of the other filters (age, vision, hearing, English fluency) must be read from the study editor; use the closest real filter and then edit the list above to say the same. The IRB-approved recruitment script lists further filters (country of residence: United States; first language; colour vision; cognitive impairment; dyslexia; ADHD) that are not in this list: decide whether to apply them (if you do, add them to `PROLIFIC_PRESCREEN_SUMMARY`, the consent and `pre-reg.json` together).
+- Screeners: set the filters listed above and no others that would exclude participants silently. "Approval rate" is a Prolific filter based on participants' recorded activity on the platform (a percentage range); set it to 85 to 100. The filters set in the study editor are Age (18 to 40), First Language (English), Country of Birth (United States) and Approval Rate (85 to 100). Vision, hearing, colour vision and cognitive impairment are not filters: they are applied through the Custom Allowlist (next section), because Prolific does not allow stating screening requirements only in the description or screening inside the study. The IRB-approved recruitment script also names dyslexia and ADHD; they are not applied. If you add or change a filter, change `PROLIFIC_PRESCREEN_SUMMARY`, the consent, `pre-reg.json` and both listing files together.
 - Device: restrict to desktop in the study's device settings, and tick the audio requirement (the study plays tones). This is a study setting, not a prescreener.
 - Completion codes: add the normal completion code CQ6EH8Q1. For screen-outs, add a completion path labelled "Screened out" in the Data collection section; this enables custom screening and Prolific generates the redirect and completion code. Paste the generated code into `config.prolific.screen_out_completion_code` (currently CED70N6J) and rebuild. Set the screen-out reward to $0.14 (Prolific's minimum), which is the amount the consent states; if you want to pay more for later exits, change the reward here and `config.prolific.payment_policy_text`, `pre-reg.json` and this file together. Prolific pays every screened-out participant the single fixed screen-out reward.
 - In-study screening: Prolific's page "Can I screen participants within my study?" lists prescreener validation, device compatibility, attention checks and consent as permitted. The pitch-discrimination and practice-accuracy exits are not on that list. Ask Prolific support in writing before launch and keep the reply.
@@ -89,6 +89,17 @@ These codes are the payment mechanism. They must never appear in the pasted bloc
 - Maximum allowed time: at least 2.5 times the measured median completion time (about 4.5 hours at 110 minutes), so that a long break does not time the participant out. Confirm the value in the editor.
 - Places (researcher-only; do not paste into the participant-facing fields): start with 60 places and aim for 60 completed sessions. Screen-outs, returns and time-outs do not count, so raise the place count until 60 sessions are completed. Then run `node scripts/pilot-summary.js <data folder>`: if fewer than 40 participants are retained after the exclusion rules in `pre-reg.json`, add one batch of 10 places and repeat. Never go past 100 completed sessions. The decision uses only the retained count, never p-values or Bayes factors.
 - Budget (researcher-only): participant rewards are $1,560 at 60 completions and $2,600 at the 100-completion maximum, plus the screen-out payments ($0.14 each). Prolific adds its service fee on top; the fee for your account must be read from the cost screen in the study editor (the rate published for academic accounts was about one third on top of rewards, which would be about $2,080 at 60 and $3,467 at 100; this is an unverified figure). Prolific will not publish the study until the account holds the full amount.
+
+## Custom Allowlist and the screening study
+
+The main study is published with Prolific's Custom Allowlist ("only these participants will be eligible"). The allowlist holds the Prolific IDs of participants who passed a separate screening study. The standard filters above still apply on top of the allowlist.
+
+- Screening study: a separate, short Prolific study that asks only closed-choice questions about vision (normal or corrected-to-normal, including colour vision), hearing (normal or corrected-to-normal) and cognitive impairment or traumatic brain injury. It must not ask for a date of birth, age, name, email address or any other identifier (age is a Prolific filter), and it must not pay less than Prolific's minimum rate. Use the same Prolific filters as the main study (age, first language, country of birth, approval rate) so that nobody is screened who could not take the main study.
+- Wording: the screening questions and the invitation item in the list above must say the same thing. Change both together.
+- Allowlist: after the screening study, download the IDs of participants who qualify and paste them into the main study's Custom Allowlist. Keep the ID list and the date in the private folder with the key file, never in the repository.
+- Size: the allowlist must hold clearly more people than the places you open (60 completions, up to 100 at the maximum). Plan for at least two to three times as many qualifying IDs, because not everyone invited takes part.
+- Approval: ask your IRB whether the screening study needs its own approval or consent text (the approved demographics questionnaire covered hearing, vision and medication questions, but a separate study may need to be listed). Keep the reply.
+- Before publishing: run the main study as a draft and check that the editor shows the allowlist, the four filters and a count of eligible participants.
 
 ## Prolific researcher rules to keep (account hold, June 2026)
 

@@ -10,16 +10,19 @@
  * The object is deeply frozen.
  */
 
-/* Prolific prescreeners, in plain language, as shown in the consent form.
- * Keep this list identical to the filters set on the Prolific study. It is
+/* Prolific prescreeners and the custom allowlist, in plain language, as shown
+ * in the consent form. Keep this list identical to the filters set on the
+ * Prolific study: Prolific requires every screening criterion to be applied
+ * through its own filters or a custom allowlist (built from a separate
+ * screening study), never inside the study or only in the description. It is
  * display text only and does not affect the task. */
 export const PROLIFIC_PRESCREEN_SUMMARY = Object.freeze([
   'Age: 18 to 40 years',
-  'Vision: normal or corrected-to-normal vision (glasses or contacts)',
-  'Hearing: normal hearing',
-  'Language: fluent in English',
-  'Prolific approval rate: 95% or higher',
+  'First language: English',
+  'Country of birth: United States',
+  'Prolific approval rate: 85% or higher',
   'Device: a desktop or laptop computer',
+  'Invitation: you reported normal or corrected-to-normal vision (including normal color vision), normal or corrected-to-normal hearing, and no cognitive impairment or traumatic brain injury in a separate Prolific screening study, and were invited to this study from it',
 ]);
 
 function deepFreeze(value) {

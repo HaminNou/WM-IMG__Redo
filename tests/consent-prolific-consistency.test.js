@@ -104,8 +104,20 @@ describe('(a) no claim the program cannot back up', () => {
 describe('(b) consent, listing, config and pre-registration agree', () => {
   const comp = preReg.sampling_plan.compensation;
 
-  it('lists exactly the config filters, in each document, including the 95% approval rate', () => {
-    expect(PROLIFIC_PRESCREEN_SUMMARY).toContain('Prolific approval rate: 95% or higher');
+  it('lists exactly the config filters, in each document, including the 85% approval rate and the invitation', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toContain('Prolific approval rate: 85% or higher');
+    expect(PROLIFIC_PRESCREEN_SUMMARY.some((i) => i.startsWith('Invitation: you reported'))).toBe(
+      true
+    );
+    /* the old 95% figure must not survive anywhere participants or the pre-registration read it */
+    for (const [name, text] of presentNamed([
+      ['consent', consentText],
+      ['listing (md)', mdParticipant],
+      ['listing (txt)', txt],
+      ['pre-reg', JSON.stringify(preReg)],
+    ])) {
+      expect(text, name).not.toMatch(/approval rate[^.]{0,40}95/i);
+    }
     expect(preReg.sampling_plan.filters.prolific_prescreeners).toEqual([
       ...PROLIFIC_PRESCREEN_SUMMARY,
     ]);
