@@ -195,7 +195,7 @@ describe('config snapshot lock', () => {
 describe('pre-reg.json matches the build', () => {
   const rule = (id) => preReg.collection_time_screen_outs.rules.find((r) => r.id === id);
 
-  it('lists the Prolific prescreeners shown in the consent form', () => {
+  it('lists the Prolific filters that are listed in the study description', () => {
     expect(preReg.sampling_plan.filters.prolific_prescreeners).toEqual([
       ...PROLIFIC_PRESCREEN_SUMMARY,
     ]);

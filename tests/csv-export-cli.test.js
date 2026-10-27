@@ -144,16 +144,20 @@ describe('csv-export CLI smoke tests', () => {
     const text = readFileSync(join(outputDir, 'DEMOGRAPHICS.csv'), 'utf-8');
     expect(countCsvDataRows(text)).toBe(3);
     const header = text.split('\n')[0];
-    for (const col of [
-      'Handedness',
-      'Education',
+    for (const col of ['Handedness', 'Education']) {
+      expect(header).toContain(`"${col}"`);
+    }
+    for (const removed of [
+      'Age',
+      'Sex',
+      'First_Languages',
+      'Hearing',
+      'Vision',
+      'Medication',
       'English_Fluency',
       'Glasses_Contacts',
       'Glasses_Contacts_Note',
     ]) {
-      expect(header).toContain(`"${col}"`);
-    }
-    for (const removed of ['Age', 'Sex', 'First_Languages', 'Hearing', 'Vision', 'Medication']) {
       expect(header).not.toContain(`"${removed}"`);
     }
   });

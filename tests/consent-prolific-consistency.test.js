@@ -104,12 +104,18 @@ describe('(a) no claim the program cannot back up', () => {
 describe('(b) consent, listing, config and pre-registration agree', () => {
   const comp = preReg.sampling_plan.compensation;
 
-  it('lists exactly the config filters, in each document, including the 85% approval rate and the invitation', () => {
-    expect(PROLIFIC_PRESCREEN_SUMMARY).toContain('Prolific approval rate: 85% or higher');
-    expect(PROLIFIC_PRESCREEN_SUMMARY.some((i) => i.startsWith('Invitation: you reported'))).toBe(
-      true
-    );
-    /* the old 95% figure must not survive anywhere participants or the pre-registration read it */
+  it('lists exactly the config filters in the listing, its copy and the pre-registration; the consent does not restate them', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toEqual([
+      'Age: 18 to 40 years',
+      'First language: English',
+      'Country of birth: United States',
+      'Prolific approval rate: 85% or higher',
+      'Hearing: no hearing difficulties',
+      'Vision: normal or corrected-to-normal vision',
+      'Cognitive health: no mild cognitive impairment or dementia',
+      'Device: a desktop or laptop computer',
+    ]);
+    /* the old 95% figure and the allowlist/invitation plan must not survive anywhere */
     for (const [name, text] of presentNamed([
       ['consent', consentText],
       ['listing (md)', mdParticipant],
@@ -118,21 +124,40 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
     ])) {
       expect(text, name).not.toMatch(/approval rate[^.]{0,40}95/i);
     }
+    for (const [name, text] of presentNamed([
+      ['consent', consentText],
+      ['listing (md)', md],
+      ['listing (txt)', txt],
+      ['pre-reg filters', JSON.stringify(preReg.sampling_plan.filters)],
+    ])) {
+      expect(text, name).not.toMatch(/allowlist|invitation list|Invitation:/i);
+    }
     expect(preReg.sampling_plan.filters.prolific_prescreeners).toEqual([
       ...PROLIFIC_PRESCREEN_SUMMARY,
     ]);
     for (const item of PROLIFIC_PRESCREEN_SUMMARY) {
-      expect(consentText, `consent: ${item}`).toContain(item);
       expect(mdParticipant, `md: ${item}`).toContain(item);
       if (txt !== null) expect(txt, `txt: ${item}`).toContain(item);
+      expect(consentText, `consent must not restate: ${item}`).not.toContain(item);
     }
-    /* the md list is the list: the same number of "- Age|Vision|..." bullets as config items */
+    /* the consent points to the Prolific page instead */
+    expect(consentText).toMatch(/criteria are listed on the study.s Prolific page/);
+    /* the md list is the list: the same number of bullets as config items */
     const bullets = mdParticipant
       .split('**Who can take part (Prolific screeners).**')[1]
       .split('Eligibility is determined')[0]
       .split('\n')
       .filter((l) => l.startsWith('- '));
     expect(bullets).toHaveLength(PROLIFIC_PRESCREEN_SUMMARY.length);
+    expect(bullets).toHaveLength(8);
+  });
+
+  it('warns the researcher that the three health filters must be restricted to one answer', () => {
+    const researcher = md.slice(md.indexOf('# RESEARCHER ONLY'));
+    expect(researcher).toMatch(/Health filters/);
+    expect(researcher).toMatch(/is any of Yes, No/);
+    expect(researcher).toMatch(/excludes nobody/);
+    if (txt !== null) expect(txt).toContain('Health filters');
   });
 
   it('states the same pay, hourly rate and duration', () => {

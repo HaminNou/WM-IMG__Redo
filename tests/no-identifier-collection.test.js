@@ -7,25 +7,20 @@
  *
  *   1. The demographics form and the questionnaires ask for nothing that
  *      identifies a person (no name, email, date of birth, age, address,
- *      phone number), and the one free-text box refuses emails, phone
- *      numbers and links.
+ *      phone number), and the demographics form has no free-text box at all.
  *   2. No source file or schema field can bring back date of birth, a
  *      computed age or an age-disqualification flag.
  *   3. Nothing in the demographics form can end a session, and every
  *      in-study exit is a compatibility, quality or consent reason, never an
  *      age or other demographic one.
- *   4. The consent text and the Prolific listing give eligibility only
- *      through Prolific's filters and do not state extra self-screening
- *      requirements (colour vision, cognitive impairment, brain injury).
+ *   4. All screening criteria are Prolific filters. The consent form does not
+ *      restate them or ask people to judge themselves against them; the
+ *      Prolific listing and the pre-registration list exactly the filters.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  demographicsTrial,
-  guardNoteAgainstIdentifiers,
-  looksLikeIdentifier,
-} from '../src/calibration/demographics.js';
+import { demographicsTrial } from '../src/calibration/demographics.js';
 import { MUSIC_EXPERIENCE_ITEMS } from '../src/questionnaire/music-experience.js';
 import { STRATEGY_ITEMS } from '../src/questionnaire/strategy.js';
 import { consentBodyHtml } from '../src/calibration/consent-text.js';
@@ -61,17 +56,12 @@ describe('the demographics form collects nothing that identifies a person', () =
     }
   });
 
-  it('has exactly one free-text box, limited in length', () => {
+  it('asks exactly handedness and education, both closed choices, with no free-text control', () => {
     document.body.innerHTML = demographicsTrial().html;
-    const free = document.querySelectorAll('textarea, input[type="text"], input:not([type])');
-    expect(free).toHaveLength(1);
-    expect(free[0].getAttribute('name')).toBe('glasses_contacts_note');
-    expect(Number(free[0].getAttribute('maxlength'))).toBeLessThanOrEqual(200);
-  });
-
-  it('tells participants not to enter identifying information', () => {
-    const html = demographicsTrial().html.toLowerCase();
-    expect(html).toContain('do not include your name, email address');
+    const controls = Array.from(document.querySelectorAll('input, select, textarea'));
+    expect(controls.map((el) => el.getAttribute('name'))).toEqual(['handedness', 'education']);
+    for (const el of controls) expect(el.tagName, el.getAttribute('name')).toBe('SELECT');
+    expect(document.querySelectorAll('textarea, input')).toHaveLength(0);
   });
 
   it('cannot end the session: no exit or abort code in the form', () => {
@@ -85,55 +75,6 @@ describe('the demographics form collects nothing that identifies a person', () =
     ]) {
       expect(src, word).not.toContain(word);
     }
-  });
-});
-
-describe('the optional note refuses direct identifiers', () => {
-  it.each([
-    ['call me 555 123 4567'],
-    ['+1 (573) 882-1234'],
-    ['mail me at a.b@c.com'],
-    ['see www.example.org'],
-    ['https://example.org/me'],
-    ['5731234567'],
-  ])('flags %s', (text) => {
-    expect(looksLikeIdentifier(text)).toBe(true);
-  });
-
-  it.each([
-    [''],
-    ['I normally wear glasses'],
-    ['I wear contacts at night'],
-    ['since 2010'],
-    ['prescription -2.5 and -3.25'],
-    ['short-sighted, about -4'],
-  ])('lets %s through', (text) => {
-    expect(looksLikeIdentifier(text)).toBe(false);
-  });
-
-  it('blocks form submission while the note holds an identifier and releases it when removed', () => {
-    document.body.innerHTML = demographicsTrial().html;
-    const note = document.querySelector('[name="glasses_contacts_note"]');
-    guardNoteAgainstIdentifiers(note);
-    expect(note.checkValidity()).toBe(true);
-    note.value = 'reach me on a.b@c.com';
-    note.dispatchEvent(new Event('input'));
-    expect(note.checkValidity()).toBe(false);
-    expect(note.validationMessage).toMatch(/email|phone|link/i);
-    note.value = 'I normally wear glasses';
-    note.dispatchEvent(new Event('input'));
-    expect(note.checkValidity()).toBe(true);
-  });
-
-  it('is wired into the trial so it runs when the form is shown', () => {
-    document.body.innerHTML = demographicsTrial().html;
-    const trial = demographicsTrial();
-    expect(typeof trial.on_load).toBe('function');
-    trial.on_load();
-    const note = document.querySelector('[name="glasses_contacts_note"]');
-    note.value = '573-882-1234';
-    note.dispatchEvent(new Event('input'));
-    expect(note.checkValidity()).toBe(false);
   });
 });
 
@@ -188,22 +129,22 @@ describe('nothing can bring back date of birth, computed age or an age screen', 
     for (const reason of found) {
       expect(ALLOWED_EXITS.has(reason), `unexpected exit reason ${reason}`).toBe(true);
       expect(
-        /age|demograph|eligib|birth|sex|gender|handed|educat|language|fluen/i.test(reason)
+        /age|demograph|eligib|birth|sex|gender|handed|educat|language|fluen|hearing|vision|cognit/i.test(
+          reason
+        )
       ).toBe(false);
     }
   });
 });
 
-describe('eligibility is given only through Prolific filters and the custom allowlist', () => {
-  const INVITATION = PROLIFIC_PRESCREEN_SUMMARY.find((i) =>
-    i.startsWith('Invitation: you reported')
-  );
+describe('every screening criterion is a Prolific filter, never an in-study statement', () => {
   /* Imperative self-screening is what Prolific objected to: asking people to
-   * judge themselves against requirements that no filter or allowlist enforces. */
+   * judge themselves against requirements that no filter enforces. */
   const SELF_SCREENING = [
     /please take part only if[^.]*(vision|hearing|colou?r|cognitive|english)/i,
     /please do not take part if[^.]*(cognitive|colou?r|brain|vision|hearing)/i,
     /do not (continue|take part) if you have (a )?(cognitive|colou?r|traumatic)/i,
+    /if any of the criteria above does not apply to you/i,
   ];
   const md = read('prolific-study-description.md');
   const pasted = md.slice(
@@ -212,28 +153,22 @@ describe('eligibility is given only through Prolific filters and the custom allo
   );
   const consent = consentBodyHtml();
 
-  it('has an invitation item in the config list', () => {
-    expect(INVITATION).toBeTruthy();
-    expect(INVITATION).toMatch(/separate Prolific screening study/);
+  it('has the eight filters in the config list', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(8);
   });
 
-  it('gives the vision, colour, hearing and cognitive criteria only as the invitation, never as self-screening', () => {
-    for (const [name, text] of [
-      ['consent', consent],
-      ['listing', pasted],
-    ]) {
-      expect(text, name).toContain(INVITATION);
-      const withoutInvitation = text.split(INVITATION).join('');
-      for (const re of SELF_SCREENING) expect(withoutInvitation, `${name}: ${re}`).not.toMatch(re);
-      expect(withoutInvitation, name).not.toMatch(
-        /color blindness|colour blindness|traumatic brain injury/i
-      );
-    }
+  it('does not restate the criteria or ask for self-screening in the consent', () => {
+    for (const item of PROLIFIC_PRESCREEN_SUMMARY) expect(consent, item).not.toContain(item);
+    for (const re of SELF_SCREENING) expect(consent, String(re)).not.toMatch(re);
+    expect(consent).not.toMatch(/color blindness|colour blindness|traumatic brain injury/i);
+    expect(consent).toMatch(/criteria are listed on the study(&rsquo;|')s Prolific page/);
   });
 
-  it('states in the pasted listing that eligibility comes only from the filters and the invitation', () => {
+  it('lists exactly the filters in the pasted listing, with no self-screening sentence', () => {
     expect(pasted.length).toBeGreaterThan(500);
-    expect(pasted).toMatch(/determined only by these Prolific filters and by the invitation/);
+    for (const item of PROLIFIC_PRESCREEN_SUMMARY) expect(pasted, item).toContain(item);
+    for (const re of SELF_SCREENING) expect(pasted, String(re)).not.toMatch(re);
+    expect(pasted).toMatch(/determined only by these Prolific filters, which are applied/);
   });
 
   it('tells participants no identifying information is asked for, in consent and listing', () => {

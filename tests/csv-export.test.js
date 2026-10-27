@@ -1021,16 +1021,13 @@ describe('extractAttentionRows', () => {
 });
 
 describe('extractDemographicsRow', () => {
-  it('pulls the in-experiment fields (plus the optional note) from the demographics row response object', () => {
+  it('pulls handedness and education from the demographics row response object', () => {
     const rows = [
       {
         phase: 'demographics',
         response: {
           handedness: 'right',
           education: 'master',
-          english_fluency: 'fluent',
-          glasses_contacts: 'yes',
-          glasses_contacts_note: '',
         },
       },
     ];
@@ -1042,8 +1039,27 @@ describe('extractDemographicsRow', () => {
     expect(row.First_Languages).toBeUndefined();
     expect(row.Handedness).toBe('right');
     expect(row.Education).toBe('master');
-    expect(row.English_Fluency).toBe('fluent');
-    expect(row.Glasses_Contacts).toBe('yes');
+    for (const removed of ['English_Fluency', 'Glasses_Contacts', 'Glasses_Contacts_Note'])
+      expect(row[removed]).toBeUndefined();
+  });
+
+  it('ignores the fields that earlier builds recorded (english fluency, glasses, note)', () => {
+    const rows = [
+      {
+        phase: 'demographics',
+        response: {
+          handedness: 'left',
+          education: 'bachelor',
+          english_fluency: 'native',
+          glasses_contacts: 'no',
+          glasses_contacts_note: 'old note',
+        },
+      },
+    ];
+    const row = extractDemographicsRow('P1', sessionMeta(), rows);
+    expect(row.Handedness).toBe('left');
+    expect(Object.keys(row)).not.toContain('Glasses_Contacts_Note');
+    expect(JSON.stringify(row)).not.toContain('old note');
   });
 
   it('emits NA for every field when no demographics row is present', () => {
@@ -1051,18 +1067,20 @@ describe('extractDemographicsRow', () => {
     expect(row.Participant_ID).toBe('P1');
     expect(row.Age).toBeUndefined();
     expect(row.Handedness).toBe('NA');
-    expect(row.Glasses_Contacts_Note).toBe('NA');
+    expect(row.Education).toBe('NA');
   });
 
-  it('exposes a column list with the 10-column shape for serialisation', () => {
+  it('exposes a column list with the 7-column shape for serialisation', () => {
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('Age');
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('Sex');
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('First_Languages');
     expect(DEMOGRAPHICS_COLUMNS).toContain('Handedness');
-    expect(DEMOGRAPHICS_COLUMNS).toContain('Glasses_Contacts_Note');
+    expect(DEMOGRAPHICS_COLUMNS).toContain('Education');
+    for (const removed of ['English_Fluency', 'Glasses_Contacts', 'Glasses_Contacts_Note'])
+      expect(DEMOGRAPHICS_COLUMNS).not.toContain(removed);
     for (const removed of ['Hearing', 'Hearing_Note', 'Vision', 'Medication', 'Medication_Note'])
       expect(DEMOGRAPHICS_COLUMNS).not.toContain(removed);
-    expect(DEMOGRAPHICS_COLUMNS.length).toBe(10);
+    expect(DEMOGRAPHICS_COLUMNS.length).toBe(7);
   });
 });
 

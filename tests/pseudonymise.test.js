@@ -86,10 +86,15 @@ describe('pseudonymisation of the analysis exports', () => {
       env.session_id = `62c3d4e5f60718293a4b5c6${i}`;
       allIds.push(env.session_id);
       if (i === 0) {
-        /* A participant typed their own Prolific id into the only free-text field. */
-        const demo = env.rows.find((r) => r.phase === 'demographics');
-        expect(demo, 'simulator emits a demographics row').toBeDefined();
-        demo.response = { ...(demo.response ?? {}), glasses_contacts_note: `my id is ${pid} ok` };
+        /* A participant typed their own Prolific id into the only free-text answer (an
+         * attention check; the demographics form has no free-text box). */
+        env.rows.push({
+          seq: 99990,
+          phase: 'attention_check',
+          attention_check_id: 'ac1_colour',
+          attention_check_raw: `my id is ${pid} ok`,
+          attention_check_passed: false,
+        });
       }
       /* Bucket-style name: the session id is part of the file name. */
       writeFileSync(
@@ -148,10 +153,10 @@ describe('pseudonymisation of the analysis exports', () => {
       }
     });
 
-    it('a Prolific id typed into free text is replaced by its code in DEMOGRAPHICS.csv', () => {
-      const demo = readFileSync(join(out, 'DEMOGRAPHICS.csv'), 'utf-8');
-      expect(demo).not.toContain(PIDS[0]);
-      const notes = csvColumn(demo, 'Glasses_Contacts_Note');
+    it('a Prolific id typed into free text is replaced by its code in ATTENTION_CHECKS.csv', () => {
+      const checks = readFileSync(join(out, 'ATTENTION_CHECKS.csv'), 'utf-8');
+      expect(checks).not.toContain(PIDS[0]);
+      const notes = csvColumn(checks, 'Raw_Input');
       expect(notes.some((n) => /^my id is P[0-9a-f]{12} ok$/.test(n.replace(/^"|"$/g, '')))).toBe(
         true
       );

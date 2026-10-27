@@ -2,9 +2,10 @@
  * Spreadsheet-formula protection is ON by default for participant-typed text.
  *
  * A free-text field that begins with = + - @ (a tab, a CR) is evaluated as a formula
- * when a CSV is opened in Excel or Sheets. `glasses_contacts_note` is free text, and
- * `=HYPERLINK(...)` used to reach DEMOGRAPHICS.csv unchanged unless the researcher
- * remembered `--neutralise-formulas` (final independent review). Now, by default:
+ * when a CSV is opened in Excel or Sheets. The typed attention-check answer is free text,
+ * and `=HYPERLINK(...)` used to reach the CSVs unchanged unless the researcher
+ * remembered `--neutralise-formulas` (final independent review). The demographics form
+ * itself has no free-text box any more. Now, by default:
  *   - the columns that can hold participant- or browser-supplied text get a leading
  *     apostrophe when they would be read as a formula;
  *   - numeric cells and every fixed-vocabulary column are never touched (R reads the
@@ -36,14 +37,7 @@ function parseCsv(text) {
 function input() {
   const env = simulateOne({ seed: 'fn', pid: 'FN', accuracy: 0.9, responseRate: 1 });
   const rows = (env.rows ?? env.data).map((r) =>
-    r.phase === 'demographics'
-      ? {
-          ...r,
-          response: { ...(r.response ?? {}), glasses_contacts_note: '=HYPERLINK("http://x","y")' },
-        }
-      : r.phase === 'attention_check'
-        ? { ...r, attention_check_raw: '+cmd|calc' }
-        : r
+    r.phase === 'attention_check' ? { ...r, attention_check_raw: '+cmd|calc' } : r
   );
   rows.push({
     seq: 99998,
@@ -64,19 +58,19 @@ function input() {
 
 describe('default protection', () => {
   it('lists the columns that can hold typed text', () => {
-    for (const c of ['Glasses_Contacts_Note', 'Raw_Input', 'Message', 'Source']) {
+    for (const c of ['Raw_Input', 'Message', 'Source']) {
       expect(FREE_TEXT_COLUMNS.has(c), c).toBe(true);
     }
+    /* the demographics form has no free-text box, so no demographics column is in it */
+    expect(FREE_TEXT_COLUMNS.has('Glasses_Contacts_Note')).toBe(false);
     /* numeric and fixed-vocabulary columns are not in it */
     for (const c of ['Participant_ID', 'Px_Per_Mm', 'Exclusion_Reasons', 'Status']) {
       expect(FREE_TEXT_COLUMNS.has(c), c).toBe(false);
     }
   });
 
-  it('a formula-like glasses note and attention input are neutralised without any flag', () => {
+  it('formula-like attention input and diagnostics text are neutralised without any flag', () => {
     const { files } = composeExport(input());
-    const demo = parseCsv(files['DEMOGRAPHICS.csv'])[0];
-    expect(demo.Glasses_Contacts_Note).toBe(`'=HYPERLINK("http://x","y")`);
     const att = parseCsv(files['ATTENTION_CHECKS.csv']);
     expect(att.length).toBeGreaterThan(0);
     expect(att[0].Raw_Input).toBe("'+cmd|calc");
@@ -97,11 +91,11 @@ describe('default protection', () => {
 
   it('does not touch ordinary text', () => {
     const safe = serializeRowsToCsv(
-      [{ Glasses_Contacts_Note: 'contacts, no problem', Raw_Input: 'right' }],
-      ['Glasses_Contacts_Note', 'Raw_Input']
+      [{ Message: 'network, no problem', Raw_Input: 'right' }],
+      ['Message', 'Raw_Input']
     );
     const [row] = parseCsv(safe);
-    expect(row.Glasses_Contacts_Note).toBe('contacts, no problem');
+    expect(row.Message).toBe('network, no problem');
     expect(row.Raw_Input).toBe('right');
   });
 
@@ -116,9 +110,7 @@ describe('modes', () => {
   it('--neutralise-formulas (all) also protects columns outside the free-text list', () => {
     const { files } = composeExport(input(), { neutraliseMode: 'all' });
     expect(parseCsv(files['CALIBRATION_SUMMARY.csv'])[0].Pilot_Label).toBe("'=evil()");
-    expect(parseCsv(files['DEMOGRAPHICS.csv'])[0].Glasses_Contacts_Note).toBe(
-      `'=HYPERLINK("http://x","y")`
-    );
+    expect(parseCsv(files['ATTENTION_CHECKS.csv'])[0].Raw_Input).toBe("'+cmd|calc");
   });
 
   it('the legacy option neutraliseFormulas: true still means all', () => {
@@ -128,9 +120,7 @@ describe('modes', () => {
 
   it('--no-neutralise-formulas switches the protection off', () => {
     const { files } = composeExport(input(), { neutraliseMode: 'none' });
-    expect(parseCsv(files['DEMOGRAPHICS.csv'])[0].Glasses_Contacts_Note).toBe(
-      '=HYPERLINK("http://x","y")'
-    );
+    expect(parseCsv(files['ATTENTION_CHECKS.csv'])[0].Raw_Input).toBe('+cmd|calc');
   });
 
   it('the command line: default is free_text, flags select all or none, both together is an error', () => {

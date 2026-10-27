@@ -229,7 +229,7 @@ const KEYBOARD_RECTY = 1;
  *                        formula; numeric cells are never touched.
  *   --no-neutralise-formulas  Switch the protection off entirely.
  *                        By default only the columns that can hold typed text
- *                        (glasses note, attention-check input, diagnostics message
+ *                        (attention-check input, diagnostics message
  *                        and source: FREE_TEXT_COLUMNS) are protected, so
  *                        `=HYPERLINK(...)` typed by a participant cannot run when
  *                        a file is opened in Excel/Sheets, while codes and numbers
@@ -529,19 +529,14 @@ export function serializeRowsToCsv(rows, columns, opts = {}) {
 }
 
 /**
- * Columns whose text can come from a participant or the browser: the optional
- * glasses/contacts note, the typed answer to an attention check, and the error
- * message and source of the runtime diagnostics. A spreadsheet runs a cell that
+ * Columns whose text can come from a participant or the browser: the typed
+ * answer to an attention check, and the error message and source of the runtime
+ * diagnostics. A spreadsheet runs a cell that
  * begins with = + - @ (tab, CR) as a formula, so these get a leading apostrophe by
  * default (see `formatCsvValue`). Every other column is a number or a fixed code and
  * is never altered.
  */
-export const FREE_TEXT_COLUMNS = new Set([
-  'Glasses_Contacts_Note',
-  'Raw_Input',
-  'Message',
-  'Source',
-]);
+export const FREE_TEXT_COLUMNS = new Set(['Raw_Input', 'Message', 'Source']);
 
 /** UTF-8 byte-order mark; prepended on request so Excel reads the file as UTF-8. */
 export const UTF8_BOM = '\uFEFF';
@@ -2053,9 +2048,6 @@ const DEMOGRAPHICS_COLUMNS = Object.freeze([
   'Pilot_Label',
   'Handedness',
   'Education',
-  'English_Fluency',
-  'Glasses_Contacts',
-  'Glasses_Contacts_Note',
 ]);
 
 export { DEMOGRAPHICS_COLUMNS };
@@ -2065,9 +2057,11 @@ export { DEMOGRAPHICS_COLUMNS };
  *
  * surveyHtmlForm stores all submitted form fields as `data.response` (a flat
  * object keyed by `name=` attribute). Field set is fixed by
- * `src/calibration/demographics.js` — handedness, education, English
- * fluency and glasses/contacts, plus an optional glasses/contacts note. Age,
- * sex, and primary language are obtained from Prolific's demographic export.
+ * `src/calibration/demographics.js` — handedness and highest level of
+ * education (closed choices; no free text). Age, sex, language, hearing, vision
+ * and cognitive status are Prolific filters or come from Prolific's demographic
+ * export. Raw dumps from earlier builds may still carry english_fluency,
+ * glasses_contacts and glasses_contacts_note; they are ignored here.
  * Returns NA for any participant with no demographics row (e.g. a session
  * that aborted before consent → demographics).
  */
@@ -2082,9 +2076,6 @@ export function extractDemographicsRow(participantId, sessionMeta, rows) {
     Pilot_Label: sessionMeta.pilot_label ?? NA,
     Handedness: resp.handedness ?? NA,
     Education: resp.education ?? NA,
-    English_Fluency: resp.english_fluency ?? NA,
-    Glasses_Contacts: resp.glasses_contacts ?? NA,
-    Glasses_Contacts_Note: resp.glasses_contacts_note ?? NA,
   };
 }
 

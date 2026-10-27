@@ -556,9 +556,6 @@ function emitSessionStubRows(seqRef, sessionMeta, calibrationMode = 'ok') {
         response: {
           handedness: 'right',
           education: 'bachelor',
-          english_fluency: 'native',
-          glasses_contacts: 'no',
-          glasses_contacts_note: '',
         },
       },
       seqRef,

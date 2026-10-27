@@ -71,8 +71,12 @@ describe('consentGate', () => {
 describe('consentTrial disclosure', () => {
   const body = () => consentTrial().stimulus;
 
-  it('lists every Prolific prescreener', () => {
-    for (const item of PROLIFIC_PRESCREEN_SUMMARY) expect(body()).toContain(item);
+  it('does not restate the Prolific screening criteria inside the study', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(8);
+    for (const item of PROLIFIC_PRESCREEN_SUMMARY) expect(body()).not.toContain(item);
+    for (const word of ['approval rate', 'hearing difficult', 'dementia', 'Country of birth']) {
+      expect(body().toLowerCase(), word).not.toContain(word.toLowerCase());
+    }
   });
 
   it('discloses each check that can end the session', () => {
@@ -128,11 +132,10 @@ describe('consentTrial disclosure', () => {
 
   it('says eligibility is by the Prolific prescreeners and not re-tested', () => {
     const html = body();
-    expect(html).toContain(
-      'Eligibility is determined by Prolific&rsquo;s screening filters and by an invitation list'
-    );
-    expect(html).toContain('the study itself does not test your age, hearing, or vision');
-    expect(html).toContain('Invitation: you reported normal or corrected-to-normal vision');
+    expect(html).toContain('Eligibility is determined by Prolific&rsquo;s screening filters');
+    expect(html).toContain('the criteria are listed on the study&rsquo;s Prolific page');
+    expect(html).toContain('The study itself does not test your age, hearing, or vision');
+    expect(html).not.toMatch(/invitation/i);
     expect(html).toContain('task-capability checks');
     expect(html).not.toContain('We do not check your age, hearing, or vision again');
   });

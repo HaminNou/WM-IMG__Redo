@@ -6,17 +6,16 @@
  * true for this study it is replaced by the minimal accurate statement
  * (pseudonymous rather than anonymous; one fixed screen-out payment; the
  * device and browser information that is recorded; the checks that can end a
- * session). Eligibility is stated as the Prolific prescreeners
- * (`PROLIFIC_PRESCREEN_SUMMARY`) together with the approved self-assessed
- * requirements, and every in-study check that can end a session is disclosed
- * together with its consequence.
+ * session). Eligibility is decided only by Prolific's screening filters before
+ * the study is shown; the consent refers to the criteria on the study's Prolific
+ * page and does not restate them (`PROLIFIC_PRESCREEN_SUMMARY` feeds the listing
+ * and the pre-registration, not this form). Every in-study check that can end a
+ * session is disclosed together with its consequence.
  *
  * Kept free of jsPsych imports so that `scripts/preflight.js` can read the
  * participant-facing text in Node.
  */
-import { PROLIFIC_PRESCREEN_SUMMARY, config } from '../config.js';
-
-const PRESCREEN_LIST_HTML = PROLIFIC_PRESCREEN_SUMMARY.map((item) => `<li>${item}</li>`).join('');
+import { config } from '../config.js';
 
 const PRACTICE_CRITERION_PCT = Math.round(config.practice.accuracy_criterion * 100);
 
@@ -40,7 +39,7 @@ export function consentBodyHtml(paymentPolicyText = config.prolific.payment_poli
         <li>This is a remote, online study session that runs entirely in your web browser. No researcher will be present during your session.</li>
         <li>The purpose of the study is to explore the capacity, functioning, and limitations of working memory processes when dealing with spatial representations and imagery.</li>
         <li>This study is pseudonymous: you are identified only by your Prolific Participant ID, a randomly assigned alphanumeric code issued by Prolific. Your responses are stored under that ID in private research files, and the ID is replaced by a random code in the files used for analysis and sharing. We do not record your name, email address, IP address, or any other directly identifying information in the study data, and we do not receive your name or email address from Prolific. To check that the task runs accurately on your computer, we record technical information about your device and browser: the browser and operating system, screen and window size, display refresh rate and timer accuracy, audio output settings (sample rate and latency), and whether the page is hidden, zoomed, or leaves fullscreen during the session.</li>
-        <li>We ask a short questionnaire about handedness, education, English fluency, and whether you are wearing glasses or contacts. These answers describe the sample and are not used to decide whether you may take part. We do not ask about your health, hearing, vision, or medical conditions, and we do not collect your date of birth. Your age and sex are taken from the information Prolific holds about you. You may select &ldquo;Prefer Not to Say&rdquo; where available. A separate questionnaire near the end asks about your musical training.</li>
+        <li>We ask a short questionnaire about handedness and highest level of education. These answers describe the sample and are not used to decide whether you may take part. We do not ask about your health, hearing, vision, or medical conditions, and we do not collect your date of birth. Your age and sex are taken from the information Prolific holds about you. You may select &ldquo;Prefer Not to Say&rdquo; where available. A separate questionnaire near the end asks about your musical training.</li>
         <li>You will be presented with visual information (e.g., simple shapes such as dots on a grid, geometric patterns, an asterisk star marker, and a question-mark probe) and auditory information (short pure tones). You will indicate your responses using a keyboard press. Please be aware that visual items can flash or appear and disappear quickly, and that auditory items are short pure tones that may be high or low in pitch.</li>
         <li>The study takes approximately 110 minutes to complete. It can take longer if the practice has to be repeated.</li>
         <li>You will be compensated at or above Prolific&rsquo;s recommended fair-pay rate, currently approximately $12.00 per hour: you will be paid $26 for the full session of approximately 110 minutes, which is about $14 per hour. The exact amount is indicated on the Prolific study listing. Payment is processed by the Prolific platform upon submission of your completion code; the University of Missouri does not collect or process any payment information. After responding to the survey, you will receive information about the payment you are eligible for based on your agreement with Prolific. If the compensation you received does not align with your expectations for this study, please contact the PI at hnth5@missouri.edu.</li>
@@ -60,11 +59,9 @@ export function consentBodyHtml(paymentPolicyText = config.prolific.payment_poli
       <p>&bull; The Working Memory Lab, University of Missouri, Department of Psychological Sciences, under the direction of Dr. Nelson Cowan, Principal Investigator and Director, via departmental funding.</p>
 
       <h3>WHO WILL BE PARTICIPATING IN THIS STUDY?</h3>
-      <p>&bull; Eligibility is determined by Prolific&rsquo;s screening filters and by an invitation list, both applied before you see this study. This study is shown only to participants who meet all of the following criteria:</p>
-      <ul>${PRESCREEN_LIST_HTML}</ul>
-      <p>&bull; Eligibility is determined by the filters and the invitation above; the study itself does not test your age, hearing, or vision. The checks listed in the next section are task-capability checks (whether the task can be run accurately on your equipment), not eligibility screening, but they can end the session. If any of the criteria above does not apply to you, please do not continue.</p>
+      <p>&bull; Eligibility is determined by Prolific&rsquo;s screening filters, which are applied before you see this study; the criteria are listed on the study&rsquo;s Prolific page. The study itself does not test your age, hearing, or vision. The checks listed in the next section are task-capability checks (whether the task can be run accurately on your equipment), not eligibility screening, but they can end the session.</p>
       <p>&bull; Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection, and working audio output (built-in or external speakers, or headphones &ndash; your choice), and if you can attend to short auditory tones that may be soft or loud, high or low, and to brief visual items that flash or appear and disappear quickly without experiencing adverse side effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). The study does not check these points; they describe what the task requires.</p>
-      <p>&bull; The study does not ask for your name, email address, date of birth, age, or any other information that identifies you, and it does not ask about your health or medical conditions. Please do not type identifying information into any text box. Your age and sex come from the information Prolific already holds.</p>
+      <p>&bull; The study does not ask for your name, email address, date of birth, age, or any other information that identifies you, and it does not ask about your health or medical conditions. Your age and sex come from the information Prolific already holds.</p>
 
       <h3>CHECKS DURING THE STUDY AND WHAT HAPPENS IF YOU DO NOT PASS</h3>
       <p>The following checks are part of the session. They are not additional eligibility screening; they confirm that the task can be completed accurately on your equipment. The device check happens at the very start, before this form appears. The others happen after you consent, in the order listed.</p>
