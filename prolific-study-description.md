@@ -40,9 +40,9 @@ Researchers at the University of Missouri Working Memory Lab invite you to parti
 - First language: English
 - Country of birth: United States
 - Prolific approval rate: 85% or higher
-- Hearing: no hearing difficulties
+- Hearing: no hearing loss or hearing difficulties
 - Vision: normal or corrected-to-normal vision
-- Cognitive health: no mild cognitive impairment or dementia
+- Cognitive health: never diagnosed with mild cognitive impairment or dementia
 
 Eligibility is determined only by these Prolific filters, which are applied before you see this study. The study itself does not test your age, hearing, or vision, and it does not ask for your name, email address, date of birth, or any other information that identifies you, or about your health or medical conditions. Your age and sex come from the information Prolific already holds. The study runs only on a desktop or laptop computer: Prolific shows this requirement on the study page, and the first step of the study checks it. Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection and working audio output, and if you can attend to short tones and to brief visual items that flash or appear and disappear quickly without adverse effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). These points describe what the task requires; the study does not check them.
 
@@ -91,15 +91,15 @@ These codes are the payment mechanism. They must never appear in the pasted bloc
 - Places (researcher-only; do not paste into the participant-facing fields): start with 60 places and aim for 60 completed sessions. Screen-outs, returns and time-outs do not count, so raise the place count until 60 sessions are completed. Then run `node scripts/pilot-summary.js <data folder>`: if fewer than 40 participants are retained after the exclusion rules in `pre-reg.json`, add one batch of 10 places and repeat. Never go past 100 completed sessions. The decision uses only the retained count, never p-values or Bayes factors.
 - Budget (researcher-only): participant rewards are $1,560 at 60 completions and $2,600 at the 100-completion maximum, plus the screen-out payments ($0.14 each). Prolific adds its service fee on top; the fee for your account must be read from the cost screen in the study editor (the rate published for academic accounts was about one third on top of rewards, which would be about $2,080 at 60 and $3,467 at 100; this is an unverified figure). Prolific will not publish the study until the account holds the full amount.
 
-## Health filters: set them before publishing
+## Health filters (confirmed 2026-10-26)
 
-When last checked (screenshot of 2026-10-26), the filters Hearing difficulties, Vision and Mild cognitive impairment/Dementia each showed "is any of Yes, No". Selecting both answers excludes nobody, so the study would still be shown to people who report hearing difficulties, impaired vision or mild cognitive impairment or dementia, and the list above would not be true.
+The three health filters are restricted to the qualifying answer, and the question each one asks was read in the Prolific editor:
 
-- Open each of the three filters in the editor, read its exact question wording, and select only the answer(s) that qualify a participant: no hearing difficulties; normal or corrected-to-normal vision; no mild cognitive impairment or dementia. The polarity of "Yes" differs between these filters, so do not assume it.
-- If a filter's wording differs from its list item above, edit the list item (config, both listing files and `pre-reg.json`, together) so that it says exactly what the filter selects.
-- Afterwards, check the number of eligible participants that the editor shows. You need 60 completed sessions (up to 100 at the maximum), and not everyone who sees the study takes part.
-- Colour blindness and traumatic brain injury are not applied. They are IRB-approved criteria that no filter enforces here. Search the editor for a colour-blindness filter; if you want to enforce it, add it and update everything together. Do not state either as a requirement in the description or the consent without a filter.
-- Prolific does not allow screening inside the study, or stating extra screening requirements only in the description. The consent therefore refers to the criteria on the Prolific page and does not restate them.
+- Hearing difficulties: "Do you have any hearing loss or hearing difficulties?" Selected answer: No. This excludes everyone who answers Yes or Rather not say.
+- Vision: "Do you have normal or corrected-to-normal vision?" Selected answer: Yes. This excludes everyone who gives either of the other two answers.
+- Mild cognitive impairment/Dementia: "Have you ever been diagnosed with mild cognitive impairment or dementia?" Selected answer: No. This excludes everyone who answers Yes or Prefer not to say.
+
+The list items above say exactly what these filters select. If a filter or its wording ever changes, edit the list item (config, both listing files and `pre-reg.json`, together). Earlier the three filters showed both Yes and No selected, which excludes nobody; that was corrected before publishing. After any change, check the number of eligible participants that the editor shows: you need 60 completed sessions (up to 100 at the maximum), and not everyone who sees the study takes part.
 
 ## Prolific researcher rules to keep (account hold, June 2026)
 

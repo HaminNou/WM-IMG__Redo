@@ -22,9 +22,9 @@ export const PROLIFIC_PRESCREEN_SUMMARY = Object.freeze([
   'First language: English',
   'Country of birth: United States',
   'Prolific approval rate: 85% or higher',
-  'Hearing: no hearing difficulties',
+  'Hearing: no hearing loss or hearing difficulties',
   'Vision: normal or corrected-to-normal vision',
-  'Cognitive health: no mild cognitive impairment or dementia',
+  'Cognitive health: never diagnosed with mild cognitive impairment or dementia',
 ]);
 
 function deepFreeze(value) {

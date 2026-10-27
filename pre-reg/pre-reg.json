@@ -108,9 +108,9 @@
         "First language: English",
         "Country of birth: United States",
         "Prolific approval rate: 85% or higher",
-        "Hearing: no hearing difficulties",
+        "Hearing: no hearing loss or hearing difficulties",
         "Vision: normal or corrected-to-normal vision",
-        "Cognitive health: no mild cognitive impairment or dementia"
+        "Cognitive health: never diagnosed with mild cognitive impairment or dementia"
       ],
       "other_filters": "None beyond the Prolific filters listed above (approval rate 85% or higher). Hearing difficulties, Vision and Mild cognitive impairment/Dementia are Prolific filters; each must be restricted to the qualifying answer in the study editor. The recruitment script approved by the IRB also names dyslexia, ADHD, color vision and traumatic brain injury; those are not applied.",
       "note": "Eligibility is determined only by the Prolific filters above; the study does not test age, hearing or vision."

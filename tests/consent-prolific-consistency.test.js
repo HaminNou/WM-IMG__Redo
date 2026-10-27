@@ -110,9 +110,9 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
       'First language: English',
       'Country of birth: United States',
       'Prolific approval rate: 85% or higher',
-      'Hearing: no hearing difficulties',
+      'Hearing: no hearing loss or hearing difficulties',
       'Vision: normal or corrected-to-normal vision',
-      'Cognitive health: no mild cognitive impairment or dementia',
+      'Cognitive health: never diagnosed with mild cognitive impairment or dementia',
     ]);
     /* the old 95% figure and the allowlist/invitation plan must not survive anywhere */
     for (const [name, text] of presentNamed([
@@ -151,12 +151,18 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
     expect(bullets).toHaveLength(7);
   });
 
-  it('warns the researcher that the three health filters must be restricted to one answer', () => {
+  it('records the confirmed question wording and selected answer of the three health filters', () => {
     const researcher = md.slice(md.indexOf('# RESEARCHER ONLY'));
-    expect(researcher).toMatch(/Health filters/);
-    expect(researcher).toMatch(/is any of Yes, No/);
-    expect(researcher).toMatch(/excludes nobody/);
-    if (txt !== null) expect(txt).toContain('Health filters');
+    expect(researcher).toMatch(/Health filters \(confirmed/);
+    expect(researcher).toContain('Do you have any hearing loss or hearing difficulties?');
+    expect(researcher).toContain('Do you have normal or corrected-to-normal vision?');
+    expect(researcher).toContain(
+      'Have you ever been diagnosed with mild cognitive impairment or dementia?'
+    );
+    expect(researcher).toMatch(
+      /Selected answer: No\..*\n[\s\S]*Selected answer: Yes\.[\s\S]*Selected answer: No\./
+    );
+    if (txt !== null) expect(txt).toContain('Health filters (confirmed');
   });
 
   it('does not present the device requirement as a Prolific filter (Prolific says device options do not filter)', () => {
