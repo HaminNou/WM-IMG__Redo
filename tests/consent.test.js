@@ -72,7 +72,7 @@ describe('consentTrial disclosure', () => {
   const body = () => consentTrial().stimulus;
 
   it('does not restate the Prolific screening criteria inside the study', () => {
-    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(8);
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(7);
     for (const item of PROLIFIC_PRESCREEN_SUMMARY) expect(body()).not.toContain(item);
     for (const word of ['approval rate', 'hearing difficult', 'dementia', 'Country of birth']) {
       expect(body().toLowerCase(), word).not.toContain(word.toLowerCase());

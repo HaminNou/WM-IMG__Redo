@@ -153,8 +153,8 @@ describe('every screening criterion is a Prolific filter, never an in-study stat
   );
   const consent = consentBodyHtml();
 
-  it('has the eight filters in the config list', () => {
-    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(8);
+  it('has the seven filters in the config list', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY).toHaveLength(7);
   });
 
   it('does not restate the criteria or ask for self-screening in the consent', () => {

@@ -113,7 +113,6 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
       'Hearing: no hearing difficulties',
       'Vision: normal or corrected-to-normal vision',
       'Cognitive health: no mild cognitive impairment or dementia',
-      'Device: a desktop or laptop computer',
     ]);
     /* the old 95% figure and the allowlist/invitation plan must not survive anywhere */
     for (const [name, text] of presentNamed([
@@ -149,7 +148,7 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
       .split('\n')
       .filter((l) => l.startsWith('- '));
     expect(bullets).toHaveLength(PROLIFIC_PRESCREEN_SUMMARY.length);
-    expect(bullets).toHaveLength(8);
+    expect(bullets).toHaveLength(7);
   });
 
   it('warns the researcher that the three health filters must be restricted to one answer', () => {
@@ -158,6 +157,18 @@ describe('(b) consent, listing, config and pre-registration agree', () => {
     expect(researcher).toMatch(/is any of Yes, No/);
     expect(researcher).toMatch(/excludes nobody/);
     if (txt !== null) expect(txt).toContain('Health filters');
+  });
+
+  it('does not present the device requirement as a Prolific filter (Prolific says device options do not filter)', () => {
+    expect(PROLIFIC_PRESCREEN_SUMMARY.some((i) => /^device/i.test(i))).toBe(false);
+    expect(preReg.sampling_plan.filters.prolific_prescreeners.some((i) => /^device/i.test(i))).toBe(
+      false
+    );
+    expect(mdParticipant).not.toMatch(/^- Device:/m);
+    if (txtParticipant !== null) expect(txtParticipant).not.toMatch(/^- Device:/m);
+    expect(mdParticipant).toMatch(
+      /Prolific shows this requirement on the study page, and the first step of the study checks it/
+    );
   });
 
   it('states the same pay, hourly rate and duration', () => {

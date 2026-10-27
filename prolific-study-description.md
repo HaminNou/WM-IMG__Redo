@@ -43,9 +43,8 @@ Researchers at the University of Missouri Working Memory Lab invite you to parti
 - Hearing: no hearing difficulties
 - Vision: normal or corrected-to-normal vision
 - Cognitive health: no mild cognitive impairment or dementia
-- Device: a desktop or laptop computer
 
-Eligibility is determined only by these Prolific filters, which are applied before you see this study. The study itself does not test your age, hearing, or vision, and it does not ask for your name, email address, date of birth, or any other information that identifies you, or about your health or medical conditions. Your age and sex come from the information Prolific already holds. Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection and working audio output, and if you can attend to short tones and to brief visual items that flash or appear and disappear quickly without adverse effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). These points describe what the task requires; the study does not check them.
+Eligibility is determined only by these Prolific filters, which are applied before you see this study. The study itself does not test your age, hearing, or vision, and it does not ask for your name, email address, date of birth, or any other information that identifies you, or about your health or medical conditions. Your age and sex come from the information Prolific already holds. The study runs only on a desktop or laptop computer: Prolific shows this requirement on the study page, and the first step of the study checks it. Please take part only if you can use a desktop or laptop computer with a working keyboard, a stable internet connection and working audio output, and if you can attend to short tones and to brief visual items that flash or appear and disappear quickly without adverse effects (for example, if you have photosensitive epilepsy or migraines triggered by flashing lights, please do not take part). These points describe what the task requires; the study does not check them.
 
 **Checks that happen during the study.** The following checks are task-capability checks, not eligibility screening. They confirm that the task can be run accurately on your equipment, and most of them can end the session. They are described again in the consent form.
 
@@ -57,10 +56,9 @@ Eligibility is determined only by these Prolific filters, which are applied befo
 6. Timing check: for a few seconds the page measures your display refresh rate and timer accuracy. If the computer is too slow or unsteady, you can run the check once more; if it fails again, the session ends.
 7. Practice-accuracy criterion: you must reach at least 70% correct on the practice trials, with one repeat allowed, before the main task begins. If you do not, the session ends.
 8. Display lock: after calibration the page must stay at the same zoom and in fullscreen. If either changes, the task pauses until you restore it, and the affected trials are excluded from analysis. If you cannot restore it, a button lets you end the session.
-9. Attention checks: three brief typed instruction checks occur during the session. They do not end the session, but if you miss more than one, your data may be excluded from the analyses.
-10. Data quality: this does not end the session. Your data may also be left out of the analyses if the two screen-size settings of your last calibration attempt disagreed by more than a few percent, or if your accuracy in a memory-only block was at chance level or close to it.
+9. Attention checks: three brief typed instruction checks occur during the session. Please read each instruction carefully; following it passes the check.
 
-**If a check is not passed.** For every check except 4, 9 and 10, the session ends, you are shown a message and sent back to Prolific, where your submission is recorded as screened out. You are then paid a fixed screen-out payment of $0.14 through Prolific, the same whichever of these checks ends the session.
+**If a check is not passed.** If one of these checks ends your session, you are shown a message and sent back to Prolific, where your submission is recorded as screened out. You are then paid a fixed screen-out payment of $0.14 through Prolific, the same whichever of these checks ends the session.
 
 **Declining or leaving.** Participation is voluntary. You can decline consent at the start, or stop at any time by selecting "Stop without completing" on Prolific, which returns your submission, without penalty. Data that your browser has already sent before you stop are kept; if you would like them removed, contact the Lead Researcher and give your Prolific ID.
 

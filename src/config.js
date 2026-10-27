@@ -25,7 +25,6 @@ export const PROLIFIC_PRESCREEN_SUMMARY = Object.freeze([
   'Hearing: no hearing difficulties',
   'Vision: normal or corrected-to-normal vision',
   'Cognitive health: no mild cognitive impairment or dementia',
-  'Device: a desktop or laptop computer',
 ]);
 
 function deepFreeze(value) {
