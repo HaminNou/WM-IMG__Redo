@@ -86,7 +86,7 @@ export function dOnlyInstructionNode() {
         <p>Keep your eyes on the center of the circle throughout.</p>
       `,
       narration: `After the dots, we test your memory ${setSize} times. Each time, a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown in that location. Press No, the left arrow, if it was not. Keep your eyes on the center of the circle throughout.`,
-      exemplar: ['qmark'],
+      exemplar: ['qmark', 'dot'],
     }),
     slideStimulusPage({
       title,
@@ -98,7 +98,7 @@ export function dOnlyInstructionNode() {
         ${FEEDBACK_RED} for incorrect while it is still on screen.</p>
       `,
       narration: `You have 3 seconds for each test. Aim for accuracy first, but don't dwell. If you answer in time, the dot turns green for correct or red for incorrect while it is still on screen.`,
-      exemplar: ['qmark'],
+      exemplar: ['qmark', 'dot'],
     }),
   ];
   const node = {

@@ -117,7 +117,7 @@ export function iDInstructionNode() {
         ${FEEDBACK_GREEN} for correct or ${FEEDBACK_RED} for incorrect.</p>
       `,
       narration: `After the ${totalEvents} things, we test your dot memory ${setSize} times. Each time a black dot appears for 3 seconds in some location. Press Yes, the right arrow, if a dot was shown here. Press No, the left arrow, if it was not. You have 3 seconds for each star and each dot test. If you answer in time, the star or dot turns green for correct or red for incorrect.`,
-      exemplar: ['qmark'],
+      exemplar: ['qmark', 'dot'],
     }),
     slideStimulusPage({
       title,
