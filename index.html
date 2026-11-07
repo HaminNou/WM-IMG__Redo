@@ -370,8 +370,8 @@
         background: rgba(0, 0, 0, 0.35);
       }
     </style>
-    <script type="module" crossorigin src="./assets/main-OQVnCYzO.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/uploader-DR0DR-2V.js">
+    <script type="module" crossorigin src="./assets/main-N_ihsYqc.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/uploader-Bef-S1YT.js">
     <link rel="stylesheet" crossorigin href="./assets/main-BF-BwXlM.css">
   </head>
   <body>
@@ -399,8 +399,10 @@
          JavaScript modules, Promise.allSettled (storage.js), fetch and AbortController
          (uploader.js, rest.js), Web Audio, requestAnimationFrame, matchMedia (display
          guard), Object.fromEntries (strategy.js), Blob URLs (data download) and
-         Object.hasOwn (called by jsPsych on every trial). Object.hasOwn is the newest of
-         them: Chrome/Edge 93, Firefox 92, Safari 15.4 (MDN browser-compat-data), so a
+         Object.hasOwn (called by jsPsych on every trial) and the unprefixed Fullscreen API
+         (display-guard.js reads document.fullscreenElement). The Fullscreen API is the
+         newest of them in Safari, which only dropped the webkit prefix in 16.4; Object.hasOwn
+         is the newest elsewhere (Chrome/Edge 93, Firefox 92; MDN browser-compat-data). A
          browser that passes this gate has all the others. -->
     <script>
       (function () {
@@ -422,6 +424,12 @@
           need(typeof Object.fromEntries === 'function', 'Object.fromEntries');
           need(typeof Object.hasOwn === 'function', 'Object.hasOwn');
           need(
+            !!document.documentElement &&
+              typeof document.documentElement.requestFullscreen === 'function' &&
+              'fullscreenElement' in document,
+            'Fullscreen'
+          );
+          need(
             typeof window.Blob === 'function' && !!(window.URL && URL.createObjectURL),
             'Blob URLs'
           );
@@ -439,7 +447,7 @@
           h.textContent = 'This browser cannot run the study';
           var p = document.createElement('p');
           p.textContent =
-            'This study needs a recent desktop browser: the current version of Chrome, Edge, Firefox or Safari (Chrome or Edge 93, Firefox 92 or Safari 15.4 at the oldest). Please open the same link in one of these.';
+            'This study needs a recent desktop browser: the current version of Chrome, Edge, Firefox or Safari (Chrome or Edge 93, Firefox 92 or Safari 16.4 at the oldest). Please open the same link in one of these.';
           var small = document.createElement('p');
           small.style.cssText = 'font-size:0.85em;opacity:0.7;';
           small.textContent = 'Missing in this browser: ' + missing.join(', ');
