@@ -17,6 +17,10 @@ import {
   initStorage,
 } from '../src/storage.js';
 
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
+
 const session = {
   params: { session_id: 'abc123', prolific_pid: 'pid-1', study_id: 'st', is_preview: false },
   prng_seed_uint32: 1,

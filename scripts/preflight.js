@@ -21,15 +21,15 @@
  *   - `config.prolific.completion_url` doesn't contain `PLACEHOLDER` in
  *     `--strict-deployment` mode. A live study with a placeholder completion
  *     URL leaves participants stranded.
- *   - When `config.uploader.provider === 'datapipe'`,
- *     `config.uploader.datapipe_experiment_id` is set to a non-placeholder
+ *   - When `config.uploader.provider === 'gdrive'`,
+ *     `config.uploader.gdrive_upload_key` is set to a non-placeholder
  *     value in `--strict-deployment` mode. Without it the uploader falls
  *     through to the JSON download fallback — same operational pain as a
  *     null endpoint.
  *   - No bracketed placeholder such as `[PAYMENT_POLICY]` remains in the
  *     participant-facing text (consent form, prescreener list, Prolific study
  *     description) in `--strict-deployment` mode.
- *   - The completion codes and DataPipe id are not in `PREVIOUSLY_USED_IDS`.
+ *   - The completion codes and Google Drive id are not in `PREVIOUSLY_USED_IDS`.
  *
  * Default mode (no flags): runs all four gates + warns about deployment gaps
  * without failing. Suitable for the n=10 pilot.
@@ -72,7 +72,7 @@ export function parsePreflightArgs(argv) {
   };
 }
 
-/* Completion codes and DataPipe experiment ids that must not be used again.
+/* Completion codes and Drive upload key ids that must not be used again.
  * Empty by default; add the ids of any earlier study here. */
 export const PREVIOUSLY_USED_IDS = Object.freeze([]);
 
@@ -206,22 +206,24 @@ export function evaluatePreflight({
       message: `config.uploader.endpoint is null — sessions will fall back to JSON download. Acceptable for n≤10 pilot; not acceptable for the main batch.`,
     });
   }
-  /* DataPipe is the locked egress provider (see config.js#uploader). The
-   * endpoint is the public DataPipe URL, but uploads only land in OUR project
-   * once `datapipe_experiment_id` is replaced with the real ID minted on the
-   * DataPipe dashboard — until then the uploader detects the PLACEHOLDER and
-   * falls through to the JSON download fallback. Same severity gate as the
-   * Prolific completion URL: warning in pilot mode, error before main batch. */
+  /* Google Drive is the locked egress provider (see config.js#uploader). Files
+   * reach our Drive folder through a Google Apps Script web app
+   * (scripts/gdrive-receiver.gs). Until the web-app URL and the upload key are
+   * replaced with the real ones, the uploader detects the PLACEHOLDER and falls
+   * through to the JSON download fallback. Same severity gate as the Prolific
+   * completion URL: warning in pilot mode, error before main batch. */
   if (
-    config.uploader.provider === 'datapipe' &&
-    (typeof config.uploader.datapipe_experiment_id !== 'string' ||
-      config.uploader.datapipe_experiment_id.length === 0 ||
-      config.uploader.datapipe_experiment_id.includes('PLACEHOLDER'))
+    config.uploader.provider === 'gdrive' &&
+    (typeof config.uploader.gdrive_upload_key !== 'string' ||
+      config.uploader.gdrive_upload_key.length === 0 ||
+      config.uploader.gdrive_upload_key.includes('PLACEHOLDER') ||
+      (typeof config.uploader.endpoint === 'string' &&
+        config.uploader.endpoint.includes('PLACEHOLDER')))
   ) {
     issues.push({
       severity: strictDeployment ? 'error' : 'warning',
-      code: 'PLACEHOLDER_DATAPIPE_ID',
-      message: `config.uploader.datapipe_experiment_id is missing or still the PLACEHOLDER token — the uploader will fall back to JSON download instead of POSTing to DataPipe. Replace with the experiment ID minted at https://pipe.jspsych.org for this study.`,
+      code: 'PLACEHOLDER_UPLOAD_KEY',
+      message: `config.uploader.gdrive_upload_key or config.uploader.endpoint is missing or still a PLACEHOLDER — the uploader will fall back to JSON download instead of POSTing to Google Drive. Deploy scripts/gdrive-receiver.gs as a web app and set the endpoint (its /exec URL) and the matching upload key.`,
     });
   }
   if (
@@ -251,11 +253,11 @@ export function evaluatePreflight({
       message: `config.prolific.screen_out_completion_code holds a previously used completion code.`,
     });
   }
-  if (previouslyUsedIds.includes(config.uploader.datapipe_experiment_id)) {
+  if (previouslyUsedIds.includes(config.uploader.gdrive_upload_key)) {
     issues.push({
       severity: 'error',
-      code: 'REUSED_DATAPIPE_ID',
-      message: `config.uploader.datapipe_experiment_id is a previously used DataPipe experiment. Create a new DataPipe experiment for this study.`,
+      code: 'REUSED_UPLOAD_KEY',
+      message: `config.uploader.gdrive_upload_key is a previously used Drive upload key. Generate a new key for this study.`,
     });
   }
   if (

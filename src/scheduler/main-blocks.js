@@ -41,12 +41,14 @@ import { injectIntraBlockRests } from '../conditions/rest.js';
 const TRIAL_TYPES = Object.freeze(['d_only', 't_only', 'i_only', 'i_d', 'i_t']);
 const TRIALS_PER_TYPE_TOTAL = 24;
 const MAIN_TRIALS_TOTAL = TRIAL_TYPES.length * TRIALS_PER_TYPE_TOTAL; /* 120 */
-/* Intra-block rest schedule. With 60 trials per block, a rest after
- * within-block trials 20 and 40 splits each block into three 20-trial
- * runs — short enough to keep fatigue effects bounded but long enough
- * that the rests don't dominate the session timeline. The inter-block
- * rest at trial 60→61 is added separately by the runner. */
-const REST_AFTER_WITHIN_BLOCK_TRIALS = Object.freeze([20, 40]);
+/* Intra-block rest schedule. With 60 trials per block, Main A gets a rest
+ * after within-block trials 20 and 40 (three 20-trial runs). Main B, the
+ * later block and the one run under more fatigue, gets one more rest: after
+ * trials 15, 30 and 45 (four 15-trial runs). Every rest is the same length
+ * (`config.blocks.rest_duration_s`). The inter-block rest at trial 60→61 is
+ * added separately by the runner. */
+const REST_AFTER_WITHIN_BLOCK_TRIALS_A = Object.freeze([20, 40]);
+const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
 
 /**
  * Generate the Main A + Main B block pair.
@@ -103,12 +105,12 @@ export function generateMainBlockPair({ sequencePoolLabelPrefix, prng } = {}) {
    * `main_trial_number_overall`. */
   mainA.nodes = injectIntraBlockRests(mainA.nodes, {
     blockStartOverall: 1,
-    restAfterWithinBlockTrials: REST_AFTER_WITHIN_BLOCK_TRIALS,
+    restAfterWithinBlockTrials: REST_AFTER_WITHIN_BLOCK_TRIALS_A,
     blockLabel: 'intra_main_a',
   });
   mainB.nodes = injectIntraBlockRests(mainB.nodes, {
     blockStartOverall: mainA.schedule.length + 1,
-    restAfterWithinBlockTrials: REST_AFTER_WITHIN_BLOCK_TRIALS,
+    restAfterWithinBlockTrials: REST_AFTER_WITHIN_BLOCK_TRIALS_B,
     blockLabel: 'intra_main_b',
   });
 

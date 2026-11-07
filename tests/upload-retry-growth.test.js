@@ -2,7 +2,7 @@
  * A retry after a partial upload must deliver the rows written in between.
  *
  * Bucket files are named from the session, the run and the bucket label, and
- * DataPipe refuses a second file with the same name (FILE_EXISTS), which the
+ * Google Drive refuses a second file with the same name (FILE_EXISTS), which the
  * uploader counts as "already delivered". That is correct for an identical
  * retry, but a bucket that GREW between two attempts (for example the meta
  * bucket gaining `upload_session_end` and `completion_redirect`) came back as
@@ -17,8 +17,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   _resetCheckpointForTests,
-  buildDataPipeEnvelope,
-  dataPipeFilenameForBucket,
+  buildUploadEnvelope,
+  uploadFilenameForBucket,
   uploadPendingData,
   uploadTail,
 } from '../src/uploader.js';
@@ -29,6 +29,10 @@ import {
   initStorage,
 } from '../src/storage.js';
 
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
+
 const session = {
   params: { session_id: 'sess1', prolific_pid: 'pid-1', study_id: 'st', is_preview: false },
   prng_seed_uint32: 1,
@@ -38,7 +42,7 @@ const session = {
   user_agent: 'test',
 };
 
-/** A DataPipe-like server: stores files by name, refuses a repeated name with FILE_EXISTS. */
+/** A Drive-receiver-like server: stores files by name, refuses a repeated name with FILE_EXISTS. */
 function makeServer({ denyName } = {}) {
   const files = new Map();
   const state = { deny: denyName ?? null };
@@ -46,18 +50,13 @@ function makeServer({ denyName } = {}) {
     const body = JSON.parse(init.body);
     const name = body.filename;
     if (state.deny && name.includes(state.deny)) {
-      return { ok: false, status: 403, statusText: 'Forbidden', text: async () => 'nope' };
+      return { ok: true, status: 200, text: async () => '{"ok":false,"error":"BAD_REQUEST"}' };
     }
     if (files.has(name)) {
-      return {
-        ok: false,
-        status: 400,
-        statusText: 'Bad Request',
-        text: async () => '{"error":"FILE_EXISTS"}',
-      };
+      return { ok: true, status: 200, text: async () => '{"ok":false,"error":"FILE_EXISTS"}' };
     }
     files.set(name, JSON.parse(body.data));
-    return { ok: true, status: 200, text: async () => 'ok' };
+    return { ok: true, status: 200, text: async () => '{"ok":true}' };
   });
   const seqs = () => {
     const all = new Set();
@@ -89,7 +88,7 @@ beforeEach(async () => {
 describe('file names of regular buckets', () => {
   it('carry the seq range, so a grown bucket is a different file', () => {
     const mk = (seq_min, seq_max) =>
-      dataPipeFilenameForBucket({
+      uploadFilenameForBucket({
         session_id: 'sess1',
         run_id: 'run1',
         bucket_label: `10_meta_s${seq_min}-${seq_max}`,
@@ -98,7 +97,7 @@ describe('file names of regular buckets', () => {
     expect(mk(2, 9)).toBe(mk(2, 9));
   });
 
-  it('buildDataPipeEnvelope adds the range to regular buckets, not to checkpoint, tail or partial files', () => {
+  it('buildUploadEnvelope adds the range to regular buckets, not to checkpoint, tail or partial files', () => {
     const base = {
       session_id: 'sess1',
       run_id: 'run1',
@@ -108,7 +107,7 @@ describe('file names of regular buckets', () => {
       rows: [],
     };
     const name = (b) =>
-      buildDataPipeEnvelope({ bucketEnvelope: { ...base, ...b }, experimentId: 'epIpSzIi9r7O' })
+      buildUploadEnvelope({ bucketEnvelope: { ...base, ...b }, uploadKey: 'epIpSzIi9r7O' })
         .filename;
     expect(name({ bucket_id: 'meta', bucket_label: '10_meta' })).toBe(
       'sess1__run1__10_meta_s4-9.json'

@@ -30,7 +30,7 @@ Researchers at the University of Missouri Working Memory Lab invite you to parti
 - Working keyboard
 - Working audio output (built-in speakers, external speakers, or headphones; headphones are recommended)
 - Stable internet connection
-- A current desktop version of Google Chrome, Microsoft Edge, Mozilla Firefox, or Safari (Chrome or Edge 93 or later, Firefox 92 or later, Safari 15.4 or later)
+- A current desktop version of Google Chrome, Microsoft Edge, Mozilla Firefox, or Safari (Chrome or Edge 93 or later, Firefox 92 or later, Safari 16.4 or later)
 - A quiet environment free of distractions for the duration of the session
 - A standard-size credit card or debit card (for screen-size calibration only; no financial information is collected)
 

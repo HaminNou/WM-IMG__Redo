@@ -28,7 +28,7 @@ import {
   initSession,
   localFallbackSessionId,
 } from '../src/prolific.js';
-import { dataPipeFilenameForBucket } from '../src/uploader.js';
+import { uploadFilenameForBucket } from '../src/uploader.js';
 import { buildSessionInfo } from '../src/session-info.js';
 import { config } from '../src/config.js';
 
@@ -132,7 +132,7 @@ describe('initSession: SESSION_ID missing', () => {
   it('the generated id builds a valid upload file name instead of throwing', () => {
     const s = initSession({ ...noSid }, PILOT);
     expect(
-      dataPipeFilenameForBucket({
+      uploadFilenameForBucket({
         session_id: s.params.session_id,
         run_id: 'abcd1234',
         bucket_label: '01_consent_demographics',
@@ -140,7 +140,7 @@ describe('initSession: SESSION_ID missing', () => {
     ).toBe(`${s.params.session_id}__abcd1234__01_consent_demographics.json`);
     /* the original failure: a null id made the file name throw */
     expect(() =>
-      dataPipeFilenameForBucket({ session_id: null, run_id: 'r', bucket_label: 'b' })
+      uploadFilenameForBucket({ session_id: null, run_id: 'r', bucket_label: 'b' })
     ).toThrow(/session_id is required/);
   });
 

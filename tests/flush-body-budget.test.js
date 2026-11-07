@@ -4,7 +4,7 @@
  * A keepalive fetch may carry about 64 KiB (65,536 bytes) in all; a larger body
  * makes `fetch` reject with a TypeError, which the flush swallows, so the safety net
  * would silently do nothing on the busiest backlog. The old flush counted the length
- * of each row's JSON (56,000) but the rows are stringified AGAIN inside the DataPipe
+ * of each row's JSON (56,000) but the rows are stringified AGAIN inside the Google Drive
  * envelope's `data` string, so quotes and backslashes are escaped twice, and
  * non-ASCII characters take 2-4 bytes in UTF-8: a realistic backlog reached 96 % of
  * the limit and quote-dense or non-ASCII rows went over it (final independent
@@ -19,6 +19,10 @@ import {
   flushPendingWrites,
   initStorage,
 } from '../src/storage.js';
+
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
 
 const session = {
   params: { session_id: 'abc123', prolific_pid: 'pid-1', study_id: 'st', is_preview: false },

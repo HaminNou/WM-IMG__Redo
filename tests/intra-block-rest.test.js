@@ -4,8 +4,9 @@
  * Tests for the intra-block forced-rest insertion.
  *
  * Spec under test:
- *   - A 30-second forced rest is spliced into each main block after every
- *     20 trials (within-block trials 20→21 and 40→41).
+ *   - A 30-second forced rest is spliced into Main A after within-block
+ *     trials 20 and 40, and into Main B after within-block trials 15, 30 and
+ *     45 (one more rest in the later block; all rests are the same length).
  *   - Each rest is immediately followed by a "press both arrow keys to
  *     start the next trial" gate (`rest_resume_gate`).
  *   - Splice happens AFTER trial-number stamping, so the gate-numbering
@@ -40,7 +41,7 @@ function findIndexOfGate(nodes, overallTrialNumber) {
 }
 
 describe('intra-block rest insertion', () => {
-  it('splices a (rest, rest_resume_gate) pair before within-block trials 21 and 41 of each main block', () => {
+  it('splices a (rest, rest_resume_gate) pair before within-block trials 21 and 41 of Main A and 16, 31 and 46 of Main B', () => {
     const pair = generateMainBlockPair();
 
     /* Main A: rest pairs precede gate of trials 21 and 41. */
@@ -51,8 +52,8 @@ describe('intra-block rest insertion', () => {
       expect(pair.mainA.nodes[idx - 1]?.data?.phase).toBe('rest_resume_gate');
     }
 
-    /* Main B: same within-block offsets — overall trials 81 and 101. */
-    for (const overallN of [81, 101]) {
+    /* Main B: rests after within-block trials 15, 30 and 45 — overall 76, 91, 106. */
+    for (const overallN of [76, 91, 106]) {
       const idx = findIndexOfGate(pair.mainB.nodes, overallN);
       expect(idx).toBeGreaterThan(1);
       expect(pair.mainB.nodes[idx - 2]?.data?.phase).toBe('rest');
@@ -60,7 +61,7 @@ describe('intra-block rest insertion', () => {
     }
   });
 
-  it('inserts exactly two rest pairs per main block (no extras, no missing)', () => {
+  it('inserts exactly two rest pairs in Main A and three in Main B (no extras, no missing)', () => {
     const pair = generateMainBlockPair();
 
     const aRests = pair.mainA.nodes.filter((n) => n?.data?.phase === 'rest');
@@ -70,8 +71,8 @@ describe('intra-block rest insertion', () => {
 
     const bRests = pair.mainB.nodes.filter((n) => n?.data?.phase === 'rest');
     const bGates = pair.mainB.nodes.filter((n) => n?.data?.phase === 'rest_resume_gate');
-    expect(bRests).toHaveLength(2);
-    expect(bGates).toHaveLength(2);
+    expect(bRests).toHaveLength(3);
+    expect(bGates).toHaveLength(3);
   });
 
   it('rest rows carry block-distinct labels separating them from the inter-block rest', () => {
@@ -88,10 +89,13 @@ describe('intra-block rest insertion', () => {
     }
   });
 
-  it('intra-block rest duration matches the configured 30-second rest', () => {
+  it('every intra-block rest, in both blocks, matches the configured 30-second rest', () => {
     const pair = generateMainBlockPair();
-    const aRest = pair.mainA.nodes.find((n) => n?.data?.phase === 'rest');
-    expect(aRest?.data?.duration_ms).toBe(30000);
+    const rests = [...pair.mainA.nodes, ...pair.mainB.nodes].filter(
+      (n) => n?.data?.phase === 'rest'
+    );
+    expect(rests).toHaveLength(5);
+    for (const r of rests) expect(r.data.duration_ms).toBe(30000);
   });
 
   it('trial numbering is unchanged after splicing – gates still read 1..60 (A) and 61..120 (B)', () => {
@@ -104,7 +108,7 @@ describe('intra-block rest insertion', () => {
 
   it('the rest does NOT precede the FIRST trial of a block (no spurious rest at within-block trial 1)', () => {
     /* If we mis-coded the breakpoint as `trial % 20 === 0` instead of
-     * `trial within {20, 40}`, a rest could end up before trial 1 of
+     * `trial within {20, 40}` (A) / `{15, 30, 45}` (B), a rest could end up before trial 1 of
      * Main B (where within-block trial = 1 maps to overall = 61). */
     const pair = generateMainBlockPair();
     const firstAGateIdx = findIndexOfGate(pair.mainA.nodes, 1);

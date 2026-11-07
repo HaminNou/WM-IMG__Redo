@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { dataPipeFilenameForBucket, bucketFileLabel } from '../src/uploader.js';
+import { uploadFilenameForBucket, bucketFileLabel } from '../src/uploader.js';
 
 const read = (p) => fs.readFileSync(path.resolve(__dirname, '..', p), 'utf8');
 
@@ -24,16 +24,16 @@ describe('upload file names (config.js comment)', () => {
   });
   it('the documented schemes are what the builders produce', () => {
     expect(
-      dataPipeFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'ckpt_5-9' })
+      uploadFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'ckpt_5-9' })
     ).toBe('S1__r1__ckpt_5-9.json');
     expect(
-      dataPipeFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'tail_10-12' })
+      uploadFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'tail_10-12' })
     ).toBe('S1__r1__tail_10-12.json');
     expect(
-      dataPipeFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'partial_13-14' })
+      uploadFilenameForBucket({ session_id: 'S1', run_id: 'r1', bucket_label: 'partial_13-14' })
     ).toBe('S1__r1__partial_13-14.json');
     expect(
-      dataPipeFilenameForBucket({
+      uploadFilenameForBucket({
         session_id: 'S1',
         run_id: 'r1',
         bucket_label: bucketFileLabel({ bucket_label: '03_d_only', seq_min: 20, seq_max: 740 }),

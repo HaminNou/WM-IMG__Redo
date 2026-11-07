@@ -7,8 +7,8 @@
  *      `partitionRowsIntoBuckets`) tested with hand-built rows that exercise
  *      every membership rule plus the meta catch-all.
  *
- *   2. Pure helpers (`buildBucketEnvelope`, `dataPipeFilenameForBucket`,
- *      `buildDataPipeEnvelope`, `buildCompletionUrl`, the two placeholder
+ *   2. Pure helpers (`buildBucketEnvelope`, `uploadFilenameForBucket`,
+ *      `buildUploadEnvelope`, `buildCompletionUrl`, the two placeholder
  *      predicates) tested directly with fabricated inputs.
  *
  *   3. `postWithRetry` tested with a mock fetch that is programmable to
@@ -31,13 +31,14 @@ import {
   bucketForRow,
   partitionRowsIntoBuckets,
   buildBucketEnvelope,
-  dataPipeFilenameForBucket,
-  buildDataPipeEnvelope,
+  uploadFilenameForBucket,
+  buildUploadEnvelope,
   buildCompletionUrl,
   isPlaceholderCompletionUrl,
   buildScreenOutUrl,
   isPlaceholderScreenOutUrl,
-  isPlaceholderDataPipeId,
+  isPlaceholderUploadKey,
+  isUploaderUnprovisioned,
   postWithRetry,
   uploadPendingData,
   uploadCheckpoint,
@@ -55,6 +56,10 @@ import {
   getRunId,
   getPendingRows,
 } from '../src/storage.js';
+
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
 
 function fakeSession(overrides = {}) {
   return {
@@ -347,10 +352,10 @@ describe('buildBucketEnvelope', () => {
   });
 });
 
-describe('dataPipeFilenameForBucket', () => {
+describe('uploadFilenameForBucket', () => {
   it('produces `<session_id>__<run_id>__<bucket_label>.json`', () => {
     expect(
-      dataPipeFilenameForBucket({
+      uploadFilenameForBucket({
         session_id: 'sess-123',
         run_id: 'ab12cd34',
         bucket_label: '03_d_only',
@@ -360,24 +365,24 @@ describe('dataPipeFilenameForBucket', () => {
 
   it('is deterministic across calls with the same inputs', () => {
     const args = { session_id: 'sess-9', run_id: 'r1', bucket_label: '10_meta' };
-    expect(dataPipeFilenameForBucket(args)).toBe(dataPipeFilenameForBucket(args));
+    expect(uploadFilenameForBucket(args)).toBe(uploadFilenameForBucket(args));
   });
 
   it('differs between page loads of the same session', () => {
     const base = { session_id: 'sess-9', bucket_label: '01_consent_demographics' };
-    expect(dataPipeFilenameForBucket({ ...base, run_id: 'r1' })).not.toBe(
-      dataPipeFilenameForBucket({ ...base, run_id: 'r2' })
+    expect(uploadFilenameForBucket({ ...base, run_id: 'r1' })).not.toBe(
+      uploadFilenameForBucket({ ...base, run_id: 'r2' })
     );
   });
 
   it('throws on missing session_id, run_id or bucket_label', () => {
-    expect(() => dataPipeFilenameForBucket({ run_id: 'r', bucket_label: '01_x' })).toThrow(
+    expect(() => uploadFilenameForBucket({ run_id: 'r', bucket_label: '01_x' })).toThrow(
       /session_id/
     );
-    expect(() => dataPipeFilenameForBucket({ session_id: 'sess', bucket_label: '01_x' })).toThrow(
+    expect(() => uploadFilenameForBucket({ session_id: 'sess', bucket_label: '01_x' })).toThrow(
       /run_id/
     );
-    expect(() => dataPipeFilenameForBucket({ session_id: 'sess', run_id: 'r' })).toThrow(
+    expect(() => uploadFilenameForBucket({ session_id: 'sess', run_id: 'r' })).toThrow(
       /bucket_label/
     );
   });
@@ -438,28 +443,28 @@ describe('buildScreenOutUrl / isPlaceholderScreenOutUrl', () => {
   });
 });
 
-describe('isPlaceholderDataPipeId', () => {
+describe('isPlaceholderUploadKey', () => {
   it('detects the literal PLACEHOLDER token', () => {
-    expect(isPlaceholderDataPipeId('PLACEHOLDER')).toBe(true);
+    expect(isPlaceholderUploadKey('PLACEHOLDER')).toBe(true);
   });
 
   it('detects PLACEHOLDER as a substring (e.g. "DP_PLACEHOLDER_X")', () => {
-    expect(isPlaceholderDataPipeId('DP_PLACEHOLDER_X')).toBe(true);
+    expect(isPlaceholderUploadKey('DP_PLACEHOLDER_X')).toBe(true);
   });
 
   it('returns true for empty string and non-string input', () => {
-    expect(isPlaceholderDataPipeId('')).toBe(true);
-    expect(isPlaceholderDataPipeId(null)).toBe(true);
-    expect(isPlaceholderDataPipeId(undefined)).toBe(true);
-    expect(isPlaceholderDataPipeId(0)).toBe(true);
+    expect(isPlaceholderUploadKey('')).toBe(true);
+    expect(isPlaceholderUploadKey(null)).toBe(true);
+    expect(isPlaceholderUploadKey(undefined)).toBe(true);
+    expect(isPlaceholderUploadKey(0)).toBe(true);
   });
 
   it('returns false for a real-looking experiment ID', () => {
-    expect(isPlaceholderDataPipeId('aBcDeF12345X')).toBe(false);
+    expect(isPlaceholderUploadKey('aBcDeF12345X')).toBe(false);
   });
 });
 
-describe('buildDataPipeEnvelope', () => {
+describe('buildUploadEnvelope', () => {
   function fakeBucketEnvelope(overrides = {}) {
     return {
       session_id: 'sess-123',
@@ -476,19 +481,19 @@ describe('buildDataPipeEnvelope', () => {
     };
   }
 
-  it('produces the {experimentID, filename, data} shape DataPipe expects', () => {
-    const env = buildDataPipeEnvelope({
+  it('produces the {key, filename, data} shape Google Drive expects', () => {
+    const env = buildUploadEnvelope({
       bucketEnvelope: fakeBucketEnvelope(),
-      experimentId: 'exp-abc',
+      uploadKey: 'exp-abc',
     });
-    expect(Object.keys(env).sort()).toEqual(['data', 'experimentID', 'filename']);
-    expect(env.experimentID).toBe('exp-abc');
+    expect(Object.keys(env).sort()).toEqual(['data', 'filename', 'key']);
+    expect(env.key).toBe('exp-abc');
   });
 
   it('builds a deterministic filename from session_id, run_id, bucket_label and the seq range', () => {
-    const env = buildDataPipeEnvelope({
+    const env = buildUploadEnvelope({
       bucketEnvelope: fakeBucketEnvelope({ bucket_label: '07_i_d_dual_dot_star' }),
-      experimentId: 'exp-abc',
+      uploadKey: 'exp-abc',
     });
     /* the seq range makes a bucket that grew between two attempts a new file
      * (tests/upload-retry-growth.test.js) */
@@ -497,33 +502,33 @@ describe('buildDataPipeEnvelope', () => {
 
   it('packs the full bucket envelope into the data string', () => {
     const inner = fakeBucketEnvelope();
-    const env = buildDataPipeEnvelope({ bucketEnvelope: inner, experimentId: 'exp-abc' });
+    const env = buildUploadEnvelope({ bucketEnvelope: inner, uploadKey: 'exp-abc' });
     expect(typeof env.data).toBe('string');
     expect(JSON.parse(env.data)).toEqual(inner);
   });
 
-  it('throws on placeholder experimentId (uploader should never reach here with one)', () => {
+  it('throws on placeholder uploadKey (uploader should never reach here with one)', () => {
     expect(() =>
-      buildDataPipeEnvelope({ bucketEnvelope: fakeBucketEnvelope(), experimentId: 'PLACEHOLDER' })
+      buildUploadEnvelope({ bucketEnvelope: fakeBucketEnvelope(), uploadKey: 'PLACEHOLDER' })
     ).toThrow(/placeholder/i);
   });
 
-  it('throws on missing experimentId', () => {
-    expect(() => buildDataPipeEnvelope({ bucketEnvelope: fakeBucketEnvelope() })).toThrow();
+  it('throws on missing uploadKey', () => {
+    expect(() => buildUploadEnvelope({ bucketEnvelope: fakeBucketEnvelope() })).toThrow();
     expect(() =>
-      buildDataPipeEnvelope({ bucketEnvelope: fakeBucketEnvelope(), experimentId: '' })
+      buildUploadEnvelope({ bucketEnvelope: fakeBucketEnvelope(), uploadKey: '' })
     ).toThrow();
   });
 
   it('throws when bucketEnvelope is missing', () => {
-    expect(() => buildDataPipeEnvelope({ experimentId: 'exp-abc' })).toThrow();
+    expect(() => buildUploadEnvelope({ uploadKey: 'exp-abc' })).toThrow();
   });
 
   it('throws when bucketEnvelope has no session_id (filename construction would be unsafe)', () => {
     expect(() =>
-      buildDataPipeEnvelope({
+      buildUploadEnvelope({
         bucketEnvelope: fakeBucketEnvelope({ session_id: undefined }),
-        experimentId: 'exp-abc',
+        uploadKey: 'exp-abc',
       })
     ).toThrow(/session_id/);
   });
@@ -533,7 +538,7 @@ describe('buildDataPipeEnvelope', () => {
 
 describe('postWithRetry', () => {
   function ok(status = 200) {
-    return Promise.resolve({ ok: true, status, statusText: 'OK', text: async () => '' });
+    return Promise.resolve({ ok: true, status, statusText: 'OK', text: async () => '{"ok":true}' });
   }
   function err(status, statusText = 'Error') {
     return Promise.resolve({ ok: false, status, statusText, text: async () => 'oops' });
@@ -545,6 +550,7 @@ describe('postWithRetry', () => {
   it('succeeds on first attempt with 200', async () => {
     const fetchImpl = vi.fn().mockReturnValueOnce(ok());
     const result = await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: { a: 1 },
       retryMax: 3,
@@ -564,6 +570,7 @@ describe('postWithRetry', () => {
       text: async () => '{"error":"FILE_EXISTS"}',
     });
     const result = await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: { a: 1 },
       retryMax: 3,
@@ -583,7 +590,14 @@ describe('postWithRetry', () => {
       text: async () => '{"error":"INVALID_FORMAT"}',
     });
     await expect(
-      postWithRetry({ url: 'http://x', body: {}, retryMax: 3, fetchImpl, sleepImpl: instantSleep })
+      postWithRetry({
+        requireAck: false,
+        url: 'http://x',
+        body: {},
+        retryMax: 3,
+        fetchImpl,
+        sleepImpl: instantSleep,
+      })
     ).rejects.toThrow(/non-retryable 400/);
   });
 
@@ -594,6 +608,7 @@ describe('postWithRetry', () => {
       .mockReturnValueOnce(err(502, 'Bad Gateway'))
       .mockReturnValueOnce(ok());
     const result = await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: {},
       retryMax: 5,
@@ -612,6 +627,7 @@ describe('postWithRetry', () => {
       .mockRejectedValueOnce(new Error('ECONNRESET'))
       .mockReturnValueOnce(ok());
     const result = await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: {},
       retryMax: 3,
@@ -627,6 +643,7 @@ describe('postWithRetry', () => {
     const fetchImpl = vi.fn().mockReturnValueOnce(err(400, 'Bad Request'));
     await expect(
       postWithRetry({
+        requireAck: false,
         url: 'http://x',
         body: {},
         retryMax: 5,
@@ -642,6 +659,7 @@ describe('postWithRetry', () => {
     const fetchImpl = vi.fn().mockReturnValueOnce(err(422, 'Unprocessable'));
     await expect(
       postWithRetry({
+        requireAck: false,
         url: 'http://x',
         body: {},
         retryMax: 5,
@@ -656,6 +674,7 @@ describe('postWithRetry', () => {
     const fetchImpl = vi.fn().mockReturnValue(err(503, 'Unavailable'));
     await expect(
       postWithRetry({
+        requireAck: false,
         url: 'http://x',
         body: {},
         retryMax: 2,
@@ -676,6 +695,7 @@ describe('postWithRetry', () => {
     };
     await expect(
       postWithRetry({
+        requireAck: false,
         url: 'http://x',
         body: {},
         retryMax: 3,
@@ -691,6 +711,7 @@ describe('postWithRetry', () => {
   it('POSTs JSON with the right headers', async () => {
     const fetchImpl = vi.fn().mockReturnValueOnce(ok());
     await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: { hello: 'world' },
       retryMax: 0,
@@ -701,7 +722,7 @@ describe('postWithRetry', () => {
     const callArgs = fetchImpl.mock.calls[0];
     expect(callArgs[0]).toBe('http://x');
     expect(callArgs[1].method).toBe('POST');
-    expect(callArgs[1].headers['Content-Type']).toBe('application/json');
+    expect(callArgs[1].headers['Content-Type']).toBe('text/plain;charset=utf-8');
     expect(JSON.parse(callArgs[1].body)).toEqual({ hello: 'world' });
     expect(callArgs[1].keepalive).toBeUndefined();
   });
@@ -714,11 +735,14 @@ describe('uploadPendingData', () => {
     return Promise.resolve();
   }
   function fetchOk() {
-    return vi
-      .fn()
-      .mockReturnValue(
-        Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' })
-      );
+    return vi.fn().mockReturnValue(
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      })
+    );
   }
 
   /**
@@ -815,7 +839,12 @@ describe('uploadPendingData', () => {
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
       const body = JSON.parse(opts.body);
       seen.push(body.bucket_id);
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     await uploadPendingData({
       session: fakeSession(),
@@ -879,7 +908,12 @@ describe('uploadPendingData', () => {
           text: async () => 'down',
         });
       }
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     const result = await uploadPendingData({
       session: fakeSession(),
@@ -937,10 +971,15 @@ describe('uploadPendingData', () => {
           ok: false,
           status: 503,
           statusText: 'Unavailable',
-          text: async () => '',
+          text: async () => '{"ok":true}',
         });
       }
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     const partial = await uploadPendingData({
       session: fakeSession(),
@@ -1002,11 +1041,14 @@ describe('uploadPendingData', () => {
 
   it('calls onProgress with status:failed on the failing bucket', async () => {
     await appendTrialRow({ phase: 'consent' });
-    const fetchImpl = vi
-      .fn()
-      .mockReturnValue(
-        Promise.resolve({ ok: false, status: 503, statusText: 'Unavailable', text: async () => '' })
-      );
+    const fetchImpl = vi.fn().mockReturnValue(
+      Promise.resolve({
+        ok: false,
+        status: 503,
+        statusText: 'Unavailable',
+        text: async () => '{"ok":true}',
+      })
+    );
     const onProgress = vi.fn();
     await uploadPendingData({
       session: fakeSession(),
@@ -1033,7 +1075,12 @@ describe('uploadPendingData', () => {
     let captured = null;
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
       captured = JSON.parse(opts.body);
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     await uploadPendingData({
       session: fakeSession(),
@@ -1065,22 +1112,22 @@ describe('uploadPendingData', () => {
     expect(result.uploadedRows).toBe(5);
   });
 
-  describe("uploadPendingData – provider: 'datapipe'", () => {
-    /* DataPipe path: each bucket envelope is wrapped in
-     * `{experimentID, filename, data}` before POST. The wire format change
+  describe("uploadPendingData – provider: 'gdrive'", () => {
+    /* Google Drive path: each bucket envelope is wrapped in
+     * `{key, filename, data}` before POST. The wire format change
      * is invisible to storage / cursor logic — those still see the same
      * pendingRows, so we re-verify here only the parts the wrapper affects:
-     * (a) short-circuit on placeholder ID, (b) actual DataPipe envelope
+     * (a) short-circuit on placeholder ID, (b) actual Google Drive envelope
      * shape on the wire, (c) per-bucket filename derivation. */
 
-    it('returns no_endpoint when datapipeExperimentId is the placeholder token', async () => {
+    it('returns no_endpoint when uploadKey is the placeholder token', async () => {
       await appendTrialRow({ phase: 'consent' });
       const fetchImpl = fetchOk();
       const result = await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'PLACEHOLDER',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'PLACEHOLDER',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1088,15 +1135,15 @@ describe('uploadPendingData', () => {
       expect(fetchImpl).not.toHaveBeenCalled();
     });
 
-    it('returns no_endpoint when datapipeExperimentId is missing', async () => {
+    it('returns no_endpoint when uploadKey is missing', async () => {
       await appendTrialRow({ phase: 'consent' });
       const fetchImpl = fetchOk();
       /* A placeholder id takes the no-endpoint short-circuit. */
       const result = await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'PLACEHOLDER',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'PLACEHOLDER',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1104,18 +1151,23 @@ describe('uploadPendingData', () => {
       expect(fetchImpl).not.toHaveBeenCalled();
     });
 
-    it('POSTs DataPipe-shaped bodies (one per bucket) when ID is real', async () => {
+    it('POSTs Drive-envelope bodies (one per bucket) when ID is real', async () => {
       await seedAllTenBuckets();
       const captured = [];
       const fetchImpl = vi.fn().mockImplementation((url, opts) => {
         captured.push({ url, body: JSON.parse(opts.body) });
-        return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => '{"ok":true}',
+        });
       });
       const result = await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'exp-abc',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'exp-abc',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1123,8 +1175,8 @@ describe('uploadPendingData', () => {
       expect(result.uploadedBuckets).toBe(10);
       expect(captured).toHaveLength(10);
       for (const c of captured) {
-        expect(c.url).toBe('https://pipe.jspsych.org/api/data/');
-        expect(c.body.experimentID).toBe('exp-abc');
+        expect(c.url).toBe('https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec');
+        expect(c.body.key).toBe('exp-abc');
         expect(typeof c.body.filename).toBe('string');
         expect(c.body.filename).toMatch(
           new RegExp(`^sess-123__${getRunId()}__\\d{2}_[a-z_]+_s\\d+-\\d+\\.json$`)
@@ -1143,13 +1195,18 @@ describe('uploadPendingData', () => {
       const filenames = [];
       const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
         filenames.push(JSON.parse(opts.body).filename);
-        return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => '{"ok":true}',
+        });
       });
       await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'exp-abc',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'exp-abc',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1159,20 +1216,20 @@ describe('uploadPendingData', () => {
       expect(sorted).toEqual(filenames); /* already in bucket order */
     });
 
-    it('advances the cursor after a full DataPipe upload (same as raw mode)', async () => {
+    it('advances the cursor after a full Google Drive upload (same as raw mode)', async () => {
       await seedAllTenBuckets();
       await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'exp-abc',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'exp-abc',
         fetchImpl: fetchOk(),
         sleepImpl: instantSleep,
       });
       expect(await getUploadCursor()).toBe(12);
     });
 
-    it('a partial DataPipe upload re-POSTs all buckets on retry (idempotent filenames)', async () => {
+    it('a partial Google Drive upload re-POSTs all buckets on retry (idempotent filenames)', async () => {
       await seedAllTenBuckets();
       let phase2 = false;
       const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
@@ -1183,16 +1240,21 @@ describe('uploadPendingData', () => {
             ok: false,
             status: 503,
             statusText: 'Unavailable',
-            text: async () => '',
+            text: async () => '{"ok":true}',
           });
         }
-        return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => '{"ok":true}',
+        });
       });
       const partial = await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'exp-abc',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'exp-abc',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1203,9 +1265,9 @@ describe('uploadPendingData', () => {
       const callsBefore = fetchImpl.mock.calls.length;
       const resume = await uploadPendingData({
         session: fakeSession(),
-        endpoint: 'https://pipe.jspsych.org/api/data/',
-        provider: 'datapipe',
-        datapipeExperimentId: 'exp-abc',
+        endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+        provider: 'gdrive',
+        uploadKey: 'exp-abc',
         fetchImpl,
         sleepImpl: instantSleep,
       });
@@ -1226,7 +1288,12 @@ describe('uploadCheckpoint', () => {
     const calls = [];
     const fetchImpl = vi.fn().mockImplementation((url, opts) => {
       calls.push(JSON.parse(opts.body));
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     return { fetchImpl, calls };
   };
@@ -1236,14 +1303,14 @@ describe('uploadCheckpoint', () => {
     await fn();
   }
 
-  const ID = { datapipeExperimentId: 'exp-abc' };
+  const ID = { uploadKey: 'exp-abc' };
 
-  it('does nothing while the DataPipe id is a placeholder', async () => {
+  it('does nothing while the Google Drive id is a placeholder', async () => {
     const { fetchImpl } = okFetch();
     await appendTrialRow({ phase: 'consent' });
     const result = await uploadCheckpoint({
       session: fakeSession(),
-      datapipeExperimentId: 'PLACEHOLDER_TODO',
+      uploadKey: 'PLACEHOLDER_TODO',
       fetchImpl,
     });
     expect(result.status).toBe('no_endpoint');
@@ -1262,7 +1329,7 @@ describe('uploadCheckpoint', () => {
         sleepImpl: instantSleep,
       });
       expect(first).toEqual({ status: 'ok', rows: 2 });
-      expect(calls[0].experimentID).toBe('exp-abc');
+      expect(calls[0].key).toBe('exp-abc');
       expect(calls[0].filename).toBe(`sess-123__${getRunId()}__ckpt_1-2.json`);
       expect(JSON.parse(calls[0].data).n_rows).toBe(2);
 
@@ -1326,7 +1393,13 @@ describe('postWithRetry – time limits and cancellation', () => {
 
   it('passes an abort signal to every request', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
-    await postWithRetry({ url: 'http://x', body: {}, fetchImpl, sleepImpl: instantSleep });
+    await postWithRetry({
+      requireAck: false,
+      url: 'http://x',
+      body: {},
+      fetchImpl,
+      sleepImpl: instantSleep,
+    });
     expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -1334,6 +1407,7 @@ describe('postWithRetry – time limits and cancellation', () => {
     const fetchImpl = hangingFetch();
     await expect(
       postWithRetry({
+        requireAck: false,
         url: 'http://x',
         body: {},
         retryMax: 2,
@@ -1358,6 +1432,7 @@ describe('postWithRetry – time limits and cancellation', () => {
       return Promise.resolve({ ok: true, status: 200 });
     });
     const out = await postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: {},
       timeoutMs: 20,
@@ -1371,6 +1446,7 @@ describe('postWithRetry – time limits and cancellation', () => {
     const fetchImpl = hangingFetch();
     const controller = new AbortController();
     const pending = postWithRetry({
+      requireAck: false,
       url: 'http://x',
       body: {},
       timeoutMs: 10000,
@@ -1389,7 +1465,13 @@ describe('postWithRetry – time limits and cancellation', () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      postWithRetry({ url: 'http://x', body: {}, signal: controller.signal, fetchImpl })
+      postWithRetry({
+        requireAck: false,
+        url: 'http://x',
+        body: {},
+        signal: controller.signal,
+        fetchImpl,
+      })
     ).rejects.toThrow(/cancelled/);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -1410,15 +1492,20 @@ describe('uploadCheckpoint – cancellation', () => {
     controller.abort();
     const out = await uploadCheckpoint({
       session: fakeSession(),
-      datapipeExperimentId: 'exp-abc',
+      uploadKey: 'exp-abc',
       signal: controller.signal,
       fetchImpl: vi.fn(),
     });
     expect(out.status).toBe('failed');
-    const ok = vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
+    const ok = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => '{"ok":true}',
+    });
     const next = await uploadCheckpoint({
       session: fakeSession(),
-      datapipeExperimentId: 'exp-abc',
+      uploadKey: 'exp-abc',
       fetchImpl: ok,
     });
     expect(next).toEqual({ status: 'ok', rows: 1 });
@@ -1431,11 +1518,16 @@ describe('rows of earlier runs', () => {
     const bodies = [];
     const fetchImpl = vi.fn().mockImplementation((_url, opts) => {
       bodies.push(JSON.parse(opts.body));
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     return { fetchImpl, bodies };
   };
-  const ID = { datapipeExperimentId: 'exp-abc' };
+  const ID = { uploadKey: 'exp-abc' };
   const sentRows = (bodies) => bodies.flatMap((b) => JSON.parse(b.data).rows);
 
   async function seedTwoRuns() {
@@ -1451,8 +1543,8 @@ describe('rows of earlier runs', () => {
     const { fetchImpl, bodies } = okFetch();
     const result = await uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       fetchImpl,
       sleepImpl: instantSleep,
@@ -1471,8 +1563,8 @@ describe('rows of earlier runs', () => {
     const { fetchImpl, bodies } = okFetch();
     await uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       allRuns: true,
       fetchImpl,
@@ -1487,8 +1579,8 @@ describe('rows of earlier runs', () => {
     const first = okFetch();
     const done = await uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       fetchImpl: first.fetchImpl,
       sleepImpl: instantSleep,
@@ -1500,8 +1592,8 @@ describe('rows of earlier runs', () => {
     const recovery = okFetch();
     const result = await uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       allRuns: true,
       fetchImpl: recovery.fetchImpl,
@@ -1533,17 +1625,22 @@ describe('rows of earlier runs', () => {
     const names = [];
     const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
       names.push(JSON.parse(opts.body).filename);
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     await uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       fetchImpl,
       sleepImpl: instantSleep,
     });
-    const earlierRun = dataPipeFilenameForBucket({
+    const earlierRun = uploadFilenameForBucket({
       session_id: 'sess-123',
       run_id: 'other-run',
       bucket_label: '01_consent_demographics',
@@ -1554,7 +1651,7 @@ describe('rows of earlier runs', () => {
 });
 
 describe('uploadCheckpoint – size limit', () => {
-  const ID = { datapipeExperimentId: 'exp-abc' };
+  const ID = { uploadKey: 'exp-abc' };
 
   it('splits a checkpoint that is larger than one request into several files', async () => {
     _resetCheckpointForTests();
@@ -1563,7 +1660,12 @@ describe('uploadCheckpoint – size limit', () => {
     const bodies = [];
     const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
       bodies.push(JSON.parse(opts.body));
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     const result = await uploadCheckpoint({ ...ID, session: fakeSession(), fetchImpl });
     expect(result).toEqual({ status: 'ok', rows: 25 });
@@ -1582,7 +1684,12 @@ describe('uploadCheckpoint – size limit', () => {
     const flaky = vi.fn().mockImplementation(() => {
       calls += 1;
       if (calls === 1) {
-        return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          text: async () => '{"ok":true}',
+        });
       }
       return Promise.reject(new Error('offline'));
     });
@@ -1596,7 +1703,12 @@ describe('uploadCheckpoint – size limit', () => {
     const bodies = [];
     const ok = vi.fn().mockImplementation((_u, opts) => {
       bodies.push(JSON.parse(opts.body));
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     await uploadCheckpoint({ ...ID, session: fakeSession(), fetchImpl: ok });
     const firstSeq = JSON.parse(bodies[0].data).seq_min;
@@ -1605,20 +1717,25 @@ describe('uploadCheckpoint – size limit', () => {
 });
 
 describe('uploadTail', () => {
-  const ID = { datapipeExperimentId: 'exp-abc' };
+  const ID = { uploadKey: 'exp-abc' };
   const okFetch = () => {
     const bodies = [];
     const fetchImpl = vi.fn().mockImplementation((_u, opts) => {
       bodies.push(JSON.parse(opts.body));
-      return Promise.resolve({ ok: true, status: 200, statusText: 'OK', text: async () => '' });
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        text: async () => '{"ok":true}',
+      });
     });
     return { fetchImpl, bodies };
   };
   const finalUpload = (fetchImpl) =>
     uploadPendingData({
       session: fakeSession(),
-      endpoint: 'https://pipe.jspsych.org/api/data/',
-      provider: 'datapipe',
+      endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+      provider: 'gdrive',
       ...ID,
       fetchImpl,
       sleepImpl: () => Promise.resolve(),
@@ -1670,5 +1787,99 @@ describe('uploadTail', () => {
     expect(result.status).toBe('failed');
     expect(hanging).toHaveBeenCalledTimes(1);
     expect(Date.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe('postWithRetry – Apps Script receiver acknowledgement (gdrive mode)', () => {
+  const instantSleep = () => Promise.resolve();
+  const reply = (body, text) => ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    text: async () => text ?? JSON.stringify(body),
+  });
+  const run = (fetchImpl, extra = {}) =>
+    postWithRetry({
+      url: 'http://x',
+      body: { a: 1 },
+      retryMax: 3,
+      initialBackoffMs: 1,
+      requireAck: true,
+      fetchImpl,
+      sleepImpl: instantSleep,
+      ...extra,
+    });
+
+  it('sends the body as text/plain so the browser makes no CORS preflight request', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply({ ok: true }));
+    await run(fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].headers['Content-Type']).toMatch(/^text\/plain/);
+  });
+
+  it('counts {ok: true} as delivered', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply({ ok: true }));
+    expect(await run(fetchImpl)).toEqual({ ok: true, status: 200, attempt: 0 });
+  });
+
+  it('counts FILE_EXISTS (HTTP 200) as already delivered, without a retry', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply({ ok: false, error: 'FILE_EXISTS' }));
+    expect(await run(fetchImpl)).toMatchObject({ ok: true, duplicate: true });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('never counts an HTTP 200 HTML error page as delivered: it retries, then gives up', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(reply(null, '<html>Service invoked too many times</html>'));
+    await expect(run(fetchImpl)).rejects.toThrow(/gave up after 4 attempts/);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  it('never counts an empty body as delivered', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply(null, ''));
+    await expect(run(fetchImpl)).rejects.toThrow(/gave up/);
+  });
+
+  it('retries SERVER_ERROR and succeeds when the receiver recovers', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(reply({ ok: false, error: 'SERVER_ERROR' }))
+      .mockResolvedValueOnce(reply({ ok: true }));
+    expect(await run(fetchImpl)).toMatchObject({ ok: true, attempt: 1 });
+  });
+
+  it.each(['BAD_KEY', 'BAD_REQUEST'])('does not retry %s', async (error) => {
+    const fetchImpl = vi.fn().mockResolvedValue(reply({ ok: false, error }));
+    await expect(run(fetchImpl)).rejects.toThrow(new RegExp(error));
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('isUploaderUnprovisioned', () => {
+  const live = {
+    url: 'https://script.google.com/macros/s/AKfy123/exec',
+    provider: 'gdrive',
+    uploadKey: 'abc123',
+  };
+  it('is false for a real URL and a real key', () => {
+    expect(isUploaderUnprovisioned(live)).toBe(false);
+  });
+  it('is true without a URL', () => {
+    expect(isUploaderUnprovisioned({ ...live, url: null })).toBe(true);
+    expect(isUploaderUnprovisioned({ ...live, url: '' })).toBe(true);
+  });
+  it('is true while the URL still holds the PLACEHOLDER token', () => {
+    expect(
+      isUploaderUnprovisioned({
+        ...live,
+        url: 'https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec',
+      })
+    ).toBe(true);
+  });
+  it('is true in gdrive mode while the key is a placeholder, false for the raw provider', () => {
+    expect(isUploaderUnprovisioned({ ...live, uploadKey: 'PLACEHOLDER' })).toBe(true);
+    expect(isUploaderUnprovisioned({ ...live, provider: 'raw', uploadKey: 'PLACEHOLDER' })).toBe(
+      false
+    );
   });
 });

@@ -93,6 +93,9 @@ function provideEverything() {
     });
   }
   if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:x';
+  /* jsdom has no Fullscreen API; the gate needs the unprefixed one (Safari 16.4+). */
+  document.documentElement.requestFullscreen = () => Promise.resolve();
+  Object.defineProperty(document, 'fullscreenElement', { value: null, configurable: true });
 }
 
 function runGate() {
@@ -113,6 +116,8 @@ afterEach(() => {
     else window[k] = saved[k];
   }
   delete window.__studyUnsupported;
+  delete document.documentElement.requestFullscreen;
+  delete document.fullscreenElement;
 });
 
 describe('browser gate in index.html', () => {
@@ -159,11 +164,18 @@ describe('browser gate in index.html', () => {
     }
   });
 
+  it('reports a browser without the unprefixed Fullscreen API (Safari before 16.4)', () => {
+    delete document.documentElement.requestFullscreen;
+    runGate();
+    expect(window.__studyUnsupported).toContain('Fullscreen');
+    expect(document.querySelector('[role="alert"]').textContent).toContain('Safari 16.4');
+  });
+
   it('says which versions are the oldest that work', () => {
     delete window.fetch;
     runGate();
     const text = document.querySelector('[role="alert"]').textContent;
-    expect(text).toContain('Safari 15.4');
+    expect(text).toContain('Safari 16.4');
     expect(text).toContain('Firefox 92');
     expect(text).toMatch(/Chrome or Edge 93/);
   });
@@ -219,7 +231,7 @@ describe('browser gate in index.html', () => {
   it('the Prolific listing names the same oldest versions as the gate', () => {
     const md = readFileSync(join(ROOT, 'prolific-study-description.md'), 'utf-8');
     for (const text of [md, indexHtml]) {
-      expect(text).toContain('Safari 15.4');
+      expect(text).toContain('Safari 16.4');
       expect(text).toContain('Firefox 92');
       expect(text).toMatch(/Chrome or Edge 93/);
     }
@@ -227,7 +239,7 @@ describe('browser gate in index.html', () => {
     const txtPath = join(ROOT, '..', 'Prolific study description.txt');
     if (existsSync(txtPath)) {
       const txt = readFileSync(txtPath, 'utf-8');
-      expect(txt).toContain('Safari 15.4');
+      expect(txt).toContain('Safari 16.4');
       expect(txt).toContain('Firefox 92');
       expect(txt).toMatch(/Chrome or Edge 93/);
     }

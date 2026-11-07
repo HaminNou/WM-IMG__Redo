@@ -2,7 +2,7 @@
  * Dump loader shared by `csv-export.js` and `pilot-summary.js`.
  *
  * Reads the JSON files a study folder holds (download-fallback exports and
- * DataPipe bucket / checkpoint / tail envelopes), pools the rows of every file
+ * Google Drive bucket / checkpoint / tail envelopes), pools the rows of every file
  * of one participant, drops rows repeated across files and splits the result by
  * run. Keeping one implementation means the batch-decision tool and the
  * exporter cannot disagree about who a participant is.

@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   _resetCheckpointForTests,
-  dataPipeFilenameForBucket,
+  uploadFilenameForBucket,
   flushOnHide,
   installPageHideFlush,
   safeFilePart,
@@ -33,6 +33,10 @@ import {
   getUploadCursor,
   initStorage,
 } from '../src/storage.js';
+
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
 
 const session = {
   params: { session_id: 'abc123', prolific_pid: 'pid-1', study_id: 'st', is_preview: false },
@@ -56,9 +60,10 @@ async function addRows(n, extra = {}) {
   await Promise.resolve();
 }
 
-const okFetch = () => vi.fn(() => Promise.resolve({ ok: true, status: 200 }));
+const okFetch = () =>
+  vi.fn(() => Promise.resolve({ ok: true, status: 200, text: async () => '{"ok":true}' }));
 
-describe('safeFilePart and DataPipe file names', () => {
+describe('safeFilePart and Google Drive file names', () => {
   it('leaves ids and labels from earlier builds unchanged', () => {
     for (const ok of [
       '5f1c2a9b8d7e6f0123456789',
@@ -72,7 +77,7 @@ describe('safeFilePart and DataPipe file names', () => {
       expect(safeFilePart(ok)).toBe(ok);
     }
     expect(
-      dataPipeFilenameForBucket({
+      uploadFilenameForBucket({
         session_id: 'abc',
         run_id: '08f4b9ae',
         bucket_label: '03_d_only',
@@ -95,7 +100,7 @@ describe('safeFilePart and DataPipe file names', () => {
       const out = safeFilePart(h);
       expect(out).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(out).not.toContain('..');
-      const name = dataPipeFilenameForBucket({ session_id: h, run_id: 'r1', bucket_label: '01_x' });
+      const name = uploadFilenameForBucket({ session_id: h, run_id: 'r1', bucket_label: '01_x' });
       expect(name).toMatch(/^[A-Za-z0-9_-]+__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+\.json$/);
       expect(name.split('.').length).toBe(2);
     }
@@ -117,7 +122,7 @@ describe('safeFilePart and DataPipe file names', () => {
 });
 
 describe('flushOnHide', () => {
-  it('sends the newest unsent rows once, as a small keepalive POST in the DataPipe envelope', async () => {
+  it('sends the newest unsent rows once, as a small keepalive POST in the Google Drive envelope', async () => {
     await addRows(5);
     const fetchImpl = okFetch();
     const r = flushOnHide({ session, fetchImpl, nowMs: 100_000 });
@@ -128,9 +133,9 @@ describe('flushOnHide', () => {
     expect(url).toMatch(/^https:\/\//);
     expect(init.method).toBe('POST');
     expect(init.keepalive).toBe(true);
-    expect(init.headers['Content-Type']).toBe('application/json');
+    expect(init.headers['Content-Type']).toBe('text/plain;charset=utf-8');
     const body = JSON.parse(init.body);
-    expect(Object.keys(body).sort()).toEqual(['data', 'experimentID', 'filename']);
+    expect(Object.keys(body).sort()).toEqual(['data', 'filename', 'key']);
     expect(body.filename).toMatch(/^abc123__[0-9a-f]{8}__partial_\d+-\d+\.json$/);
     const env = JSON.parse(body.data);
     expect(env.bucket_id).toBe('partial');

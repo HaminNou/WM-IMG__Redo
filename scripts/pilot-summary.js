@@ -3,7 +3,7 @@
  * Pilot-data summariser and batch-decision tool.
  *
  * Ingests the JSON files of a study folder (the download-fallback exports from
- * `uploader.downloadAsJson` and the DataPipe bucket, checkpoint and tail
+ * `uploader.downloadAsJson` and the Google Drive bucket, checkpoint and tail
  * envelopes), POOLS EVERY FILE OF A PARTICIPANT (one Prolific PID), drops rows
  * repeated across files on (run_id, seq) and reports per-participant and
  * aggregate statistics. A real session uploads about eight files, so a file is

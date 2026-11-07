@@ -6,14 +6,14 @@
  *
  * Design:
  *
- *   - **One DataPipe POST per logical bucket.** A session produces up to 10
+ *   - **One POST per logical bucket, each stored as one Google Drive file.** A session produces up to 10
  *     named bucket files in storage: one per analysis-relevant slice of the data
  *     (consent + demographics, practice, each of the five main-task
  *     conditions, music questionnaire, strategy questionnaire, and a meta
  *     bucket for everything else). Buckets that received no rows are not
  *     sent. Filenames are deterministic within a page load
  *     (`<session_id>__<run_id>__NN_<label>.json`), so a repeat of a bucket
- *     DataPipe already holds is reported as FILE_EXISTS and counted as
+ *     the Drive folder already holds is reported as FILE_EXISTS and counted as
  *     delivered. The run id keeps a reloaded page from being mistaken for the
  *     earlier one, and only the rows of the current run are sent.
  *
@@ -45,14 +45,24 @@
  *
  *   - **Provider-aware wire format.** The bucket envelope produced by
  *     `buildBucketEnvelope` is the canonical row carrier (rows + session
- *     metadata). When `provider === 'datapipe'`, each envelope is wrapped in
- *     DataPipe's `{experimentID, filename, data}` shape via
- *     `buildDataPipeEnvelope` before POST. Otherwise the raw bucket envelope
+ *     metadata). When `provider === 'gdrive'`, each envelope is wrapped in
+ *     the receiver's `{key, filename, data}` shape via `buildUploadEnvelope`
+ *     before POST. The receiver is a Google Apps Script web app
+ *     (`scripts/gdrive-receiver.gs`) that writes `data` to a file called
+ *     `filename` in a private Drive folder. Otherwise the raw bucket envelope
  *     is POSTed directly.
  *
+ *   - **The receiver answers HTTP 200 for everything.** Apps Script cannot set
+ *     a status code, so success and failure are in the JSON body: `{ok: true}`,
+ *     or `{ok: false, error: 'FILE_EXISTS' | 'BAD_KEY' | 'BAD_REQUEST' |
+ *     'SERVER_ERROR'}`. In `gdrive` mode a response that is not a parsable
+ *     `{ok: true}` is never counted as delivered (`postWithRetry`). The body is
+ *     sent as `text/plain` so the browser makes no CORS preflight request,
+ *     which Apps Script cannot answer.
+ *
  *   - **Provider absence = explicit no-op + download fallback.** When
- *     `config.uploader.endpoint` is null, or the provider is `'datapipe'`
- *     and `datapipe_experiment_id` is still the `PLACEHOLDER` token,
+ *     `config.uploader.endpoint` is null or holds `PLACEHOLDER`, or the provider
+ *     is `'gdrive'` and `gdrive_upload_key` is still the `PLACEHOLDER` token,
  *     `uploadPendingData` returns `{ status: 'no_endpoint' }` immediately and
  *     the download fallback handles the data egress.
  */
@@ -79,8 +89,8 @@ function noteDelivered(seq) {
   if (Number.isFinite(seq) && seq > deliveredSeq) deliveredSeq = seq;
 }
 
-/* Largest checkpoint request. The assumption is that DataPipe accepts a
- * request body of about 1 MB; a checkpoint with more rows than fit is sent as
+/* Largest checkpoint request. The assumption is that the receiver accepts a
+ * request body of about 1 MB (Apps Script allows far more); a checkpoint with more rows than fit is sent as
  * several files, each with its own seq range. */
 const CHECKPOINT_MAX_BYTES = 900_000;
 /* Time allowed for the last upload before the redirect. */
@@ -271,17 +281,17 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
 }
 
 /**
- * DataPipe filename for a bucket: `<session_id>__<run_id>__<bucket_label>.json`
+ * Drive file name for a bucket: `<session_id>__<run_id>__<bucket_label>.json`
  * (for a regular bucket the label carries the seq range, see `bucketFileLabel`).
  *
  * Stability requirements:
- *   - **Unique per bucket per run.** DataPipe stores each POST as a
- *     separate file under the project; a repeated filename is refused. Each
+ *   - **Unique per bucket per run.** The receiver stores each POST as a
+ *     separate file in the Drive folder; a repeated filename is refused. Each
  *     bucket's `label` is unique and the run id changes with every page load,
  *     so a reloaded page never meets the files of the earlier one.
  *   - **Deterministic for the same content.** The bucket label comes from the
  *     static `BUCKETS` table plus the seq range of the rows, so a retry of the
- *     same rows POSTs the same filename. DataPipe rejects a name that already
+ *     same rows POSTs the same filename. The receiver rejects a name that already
  *     exists (FILE_EXISTS); the uploader counts that as delivered, because the
  *     name identifies the same rows, and failed posts get another attempt. A
  *     bucket that gained rows since an earlier attempt has another name.
@@ -289,15 +299,15 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
  *     two-digit prefix (`01_…` through `10_…`) so a directory listing matches
  *     the analysis-relevant order without manual sort.
  */
-export function dataPipeFilenameForBucket({ session_id, run_id, bucket_label }) {
+export function uploadFilenameForBucket({ session_id, run_id, bucket_label }) {
   if (!session_id) {
-    throw new Error('dataPipeFilenameForBucket: session_id is required');
+    throw new Error('uploadFilenameForBucket: session_id is required');
   }
   if (!run_id) {
-    throw new Error('dataPipeFilenameForBucket: run_id is required');
+    throw new Error('uploadFilenameForBucket: run_id is required');
   }
   if (!bucket_label) {
-    throw new Error('dataPipeFilenameForBucket: bucket_label is required');
+    throw new Error('uploadFilenameForBucket: bucket_label is required');
   }
   return `${safeFilePart(session_id)}__${safeFilePart(run_id)}__${safeFilePart(bucket_label)}.json`;
 }
@@ -306,7 +316,7 @@ export function dataPipeFilenameForBucket({ session_id, run_id, bucket_label }) 
 const FILE_PART_MAX = 64;
 
 /**
- * One piece of a DataPipe file name, reduced to `[A-Za-z0-9_-]`. The session id
+ * One piece of a Drive file name, reduced to `[A-Za-z0-9_-]`. The session id
  * comes from the page URL, so it must not be able to put a path separator, a
  * dot sequence or any other special character into a name. Prolific ids (hex),
  * the run id (hex) and the bucket labels are already in this alphabet and pass
@@ -333,28 +343,28 @@ export function safeFilePart(value) {
 }
 
 /**
- * Wrap a bucket envelope in DataPipe's `{experimentID, filename, data}` POST
- * shape (https://pipe.jspsych.org). DataPipe ignores everything outside the
- * three named fields, so the full bucket envelope is JSON-stringified into
- * `data` and stored in storage as a single per-bucket file.
+ * Wrap a bucket envelope in the receiver's `{key, filename, data}` POST shape
+ * (`scripts/gdrive-receiver.gs`). The receiver reads only those three fields,
+ * so the full bucket envelope is JSON-stringified into `data` and stored as a
+ * single per-bucket file in the Drive folder.
  *
  * @param {object} opts
  * @param {object} opts.bucketEnvelope    output of `buildBucketEnvelope`
- * @param {string} opts.experimentId      DataPipe experiment ID for this study
- * @returns {{experimentID: string, filename: string, data: string}}
+ * @param {string} opts.uploadKey         the shared upload key the receiver checks
+ * @returns {{key: string, filename: string, data: string}}
  */
-export function buildDataPipeEnvelope({ bucketEnvelope, experimentId }) {
-  if (!experimentId || isPlaceholderDataPipeId(experimentId)) {
+export function buildUploadEnvelope({ bucketEnvelope, uploadKey }) {
+  if (!uploadKey || isPlaceholderUploadKey(uploadKey)) {
     throw new Error(
-      `buildDataPipeEnvelope: experimentId must be a non-placeholder string (got ${JSON.stringify(experimentId)})`
+      `buildUploadEnvelope: uploadKey must be a non-placeholder string (got ${JSON.stringify(uploadKey)})`
     );
   }
   if (!bucketEnvelope || typeof bucketEnvelope !== 'object') {
-    throw new Error('buildDataPipeEnvelope: bucketEnvelope is required');
+    throw new Error('buildUploadEnvelope: bucketEnvelope is required');
   }
   return {
-    experimentID: experimentId,
-    filename: dataPipeFilenameForBucket({
+    key: uploadKey,
+    filename: uploadFilenameForBucket({
       session_id: bucketEnvelope.session_id,
       run_id: bucketEnvelope.run_id,
       bucket_label: bucketFileLabel(bucketEnvelope),
@@ -367,9 +377,9 @@ export function buildDataPipeEnvelope({ bucketEnvelope, experimentId }) {
 const RANGE_LABELLED_BUCKETS = new Set(['checkpoint', 'tail', 'partial']);
 
 /**
- * The label used in a bucket's DataPipe file name. A regular bucket
+ * The label used in a bucket's Drive file name. A regular bucket
  * (`03_d_only`, `10_meta`, …) gets the seq range of the rows it holds appended
- * (`10_meta_s2-9`). DataPipe refuses a second file with the same name
+ * (`10_meta_s2-9`). The receiver refuses a second file with the same name
  * (FILE_EXISTS) and the uploader counts that as "delivered", which is right only
  * if the content is the same. Rows are append-only with a unique seq, so the same
  * session, run and range always means the same content: an identical retry is
@@ -389,18 +399,59 @@ export function bucketFileLabel(env) {
 }
 
 /**
- * True iff the configured DataPipe experiment ID is still the placeholder
+ * True iff the configured Drive upload key is still the placeholder
  * token. Mirrors `isPlaceholderCompletionUrl` — the gating predicate the
- * uploader (and preflight) use to decide whether DataPipe is provisioned.
+ * uploader (and preflight) use to decide whether the Drive receiver is provisioned.
  *
  * @param {string} id
  * @returns {boolean}
  */
-export function isPlaceholderDataPipeId(id) {
+export function isPlaceholderUploadKey(id) {
   if (typeof id !== 'string') return true;
   if (id.length === 0) return true;
   return id.includes('PLACEHOLDER');
 }
+
+/**
+ * True when uploads cannot go anywhere yet: no endpoint, an endpoint that
+ * still holds the `PLACEHOLDER` token, or (in `gdrive` mode) an upload key that
+ * is still a placeholder. The caller then reports `no_endpoint` and the
+ * participant gets the JSON download fallback.
+ *
+ * @param {{url?: string|null, provider?: string, uploadKey?: string|null}} opts
+ * @returns {boolean}
+ */
+export function isUploaderUnprovisioned({ url, provider, uploadKey } = {}) {
+  if (!url) return true;
+  if (typeof url === 'string' && url.includes('PLACEHOLDER')) return true;
+  return provider === 'gdrive' && isPlaceholderUploadKey(uploadKey);
+}
+
+/**
+ * Read a receiver response. The Apps Script receiver answers HTTP 200 for
+ * everything and reports the outcome in a JSON body, so a 200 alone proves
+ * nothing (Google's own error pages are also 200).
+ *
+ * @param {Response} response
+ * @returns {Promise<{ok: boolean, error: string|null, parsed: boolean}>}
+ */
+async function readReceiverAck(response) {
+  const text = await safeReadText(response);
+  if (typeof text !== 'string') return { ok: false, error: 'NO_BODY', parsed: false };
+  try {
+    const json = JSON.parse(text);
+    if (json && typeof json === 'object' && typeof json.ok === 'boolean') {
+      return { ok: json.ok, error: json.ok ? null : String(json.error ?? 'UNKNOWN'), parsed: true };
+    }
+  } catch {
+    /* not JSON: an HTML error page, a login page or a proxy message */
+  }
+  return { ok: false, error: 'BAD_RESPONSE', parsed: false };
+}
+
+/* Receiver errors that retrying cannot fix. SERVER_ERROR, BAD_RESPONSE and
+ * NO_BODY are transient (quota, a Google error page, a cut connection). */
+const RECEIVER_FATAL_ERRORS = new Set(['BAD_KEY', 'BAD_REQUEST']);
 
 /**
  * POST `body` to `url` with bounded exponential-backoff retry. Resolves on
@@ -412,6 +463,9 @@ export function isPlaceholderDataPipeId(id) {
  * Failure modes that do NOT retry:
  *   - 4xx with status 400/401/403/404/422 (programming error — retrying
  *     won't help). Throws immediately with the response status.
+ *   - in `gdrive` mode (`requireAck`), a receiver answer of BAD_KEY or
+ *     BAD_REQUEST. FILE_EXISTS counts as delivered; anything that is not a
+ *     JSON `{ok: true}` (SERVER_ERROR, an HTML error page) is retried.
  *   - the caller's `signal` is aborted. Throws immediately.
  *
  * @param {object}        opts
@@ -434,6 +488,7 @@ export async function postWithRetry({
   signal,
   fetchImpl,
   sleepImpl,
+  requireAck = config.uploader.provider === 'gdrive',
 } = {}) {
   const fetcher = fetchImpl ?? globalThis.fetch;
   const sleeper = sleepImpl ?? defaultSleep;
@@ -453,7 +508,9 @@ export async function postWithRetry({
         url,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          /* text/plain keeps this a "simple" request: no CORS preflight, which
+           * the Apps Script receiver cannot answer. The body is still JSON. */
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(body),
         },
         timeoutMs,
@@ -464,12 +521,24 @@ export async function postWithRetry({
       lastError = err;
       continue;
     }
+    if (response.ok && requireAck) {
+      const ack = await readReceiverAck(response);
+      if (ack.ok) return { ok: true, status: response.status, attempt };
+      if (ack.error === 'FILE_EXISTS') {
+        return { ok: true, status: response.status, attempt, duplicate: true };
+      }
+      if (RECEIVER_FATAL_ERRORS.has(ack.error)) {
+        throw new Error(`postWithRetry: receiver refused the upload (${ack.error}) from ${url}`);
+      }
+      lastError = new Error(`postWithRetry: receiver reported ${ack.error}`);
+      continue;
+    }
     if (response.ok) {
       return { ok: true, status: response.status, attempt };
     }
     if ([400, 401, 403, 404, 422].includes(response.status)) {
       const text = await safeReadText(response);
-      /* DataPipe refuses a second file with the same name. A repeat of a
+      /* The receiver refuses a second file with the same name. A repeat of a
        * file that already arrived (for example after a lost response) is
        * therefore already stored, not a failure. */
       if (response.status === 400 && text && text.includes('FILE_EXISTS')) {
@@ -533,9 +602,9 @@ function defaultSleep(ms) {
 export async function uploadConsentAndPractice({ session, signal } = {}) {
   const url = config.uploader.endpoint;
   const provider = config.uploader.provider ?? 'raw';
-  const experimentId = config.uploader.datapipe_experiment_id ?? null;
+  const uploadKey = config.uploader.gdrive_upload_key ?? null;
 
-  if (!url || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+  if (isUploaderUnprovisioned({ url, provider, uploadKey })) {
     return { uploaded: [], failed: 'no_endpoint' };
   }
 
@@ -558,11 +627,11 @@ export async function uploadConsentAndPractice({ session, signal } = {}) {
       rows,
     });
     const body =
-      provider === 'datapipe'
-        ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+      provider === 'gdrive'
+        ? buildUploadEnvelope({ bucketEnvelope: envelope, uploadKey })
         : envelope;
     try {
-      await postWithRetry({ url, body, signal });
+      await postWithRetry({ url, body, signal, requireAck: provider === 'gdrive' });
       uploaded.push(bucket.id);
       midSessionUploaded.add(bucket.id);
     } catch (err) {
@@ -613,7 +682,7 @@ function splitRowsBySize(rows, maxBytes) {
  * @param {object} opts.session   prolific session object
  * @param {AbortSignal} [opts.signal]   cancels the upload (the rest screen ends)
  * @param {string} [opts.endpoint]   defaults to config.uploader.endpoint
- * @param {string} [opts.datapipeExperimentId]   defaults to config.uploader.datapipe_experiment_id
+ * @param {string} [opts.uploadKey]   defaults to config.uploader.gdrive_upload_key
  * @param {Function} [opts.fetchImpl]   overridable for tests
  * @param {Function} [opts.sleepImpl]   overridable for tests
  * @returns {Promise<{status: string, rows?: number, error?: string}>}
@@ -622,14 +691,14 @@ export async function uploadCheckpoint({
   session,
   signal,
   endpoint,
-  datapipeExperimentId,
+  uploadKey,
   fetchImpl,
   sleepImpl,
 } = {}) {
   const url = endpoint ?? config.uploader.endpoint;
   const provider = config.uploader.provider ?? 'raw';
-  const experimentId = datapipeExperimentId ?? config.uploader.datapipe_experiment_id ?? null;
-  if (!url || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+  const resolvedUploadKey = uploadKey ?? config.uploader.gdrive_upload_key ?? null;
+  if (isUploaderUnprovisioned({ url, provider, uploadKey: resolvedUploadKey })) {
     return { status: 'no_endpoint' };
   }
   const rows = currentRunRows(await getAllTrialRows()).filter((r) => r.seq > checkpointCursor);
@@ -646,11 +715,18 @@ export async function uploadCheckpoint({
       rows: part,
     });
     const body =
-      provider === 'datapipe'
-        ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+      provider === 'gdrive'
+        ? buildUploadEnvelope({ bucketEnvelope: envelope, uploadKey: resolvedUploadKey })
         : envelope;
     try {
-      await postWithRetry({ url, body, signal, fetchImpl, sleepImpl });
+      await postWithRetry({
+        url,
+        body,
+        signal,
+        fetchImpl,
+        sleepImpl,
+        requireAck: provider === 'gdrive',
+      });
     } catch (err) {
       return { status: 'failed', error: err.message };
     }
@@ -675,7 +751,7 @@ let finalUploadComplete = false;
  * @param {object} opts.session
  * @param {number} [opts.timeoutMs]
  * @param {string} [opts.endpoint]
- * @param {string} [opts.datapipeExperimentId]
+ * @param {string} [opts.uploadKey]
  * @param {Function} [opts.fetchImpl]
  * @returns {Promise<{status: string, rows?: number, error?: string}>}
  */
@@ -683,13 +759,13 @@ export async function uploadTail({
   session,
   timeoutMs = TAIL_TIMEOUT_MS,
   endpoint,
-  datapipeExperimentId,
+  uploadKey,
   fetchImpl,
 } = {}) {
   const url = endpoint ?? config.uploader.endpoint;
   const provider = config.uploader.provider ?? 'raw';
-  const experimentId = datapipeExperimentId ?? config.uploader.datapipe_experiment_id ?? null;
-  if (!url || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+  const resolvedUploadKey = uploadKey ?? config.uploader.gdrive_upload_key ?? null;
+  if (isUploaderUnprovisioned({ url, provider, uploadKey: resolvedUploadKey })) {
     return { status: 'no_endpoint' };
   }
   if (!finalUploadComplete) return { status: 'skipped' };
@@ -706,11 +782,18 @@ export async function uploadTail({
     rows,
   });
   const body =
-    provider === 'datapipe'
-      ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+    provider === 'gdrive'
+      ? buildUploadEnvelope({ bucketEnvelope: envelope, uploadKey: resolvedUploadKey })
       : envelope;
   try {
-    await postWithRetry({ url, body, retryMax: 0, timeoutMs, fetchImpl });
+    await postWithRetry({
+      url,
+      body,
+      retryMax: 0,
+      timeoutMs,
+      fetchImpl,
+      requireAck: provider === 'gdrive',
+    });
   } catch (err) {
     return { status: 'failed', error: err.message };
   }
@@ -733,7 +816,7 @@ export function _resetCheckpointForTests() {
 
 /* A keepalive request may carry about 64 KiB (65,536 bytes) in all, and the limit
  * is on the final request body in UTF-8 bytes. The rows are stringified twice (once
- * as rows, again inside the DataPipe envelope's `data` string), so quotes and
+ * as rows, again inside the upload envelope's `data` string), so quotes and
  * backslashes double and non-ASCII characters cost 2-4 bytes each. The body is
  * therefore MEASURED, with a margin below the limit. */
 const FLUSH_MAX_BYTES = 48_000;
@@ -760,7 +843,7 @@ let lastFlushAt = 0;
  *   - the request uses `keepalive`, so the browser may finish it after the
  *     page is gone, and nothing waits for the answer;
  *   - the file is named `<session>__<run>__partial_<seqMin>-<seqMax>.json`: a
- *     range that was already sent is never sent twice, and DataPipe's
+ *     range that was already sent is never sent twice, and the receiver's
  *     one-file-per-name rule cannot block a later, different range. The
  *     exporter pools files by (run, seq) and drops duplicates, so rows that
  *     also arrive in a regular file are counted once;
@@ -788,8 +871,8 @@ export function flushOnHide({
   try {
     const url = config.uploader.endpoint;
     const provider = config.uploader.provider ?? 'raw';
-    const experimentId = config.uploader.datapipe_experiment_id ?? null;
-    if (!url || !session || (provider === 'datapipe' && isPlaceholderDataPipeId(experimentId))) {
+    const uploadKey = config.uploader.gdrive_upload_key ?? null;
+    if (!session || isUploaderUnprovisioned({ url, provider, uploadKey })) {
       return { status: 'no_endpoint' };
     }
     const run = getRunId();
@@ -811,8 +894,8 @@ export function flushOnHide({
         rows,
       });
       const body =
-        provider === 'datapipe'
-          ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId })
+        provider === 'gdrive'
+          ? buildUploadEnvelope({ bucketEnvelope: envelope, uploadKey })
           : envelope;
       const json = JSON.stringify(body);
       return { body, json, bytes: utf8Bytes(json) };
@@ -843,7 +926,7 @@ export function flushOnHide({
     lastFlushAt = nowMs;
     const pending = fetcher(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: json,
       keepalive: true,
     });
@@ -912,8 +995,8 @@ function uninstallPageHideFlush() {
  * @param {object}   opts
  * @param {object}   opts.session                  output of `prolific.initSession()`
  * @param {string}   [opts.endpoint]               defaults to config.uploader.endpoint
- * @param {string}   [opts.provider]               'datapipe' | 'raw'; defaults to config.uploader.provider ?? 'raw'
- * @param {string}   [opts.datapipeExperimentId]   defaults to config.uploader.datapipe_experiment_id
+ * @param {string}   [opts.provider]               'gdrive' | 'raw'; defaults to config.uploader.provider ?? 'raw'
+ * @param {string}   [opts.uploadKey]   defaults to config.uploader.gdrive_upload_key
  * @param {Function} [opts.onProgress]             called with {bucketIndex, totalBuckets, bucketId, bucketLabel, status, error?}
  * @param {Function} [opts.fetchImpl]
  * @param {Function} [opts.sleepImpl]
@@ -931,7 +1014,7 @@ export async function uploadPendingData({
   session,
   endpoint,
   provider,
-  datapipeExperimentId,
+  uploadKey,
   onProgress,
   fetchImpl,
   sleepImpl,
@@ -939,21 +1022,10 @@ export async function uploadPendingData({
 } = {}) {
   const url = endpoint ?? config.uploader.endpoint;
   const resolvedProvider = provider ?? config.uploader.provider ?? 'raw';
-  const resolvedExperimentId =
-    datapipeExperimentId ?? config.uploader.datapipe_experiment_id ?? null;
-  /* No-endpoint short-circuit covers two cases that both want the download
-   * fallback: missing URL, or DataPipe provider with an unprovisioned
-   * placeholder experiment ID. */
-  if (!url) {
-    return {
-      status: 'no_endpoint',
-      uploadedBuckets: 0,
-      totalBuckets: 0,
-      uploadedRows: 0,
-      lastError: null,
-    };
-  }
-  if (resolvedProvider === 'datapipe' && isPlaceholderDataPipeId(resolvedExperimentId)) {
+  const resolvedUploadKey = uploadKey ?? config.uploader.gdrive_upload_key ?? null;
+  /* No-endpoint short-circuit: a missing or placeholder URL, or the Drive
+   * provider with an unprovisioned upload key. Both want the download fallback. */
+  if (isUploaderUnprovisioned({ url, provider: resolvedProvider, uploadKey: resolvedUploadKey })) {
     return {
       status: 'no_endpoint',
       uploadedBuckets: 0,
@@ -1001,8 +1073,8 @@ export async function uploadPendingData({
       rows,
     });
     const body =
-      resolvedProvider === 'datapipe'
-        ? buildDataPipeEnvelope({ bucketEnvelope: envelope, experimentId: resolvedExperimentId })
+      resolvedProvider === 'gdrive'
+        ? buildUploadEnvelope({ bucketEnvelope: envelope, uploadKey: resolvedUploadKey })
         : envelope;
     try {
       await postWithRetry({
@@ -1010,6 +1082,7 @@ export async function uploadPendingData({
         body,
         fetchImpl,
         sleepImpl,
+        requireAck: resolvedProvider === 'gdrive',
         /* After one bucket has used up its retries the server is most likely
          * down: the buckets after it get a single attempt each, so an outage
          * costs one back-off sequence, not one per bucket. If the server is

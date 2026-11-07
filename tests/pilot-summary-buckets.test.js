@@ -12,7 +12,7 @@
  * `uploadPendingData` + `uploadTail`) into a folder and check participants,
  * completed, retained and the batch decision against the known truth.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
@@ -31,6 +31,10 @@ import { initStorage, _resetStorageForTests, appendTrialRow, getRunId } from '..
 import { loadParticipants, aggregate } from '../scripts/pilot-summary.js';
 import { loadAndFlattenDumps } from '../scripts/dump-loader.js';
 import { composeExport } from '../scripts/csv-export.js';
+
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -213,17 +217,17 @@ beforeAll(async () => {
   const posted = [];
   const fetchImpl = async (_url, init) => {
     posted.push(JSON.parse(init.body));
-    return { ok: true, status: 200, statusText: 'OK', text: async () => '' };
+    return { ok: true, status: 200, statusText: 'OK', text: async () => '{"ok":true}' };
   };
   const common = {
     session: sessionFor('REAL_UPLOADER', getRunId()),
     endpoint: 'http://stub.invalid/api/data/',
-    datapipeExperimentId: 'TESTEXPERIMENT01',
+    uploadKey: 'TESTEXPERIMENT01',
     fetchImpl,
   };
   const up = await uploadPendingData({
     ...common,
-    provider: 'datapipe',
+    provider: 'gdrive',
     sleepImpl: async () => {},
   });
   expect(up.status).toBe('uploaded');

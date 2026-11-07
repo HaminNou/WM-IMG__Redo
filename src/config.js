@@ -247,11 +247,11 @@ export const config = deepFreeze({
       'a fixed screen-out payment of $0.14 through Prolific, the same whichever of these checks ends the session',
   },
 
-  /* Data egress — DataPipe (https://pipe.jspsych.org), jsPsych's free
-   * forwarding service into a storage folder. The uploader partitions the
-   * captured rows into the canonical 10-bucket layout
-   * (`src/uploader.js#BUCKETS`) and POSTs one DataPipe envelope per
-   * non-empty bucket. DataPipe writes one file per envelope, named
+  /* Data egress — Google Drive, through a Google Apps Script web app
+   * (`scripts/gdrive-receiver.gs`) that writes each upload into a private
+   * Drive folder. The uploader partitions the captured rows into the
+   * canonical 10-bucket layout (`src/uploader.js#BUCKETS`) and POSTs one
+   * envelope per non-empty bucket. The receiver writes one file per envelope, named
    * `<session_id>__<run_id>__<NN_label>_s<seqMin>-<seqMax>.json` (e.g.
    * `<sid>__<run>__03_d_only_s20-740.json`; the seq range makes a bucket that
    * grew between two upload attempts a new file). A
@@ -281,15 +281,17 @@ export const config = deepFreeze({
    * bounds the whole end-of-session upload, after which the participant is
    * released to the final screen and the download fallback is offered.
    *
-   * `datapipe_experiment_id` must be replaced with the alphanumeric ID
-   * minted on the DataPipe dashboard for this study. Until it is, the
-   * uploader detects the `PLACEHOLDER` token and falls through to the JSON
+   * `endpoint` is the web app's `/exec` URL (Deploy > New deployment in the
+   * Apps Script editor) and `gdrive_upload_key` is the same random string as
+   * `UPLOAD_KEY` in the script. The key only keeps stray requests out of the
+   * folder; it ships in the page, so it is not a secret. While either still
+   * holds the `PLACEHOLDER` token the uploader falls through to the JSON
    * download fallback, so a pilot or dev session can still finish without
    * losing data. */
   uploader: {
-    endpoint: 'https://pipe.jspsych.org/api/data/',
-    provider: 'datapipe',
-    datapipe_experiment_id: 'epIpSzIi9r7O',
+    endpoint: 'https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec',
+    provider: 'gdrive',
+    gdrive_upload_key: '19231dda4521edfc984d509c',
     retry_max: 5,
     retry_initial_backoff_ms: 1000,
     request_timeout_ms: 15000,

@@ -52,13 +52,12 @@
     },
     {
       "id": "H5",
-      "label": "On-letter facilitation replicates and is amplified under dual-task",
+      "label": "On-pattern facilitation replicates and is amplified under dual-task",
       "claim": "Within memory-bearing conditions, accuracy(T_on) > accuracy(T_off); the on/off effect is larger when imagery is concurrent (I+D, I+T) than in single-task (D_only, T_only).",
       "test": "Repeated-measures ANOVA on probe_type × concurrency, with planned contrast on the interaction."
     }
   ],
   "exploratory_analyses": [
-    "Star × probe-type contingency: does dual-task release happen more cleanly when star is off the cell of the upcoming probe?",
     "Strategy × dual-task cost: pre-registered Spearman rho on the Structural Chunking composite (strategy_q01 + strategy_q02 + strategy_q03, range 3–15) against per-participant ΔAccuracy (single − dual), separately for I+D and I+T.",
     "Imagery-maintenance composite × accuracy: Spearman rho on imagery_maintenance_id (strategy_q13 + strategy_q15, range 2–10) against I+D star accuracy, and imagery_maintenance_it (strategy_q16 + strategy_q18, range 2–10) against I+T star accuracy — construct-validity check that endorsement of continuous-visualization / phase-specific-focus tracks the imagery-maintenance manipulation.",
     "Per-modality serial-position curves (post-star release pattern).",
@@ -324,7 +323,7 @@
     "items": [
       {
         "id": "hosting_endpoint",
-        "status": "DataPipe experiment id is set in config.js (pinned in config_locked). Before launch, confirm in the DataPipe dashboard that data collection is on and validation is off for this experiment.",
+        "status": "Data go to a private Google Drive folder through a Google Apps Script web app (scripts/gdrive-receiver.gs). The web-app URL (config.uploader.endpoint) and the upload key (config.uploader.gdrive_upload_key) are pinned in config_locked. Before launch, deploy the script, set the URL, and confirm that a test upload creates a file in the folder.",
         "fallback": "Uploader returns 'no_endpoint'; debrief node triggers JSON download for participant to email.",
         "post_registration_amendment_required_if": "Hosting choice changes data-retention policy or introduces an additional identifier in the URL."
       },
@@ -340,7 +339,7 @@
       },
       {
         "id": "strategy_questionnaire",
-        "status": "19-item English questionnaire (`src/questionnaire/strategy.js`) with 5 sections; used in exploratory analyses only (see `exploratory_analyses` entries 2 and 3).",
+        "status": "19-item English questionnaire (`src/questionnaire/strategy.js`) with 5 sections; used in exploratory analyses only (see `exploratory_analyses` entries 1 and 2).",
         "post_registration_amendment_required_if": "Strategy-questionnaire data are used in confirmatory (not exploratory) analyses."
       }
     ]
@@ -423,9 +422,9 @@
       "target_phon_level": 70
     },
     "uploader": {
-      "datapipe_experiment_id": "epIpSzIi9r7O",
-      "endpoint": "https://pipe.jspsych.org/api/data/",
-      "provider": "datapipe",
+      "gdrive_upload_key": "19231dda4521edfc984d509c",
+      "endpoint": "https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec",
+      "provider": "gdrive",
       "retry_initial_backoff_ms": 1000,
       "retry_max": 5,
       "request_timeout_ms": 15000,

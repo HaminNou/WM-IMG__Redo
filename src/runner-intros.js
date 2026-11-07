@@ -95,8 +95,8 @@ export function mainBIntroNode() {
         <h2>Main task – Block 2 of 2</h2>
         <div data-voiceover-target>
           <p>Last block. 60 more trials, same controls, with
-          ${config.blocks.rest_duration_s}-second rests after trials 20
-          and 40.</p>
+          ${config.blocks.rest_duration_s}-second rests after trials 15,
+          30 and 45.</p>
           ${continueHintHtml('Press <kbd>Space</kbd> to begin Block 2.')}
         </div>
       </div>

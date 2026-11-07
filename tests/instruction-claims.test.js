@@ -50,7 +50,7 @@ describe('instruction prose matches config', () => {
     }
   });
 
-  it('main-task intro: two blocks of 60 trials, rests after trials 20 and 40, config rest length', () => {
+  it('main-task intro: two blocks of 60 trials, rests after trials 20 and 40 (Block 1) and 15, 30 and 45 (Block 2), config rest length', () => {
     const trialsPerBlock =
       (5 * config.blocks.main_trials_per_type) / config.blocks.main_block_count;
     expect(trialsPerBlock).toBe(60);
@@ -64,9 +64,11 @@ describe('instruction prose matches config', () => {
     expect(a).toContain('after trials 20 and 40');
     expect(a).toContain(`${config.blocks.rest_duration_s}-second rest`);
     expect(b).toContain(`${trialsPerBlock} more trials`);
-    expect(b).toContain('after trials 20 and 40');
+    expect(b).toContain('after trials 15, 30 and 45');
+    expect(b).toContain(`${config.blocks.rest_duration_s}-second rest`);
     const scheduler = readFileSync('src/scheduler/main-blocks.js', 'utf8');
-    expect(scheduler).toContain('REST_AFTER_WITHIN_BLOCK_TRIALS = Object.freeze([20, 40])');
+    expect(scheduler).toContain('REST_AFTER_WITHIN_BLOCK_TRIALS_A = Object.freeze([20, 40])');
+    expect(scheduler).toContain('REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45])');
   });
 });
 

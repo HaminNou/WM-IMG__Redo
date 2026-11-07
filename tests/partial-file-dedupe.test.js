@@ -28,6 +28,10 @@ import {
 } from '../src/storage.js';
 import { loadAndFlattenDumps } from '../scripts/dump-loader.js';
 
+vi.mock('../src/config.js', async (orig) =>
+  (await import('./helpers/live-uploader-config.js')).withLiveUploader(await orig())
+);
+
 const session = {
   params: { session_id: 'sess-1', prolific_pid: 'PID_ONE', study_id: 'st', is_preview: false },
   prng_seed_uint32: 1,

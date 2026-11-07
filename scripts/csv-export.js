@@ -107,7 +107,7 @@
  *   The link between code and person is PID_KEY.csv, written to a PRIVATE directory
  *   (default: a sibling of the export folder named <out>_PRIVATE; --private-dir to
  *   choose; refused inside the export folder). NEVER share PID_KEY.csv, the salt, or
- *   the raw uploaded JSON files (they carry the PID: they live in the DataPipe /
+ *   the raw uploaded JSON files (they carry the PID: they live in the Google Drive /
  *   Google Drive folder and must be treated as private).
  *   Before anything is written, every output text is scanned for every raw PID and
  *   session id; a hit aborts the export (exit 4). --keep-pid exports the raw ids for

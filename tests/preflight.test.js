@@ -26,7 +26,7 @@ function fakeConfig(overrides = {}) {
   return {
     schema_version: '1.1.3',
     build_id: 'v1',
-    uploader: { endpoint: null, provider: 'datapipe', datapipe_experiment_id: 'PLACEHOLDER' },
+    uploader: { endpoint: null, provider: 'gdrive', gdrive_upload_key: 'PLACEHOLDER' },
     prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=PLACEHOLDER' },
     ...overrides,
   };
@@ -85,8 +85,8 @@ describe('evaluatePreflight – locked-id checks', () => {
       config: fakeConfig({
         uploader: {
           endpoint: 'https://api.test/upload',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'real-id',
+          provider: 'gdrive',
+          gdrive_upload_key: 'real-id',
         },
         prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC123' },
       }),
@@ -176,8 +176,8 @@ describe('evaluatePreflight – deployment readiness severity gates', () => {
       config: fakeConfig({
         uploader: {
           endpoint: 'https://api.test/upload',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'real-id',
+          provider: 'gdrive',
+          gdrive_upload_key: 'real-id',
         },
         prolific: {
           completion_url: 'https://app.prolific.com/submissions/complete?cc=REAL_CODE_HERE',
@@ -189,72 +189,88 @@ describe('evaluatePreflight – deployment readiness severity gates', () => {
     expect(issues).toEqual([]);
   });
 
-  it('PLACEHOLDER_DATAPIPE_ID is a warning in permissive mode', () => {
+  it('PLACEHOLDER_UPLOAD_KEY is a warning in permissive mode', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
-          endpoint: 'https://pipe.jspsych.org/api/data/',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'PLACEHOLDER',
+          endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'PLACEHOLDER',
         },
         prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC' },
       }),
       preReg: fakePreReg(),
       strictDeployment: false,
     });
-    const issue = issues.find((i) => i.code === 'PLACEHOLDER_DATAPIPE_ID');
+    const issue = issues.find((i) => i.code === 'PLACEHOLDER_UPLOAD_KEY');
     expect(issue).toBeDefined();
     expect(issue.severity).toBe('warning');
   });
 
-  it('PLACEHOLDER_DATAPIPE_ID is an error in strict-deployment mode', () => {
+  it('PLACEHOLDER_UPLOAD_KEY is an error in strict-deployment mode', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
-          endpoint: 'https://pipe.jspsych.org/api/data/',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'PLACEHOLDER',
+          endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'PLACEHOLDER',
         },
         prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC' },
       }),
       preReg: fakePreReg(),
       strictDeployment: true,
     });
-    const issue = issues.find((i) => i.code === 'PLACEHOLDER_DATAPIPE_ID');
+    const issue = issues.find((i) => i.code === 'PLACEHOLDER_UPLOAD_KEY');
     expect(issue).toBeDefined();
     expect(issue.severity).toBe('error');
   });
 
-  it('PLACEHOLDER_DATAPIPE_ID is not flagged when datapipe_experiment_id is a real ID', () => {
+  it('PLACEHOLDER_UPLOAD_KEY is not flagged when gdrive_upload_key is a real ID', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
-          endpoint: 'https://pipe.jspsych.org/api/data/',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'aBcDeF12345X',
+          endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'aBcDeF12345X',
         },
         prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC' },
       }),
       preReg: fakePreReg(),
       strictDeployment: true,
     });
-    expect(issues.find((i) => i.code === 'PLACEHOLDER_DATAPIPE_ID')).toBeUndefined();
+    expect(issues.find((i) => i.code === 'PLACEHOLDER_UPLOAD_KEY')).toBeUndefined();
   });
 
-  it('PLACEHOLDER_DATAPIPE_ID is not flagged when provider is not datapipe', () => {
+  it('PLACEHOLDER_UPLOAD_KEY is an error in strict mode while the endpoint still holds PLACEHOLDER', () => {
+    const issues = evaluatePreflight({
+      config: fakeConfig({
+        uploader: {
+          endpoint: 'https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'aBcDeF12345X',
+        },
+        prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC' },
+      }),
+      preReg: fakePreReg(),
+      strictDeployment: true,
+    });
+    expect(issues.find((i) => i.code === 'PLACEHOLDER_UPLOAD_KEY')?.severity).toBe('error');
+  });
+
+  it('PLACEHOLDER_UPLOAD_KEY is not flagged when provider is not gdrive', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
           endpoint: 'https://api.test/upload',
           provider: 'raw',
-          datapipe_experiment_id: 'PLACEHOLDER' /* irrelevant when provider != datapipe */,
+          gdrive_upload_key: 'PLACEHOLDER' /* irrelevant when provider != gdrive */,
         },
         prolific: { completion_url: 'https://app.prolific.com/submissions/complete?cc=ABC' },
       }),
       preReg: fakePreReg(),
       strictDeployment: true,
     });
-    expect(issues.find((i) => i.code === 'PLACEHOLDER_DATAPIPE_ID')).toBeUndefined();
+    expect(issues.find((i) => i.code === 'PLACEHOLDER_UPLOAD_KEY')).toBeUndefined();
   });
 });
 
@@ -335,29 +351,29 @@ describe('evaluatePreflight – previously used identifiers', () => {
     expect(codes(issues)).toContain('REUSED_SCREEN_OUT_CODE');
   });
 
-  it('errors when the DataPipe experiment id was used before', () => {
+  it('errors when the Drive upload key id was used before', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
-          endpoint: 'https://pipe.jspsych.org/api/data/',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'USEDPIPE1',
+          endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'USEDPIPE1',
         },
       }),
       preReg: fakePreReg(),
       strictDeployment: false,
       previouslyUsedIds,
     });
-    expect(issues.find((i) => i.code === 'REUSED_DATAPIPE_ID')?.severity).toBe('error');
+    expect(issues.find((i) => i.code === 'REUSED_UPLOAD_KEY')?.severity).toBe('error');
   });
 
   it('reports only placeholders, not reuse, for the placeholder ids in the live config shape', () => {
     const issues = evaluatePreflight({
       config: fakeConfig({
         uploader: {
-          endpoint: 'https://pipe.jspsych.org/api/data/',
-          provider: 'datapipe',
-          datapipe_experiment_id: 'PLACEHOLDER_TODO_NEW_DATAPIPE_ID',
+          endpoint: 'https://script.google.com/macros/s/TEST_DEPLOYMENT_ID/exec',
+          provider: 'gdrive',
+          gdrive_upload_key: 'PLACEHOLDER_TODO_NEW_UPLOAD_KEY',
         },
         prolific: {
           completion_url:
@@ -368,10 +384,10 @@ describe('evaluatePreflight – previously used identifiers', () => {
       strictDeployment: true,
       previouslyUsedIds,
     });
-    expect(codes(issues)).toContain('PLACEHOLDER_DATAPIPE_ID');
+    expect(codes(issues)).toContain('PLACEHOLDER_UPLOAD_KEY');
     expect(codes(issues)).toContain('PLACEHOLDER_COMPLETION_URL');
     expect(codes(issues)).not.toContain('REUSED_COMPLETION_CODE');
-    expect(codes(issues)).not.toContain('REUSED_DATAPIPE_ID');
+    expect(codes(issues)).not.toContain('REUSED_UPLOAD_KEY');
   });
 
   it('ships with an empty list of previously used ids', () => {
@@ -518,8 +534,8 @@ describe('evaluatePreflight: lock file and launch-blocker checks', () => {
     config: fakeConfig({
       uploader: {
         endpoint: 'https://pipe.example/api/',
-        provider: 'datapipe',
-        datapipe_experiment_id: 'abc123',
+        provider: 'gdrive',
+        gdrive_upload_key: 'abc123',
       },
       prolific: {
         completion_url: 'https://app.prolific.com/submissions/complete?cc=REAL',
