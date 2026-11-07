@@ -61,7 +61,9 @@ describe('instruction prose matches config', () => {
       .stimulus.replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ');
     expect(a).toContain(`two blocks of ${trialsPerBlock} trials`);
+    expect(a).toContain('Block 1 includes');
     expect(a).toContain('after trials 20 and 40');
+    expect(a).toContain('trials 15, 30 and 45');
     expect(a).toContain(`${config.blocks.rest_duration_s}-second rest`);
     expect(b).toContain(`${trialsPerBlock} more trials`);
     expect(b).toContain('after trials 15, 30 and 45');

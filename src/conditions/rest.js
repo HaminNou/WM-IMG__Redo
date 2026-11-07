@@ -10,11 +10,11 @@
  *     block for reasons unrelated to the manipulation.
  *
  * (2) Intra-block rest. A 30-second rest is spliced
- *     in after every 20 trials within each main block (so Main A gets two
- *     mid-block rests at trials 20→21 and 40→41, and Main B gets the same
- *     pattern at within-block trials 20→21 and 40→41 = overall 80→81 and
- *     100→101). 120 trials in a single sitting is enough to bake in
- *     fatigue effects that contaminate the design contrast; periodic
+ *     in within each main block (see `src/scheduler/main-blocks.js`): Main A
+ *     gets two mid-block rests after within-block trials 20 and 40 (gates
+ *     21 and 41), and Main B gets three, after within-block trials 15, 30
+ *     and 45 (overall 75→76, 90→91 and 105→106). 120 trials in a single
+ *     sitting is enough to bake in fatigue effects that contaminate the design contrast; periodic
  *     forced rests bound that decay. After the timer hits zero the
  *     participant is shown a "press both arrow keys to start the next
  *     trial" gate (`resumeAfterRestGateNode`) — making them act before
@@ -263,7 +263,7 @@ export function resumeAfterRestGateNode({ blockLabel } = {}) {
  * @param {object[]} nodes
  * @param {object} opts
  * @param {number} opts.blockStartOverall            overall trial number of this block's first trial (1 for Main A, 61 for Main B)
- * @param {number[]} opts.restAfterWithinBlockTrials within-block trial numbers AFTER which to rest (e.g. [20, 40])
+ * @param {number[]} opts.restAfterWithinBlockTrials within-block trial numbers AFTER which to rest (e.g. [20, 40] for Main A, [15, 30, 45] for Main B)
  * @param {string} opts.blockLabel                   passed through to the rest + gate data records
  * @param {number} [opts.durationS]                  rest duration override
  * @returns {object[]}                               new nodes array

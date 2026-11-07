@@ -94,7 +94,7 @@ function noteDelivered(seq) {
  * several files, each with its own seq range. */
 const CHECKPOINT_MAX_BYTES = 900_000;
 /* Time allowed for the last upload before the redirect. */
-const TAIL_TIMEOUT_MS = 2000;
+const TAIL_TIMEOUT_MS = 4500;
 
 /* Browser storage keeps the rows of every earlier run in this browser. An
  * upload sends the rows of the current run only; the others stay in storage
@@ -502,8 +502,9 @@ export async function postWithRetry({
       if (signal?.aborted) throw new Error('postWithRetry: cancelled');
     }
     let response;
+    let ack = null;
     try {
-      response = await fetchWithTimeout(
+      ({ response, ack } = await fetchWithTimeout(
         fetcher,
         url,
         {
@@ -514,15 +515,15 @@ export async function postWithRetry({
           body: JSON.stringify(body),
         },
         timeoutMs,
-        signal
-      );
+        signal,
+        requireAck
+      ));
     } catch (err) {
       if (signal?.aborted) throw new Error('postWithRetry: cancelled');
       lastError = err;
       continue;
     }
     if (response.ok && requireAck) {
-      const ack = await readReceiverAck(response);
       if (ack.ok) return { ok: true, status: response.status, attempt };
       if (ack.error === 'FILE_EXISTS') {
         return { ok: true, status: response.status, attempt, duplicate: true };
@@ -555,14 +556,33 @@ export async function postWithRetry({
   );
 }
 
-/** fetch that is aborted after `timeoutMs` or when `outerSignal` aborts. */
-async function fetchWithTimeout(fetcher, url, init, timeoutMs, outerSignal) {
+/**
+ * fetch that is aborted after `timeoutMs` or when `outerSignal` aborts. With
+ * `readAck`, the receiver's reply body is read inside the same time limit: the
+ * headers can arrive and the body then stall, and that must not hang the
+ * attempt. A body that is cut off by the limit counts as no acknowledgement.
+ *
+ * @returns {Promise<{response: Response, ack: {ok: boolean, error: string|null, parsed: boolean}|null}>}
+ */
+async function fetchWithTimeout(fetcher, url, init, timeoutMs, outerSignal, readAck = false) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const onOuterAbort = () => controller.abort();
   outerSignal?.addEventListener('abort', onOuterAbort, { once: true });
   try {
-    return await fetcher(url, { ...init, signal: controller.signal });
+    const response = await fetcher(url, { ...init, signal: controller.signal });
+    let ack = null;
+    if (readAck && response.ok) {
+      const cutOff = new Promise((resolve) => {
+        controller.signal.addEventListener(
+          'abort',
+          () => resolve({ ok: false, error: 'NO_BODY', parsed: false }),
+          { once: true }
+        );
+      });
+      ack = await Promise.race([readReceiverAck(response), cutOff]);
+    }
+    return { response, ack };
   } finally {
     clearTimeout(timer);
     outerSignal?.removeEventListener('abort', onOuterAbort);

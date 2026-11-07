@@ -254,7 +254,10 @@ describe('completionRedirectNode', () => {
       await node.on_load();
       await vi.advanceTimersByTimeAsync(1100);
       expect(assign).not.toHaveBeenCalled();
+      /* The redirect waits up to TAIL_WAIT_MS (5000 ms) for the last upload. */
       await vi.advanceTimersByTimeAsync(3000);
+      expect(assign).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(2500);
       expect(assign).toHaveBeenCalledWith(mocks.completionUrl);
     });
 

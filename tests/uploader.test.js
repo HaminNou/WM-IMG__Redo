@@ -1848,6 +1848,29 @@ describe('postWithRetry – Apps Script receiver acknowledgement (gdrive mode)',
     expect(await run(fetchImpl)).toMatchObject({ ok: true, attempt: 1 });
   });
 
+  it('a reply whose body stalls is cut off by the time limit and retried, not hung', async () => {
+    const stalled = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: () => new Promise(() => {}),
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(stalled)
+      .mockResolvedValueOnce(reply({ ok: true }));
+    const out = await run(fetchImpl, { timeoutMs: 30 });
+    expect(out).toMatchObject({ ok: true, attempt: 1 });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('a body that always stalls ends in a failure after the retries, never a hang', async () => {
+    const stalled = { ok: true, status: 200, statusText: 'OK', text: () => new Promise(() => {}) };
+    const fetchImpl = vi.fn().mockResolvedValue(stalled);
+    await expect(run(fetchImpl, { timeoutMs: 20, retryMax: 1 })).rejects.toThrow(/gave up/);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['BAD_KEY', 'BAD_REQUEST'])('does not retry %s', async (error) => {
     const fetchImpl = vi.fn().mockResolvedValue(reply({ ok: false, error }));
     await expect(run(fetchImpl)).rejects.toThrow(new RegExp(error));

@@ -148,6 +148,10 @@
     "source": "dual.iTInstructionNode.page1#0:script"
   },
   {
+    "text": "Practice is over. The main trials start now. There are two blocks of 60 trials. Block 1 includes a 30-second rest after trials 20 and 40, Block 2 includes 30-second rests after trials 15, 30 and 45, and there is another 30-second rest between the two blocks. Same controls as the practice: Yes or On-pattern on the → RIGHT arrow key, No or Not on-pattern on the ← LEFT arrow key. Important: To start each trial, press the Left and Right arrow keys at the same time . Before you do, look at the label shown above the circle. It tells you what type of trial is coming next, so you know what to expect. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
     "text": "Memorize the locations of the dots that will appear inside the circle one at a time.",
     "source": "demos.caption14"
   },
@@ -550,6 +554,10 @@
   {
     "text": "Step 2 of 3 — An arrow tells you which way to turn the pattern in your mind (here, by +75°).",
     "source": "demos.caption11"
+  },
+  {
+    "text": "Last block. 60 more trials, same controls, with 30-second rests after trials 15, 30 and 45. Press Space to begin Block 2.",
+    "source": "runner-intros.mainBIntroNode.stimulus#0"
   },
   {
     "text": "Now on to Task 4. This task combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow, which tells you to turn the pattern in your mind. Hold this turned pattern in mind for the whole trial.",

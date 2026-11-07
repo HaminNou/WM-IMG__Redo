@@ -50,10 +50,12 @@ export function mainAIntroNode() {
         <h2>Practice is over – the main trials start now</h2>
         <div data-voiceover-target>
           <p>Practice is over. The main trials start now. There are two
-          blocks of 60 trials. Each block includes a
+          blocks of 60 trials. Block 1 includes a
           ${config.blocks.rest_duration_s}-second rest after trials 20 and 40,
-          and there is another ${config.blocks.rest_duration_s}-second rest
-          between the two blocks.</p>
+          Block 2 includes ${config.blocks.rest_duration_s}-second rests after
+          trials 15, 30 and 45, and there is another
+          ${config.blocks.rest_duration_s}-second rest between the two
+          blocks.</p>
           <p>Same controls as the practice: <strong>Yes</strong> or
           <strong>On-pattern</strong> on the
           <kbd>&rarr;</kbd> RIGHT arrow key,

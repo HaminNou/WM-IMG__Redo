@@ -74,7 +74,7 @@ const FINAL_UPLOAD_WAIT_MS = 6000;
 const UPLOAD_SAVED = ['uploaded', 'nothing_to_upload'];
 const UPLOAD_FAILED = ['partial', 'timed_out', 'no_endpoint'];
 /* Longest the redirect waits for the last upload. */
-const TAIL_WAIT_MS = 2500;
+const TAIL_WAIT_MS = 5000;
 
 /**
  * Upload-progress node.
