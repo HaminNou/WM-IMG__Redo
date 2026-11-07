@@ -289,7 +289,8 @@ export const config = deepFreeze({
    * download fallback, so a pilot or dev session can still finish without
    * losing data. */
   uploader: {
-    endpoint: 'https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec',
+    endpoint:
+      'https://script.google.com/macros/s/AKfycbwUG-V3YvDMBvR80BX0IzNngDzGW-fkpETWJxHzQypGJaMs4ZwWr_Dz4_nVKzYI-0eOUw/exec',
     provider: 'gdrive',
     gdrive_upload_key: '19231dda4521edfc984d509c',
     retry_max: 5,

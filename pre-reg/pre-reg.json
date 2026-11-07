@@ -423,7 +423,7 @@
     },
     "uploader": {
       "gdrive_upload_key": "19231dda4521edfc984d509c",
-      "endpoint": "https://script.google.com/macros/s/PLACEHOLDER_APPS_SCRIPT_DEPLOYMENT_ID/exec",
+      "endpoint": "https://script.google.com/macros/s/AKfycbwUG-V3YvDMBvR80BX0IzNngDzGW-fkpETWJxHzQypGJaMs4ZwWr_Dz4_nVKzYI-0eOUw/exec",
       "provider": "gdrive",
       "retry_initial_backoff_ms": 1000,
       "retry_max": 5,
