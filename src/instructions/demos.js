@@ -22,7 +22,7 @@
  * to advance into the practice. Replay is mouse-only: there is no
  * keyboard shortcut for it, and the on-screen prompt does not mention
  * a Yes key (no key on a demo screen is labelled Yes). They can request
- * up to DEMO_MAX_REPLAYS = 3 additional viewings (= 4 total).
+ * up to DEMO_MAX_REPLAYS = 2 additional viewings (= 3 total).
  *
  * Key handling on a demo screen is owned end-to-end by the controller-
  * managed keydown listener mounted in `buildDemoNode` — jsPsych itself
@@ -1749,9 +1749,10 @@ async function runITMiniTrial(frame, ctl) {
 }
 
 /* Maximum number of replays the participant can request after the first
- * (mandatory) viewing. Three additional
- * viewings (= 4 total) is generous without becoming a stalling tactic. */
-const DEMO_MAX_REPLAYS = 3;
+ * (mandatory) viewing: two repeats, so three viewings in all at most. The
+ * on-screen hint ("up to 2 more times", then "the last replay") is derived
+ * from this number, and so is the narration list below. */
+const DEMO_MAX_REPLAYS = 2;
 
 /**
  * After a mini-trial finishes, offer the participant a single
@@ -2220,18 +2221,17 @@ export function enumerateDemoNarrationStrings() {
     out.add(`Tone test ${p + 1} of 3: was that tone one of the ones you just heard?`);
   }
 
-  /* Replay prompt + end-of-demo. The remainingHint branch produces three
-   * forms by replaysRemaining ∈ {1, 2, 3} (DEMO_MAX_REPLAYS = 3): "last
-   * replay you can request" when 1; "you can watch up to N more time(s)"
-   * for 2 and 3. */
+  /* Replay prompt + end-of-demo. The remainingHint branch produces one form
+   * per value of replaysRemaining ∈ {1 … DEMO_MAX_REPLAYS}: "last replay you
+   * can request" when 1; "you can watch up to N more times" for the others
+   * (just 2, with DEMO_MAX_REPLAYS = 2). */
   const replayLastForm = ' (this is the last replay you can request)';
   const replayMore = (n) => ` (you can watch up to ${n} more time${n === 1 ? '' : 's'})`;
   const replayBody = (hint) =>
     `Would you like to watch the demonstration again?${hint} ` +
     'Click the button below to watch it again.';
   out.add(replayBody(replayLastForm));
-  out.add(replayBody(replayMore(2)));
-  out.add(replayBody(replayMore(3)));
+  for (let n = 2; n <= DEMO_MAX_REPLAYS; n++) out.add(replayBody(replayMore(n)));
   out.add('That was the last demonstration. Press Space when you are ready to start the practice.');
   out.add('Press Space when you are ready to start the practice.');
   out.add('Replaying the demonstration…');

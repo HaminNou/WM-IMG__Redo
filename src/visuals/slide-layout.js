@@ -54,6 +54,7 @@
 import { config } from '../config.js';
 import { questionMarkPath, QMARK_STROKE_MM } from './fixation-mark.js';
 import { ARROW_CENTRE_HOLE_STYLE } from './rotation-arrow-style.js';
+import { FIXATION_MARK_COLOUR_DARK } from './colour-palette.js';
 
 /* Single source of truth for the wrapper's vertical extent. The exported
  * style strings reference this so a change propagates everywhere at once.
@@ -306,10 +307,11 @@ const SLIDE_STAR_POLY_POINTS = starPolygonPoints(
  * FIXATION_MARK_COLOUR_DARK, STIMULUS_BLACK) so the exemplar dot / star /
  * '?' / '♪' that the participant sees on the instruction card is
  * pixel-identical to the stimulus they'll see during the trial body. The
- * fixation centre dot uses the deeper 0.55 alpha so it reads as a fixation
- * aid against the gray card without blending into the dim 0.229 ring. */
+ * fixation centre dot IS the live one (`FIXATION_MARK_COLOUR_DARK`, the colour
+ * `frame.js` gives its bull's-eye dot): an earlier, fainter value made the dot
+ * on the pattern and arrow cards look weaker than the dot shown in the task. */
 const SLIDE_RING_STROKE_COLOUR = 'rgba(0, 0, 0, 0.229)';
-const SLIDE_FIXATION_DOT_COLOUR = 'rgba(0, 0, 0, 0.55)';
+const SLIDE_FIXATION_DOT_COLOUR = FIXATION_MARK_COLOUR_DARK;
 const SLIDE_STIM_COLOUR = '#000';
 const SLIDE_TONE_GLYPH_COLOUR = 'rgba(0, 0, 0, 0.85)';
 

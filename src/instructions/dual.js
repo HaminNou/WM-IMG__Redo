@@ -96,8 +96,9 @@ export function iDInstructionNode() {
           <strong>which locations</strong> they appear in, for the dot
           tests at the end of the trial.</li>
         </ul>
+        <p>Respond to each star <strong>as fast and as accurately as you can</strong>.</p>
       `,
-      narration: `Then ${totalEvents} things appear inside the circle one at a time, mixed together. ${starsPerTrial} stars – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} dots – remember which locations they appear in, for the dot tests at the end of the trial.`,
+      narration: `Then ${totalEvents} things appear inside the circle one at a time, mixed together. ${starsPerTrial} stars – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} dots – remember which locations they appear in, for the dot tests at the end of the trial. Respond to each star as fast and as accurately as you can.`,
       exemplar: ['star', 'dot'],
     }),
     slideStimulusPage({
@@ -177,8 +178,9 @@ export function iTInstructionNode() {
           <strong>each tone you hear</strong>, for the tone tests at the
           end of the trial.</li>
         </ul>
+        <p>Respond to each star <strong>as fast and as accurately as you can</strong>.</p>
       `,
-      narration: `Then ${totalEvents} things happen one at a time, mixed together. ${starsPerTrial} stars inside the circle – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} tones – remember each tone you hear, for the tone tests at the end of the trial.`,
+      narration: `Then ${totalEvents} things happen one at a time, mixed together. ${starsPerTrial} stars inside the circle – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And ${setSize} tones – remember each tone you hear, for the tone tests at the end of the trial. Respond to each star as fast and as accurately as you can.`,
       exemplar: ['star', 'tone'],
     }),
     slideStimulusPage({

@@ -110,8 +110,9 @@ export function iOnlyInstructionNode() {
     slideStimulusPage({
       title,
       body: `
-        <p>You have <strong>3 seconds</strong> for each star. Aim for
-        accuracy first, but don't dwell.</p>
+        <p>Respond to each star <strong>as fast and as accurately as
+        you can</strong>. You have <strong>3 seconds</strong> for each
+        star.</p>
         <p>If you answer in time, the star turns
         ${FEEDBACK_GREEN} for correct or
         ${FEEDBACK_RED} for incorrect while it is still on screen.</p>
@@ -119,7 +120,7 @@ export function iOnlyInstructionNode() {
         your best.</p>
         <p>Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.</p>
       `,
-      narration: `You have 3 seconds for each star. Aim for accuracy first, but don't dwell. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.`,
+      narration: `Respond to each star as fast and as accurately as you can. You have 3 seconds for each star. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.`,
       exemplar: ['star'],
     }),
   ];

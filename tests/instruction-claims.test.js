@@ -19,6 +19,7 @@ import { iOnlyInstructionNode } from '../src/instructions/imagery.js';
 import { dOnlyInstructionNode, tOnlyInstructionNode } from '../src/instructions/memory.js';
 import { ATTENTION_CHECK_ITEMS } from '../src/instructions/attention-checks.js';
 import { mainAIntroNode, mainBIntroNode } from '../src/runner-intros.js';
+import { enumerateDemoNarrationStrings } from '../src/instructions/demos.js';
 
 const text = (node) =>
   node.pages
@@ -148,5 +149,45 @@ describe('response labels are written with "or", never a slash (the voice reads 
       if (/<\/kbd>\s*\/\s*<kbd>/.test(src)) bad.push(`${f}: key / key`);
     }
     expect(bad).toEqual([]);
+  });
+});
+
+describe('respond to the stars as fast and as accurately as possible', () => {
+  const SENTENCE = 'respond to each star as fast and as accurately as you can';
+  const pagesOf = (node) => node.pages.map((p) => p.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+  const narrationOf = (node) =>
+    node.pages.map((p) => p.match(/data-voiceover-script="([^"]*)"/)?.[1] ?? '');
+
+  it.each([
+    ['imagery (Task 3)', iOnlyInstructionNode],
+    ['dual dot + star (Task 4)', iDInstructionNode],
+    ['dual tone + star (Task 5)', iTInstructionNode],
+  ])('the %s deck says it, on screen and in the narration', (_name, make) => {
+    const node = make();
+    expect(pagesOf(node).some((t) => t.toLowerCase().includes(SENTENCE))).toBe(true);
+    expect(narrationOf(node).some((t) => t.toLowerCase().includes(SENTENCE))).toBe(true);
+  });
+
+  it('the imagery deck no longer tells participants to put accuracy before speed', () => {
+    const all = text(iOnlyInstructionNode()).toLowerCase();
+    expect(all).not.toContain('accuracy first');
+    expect(all).not.toContain("don't dwell");
+  });
+});
+
+describe('demonstration replays: the first viewing plus two repeats', () => {
+  it('the replay limit is two', () => {
+    const src = readFileSync('src/instructions/demos.js', 'utf8');
+    expect(src).toMatch(/const DEMO_MAX_REPLAYS = 2;/);
+  });
+
+  it('the replay prompt offers "up to 2 more times", then "the last replay" - never 3', () => {
+    const prompts = enumerateDemoNarrationStrings().filter((t) =>
+      t.startsWith('Would you like to watch the demonstration again?')
+    );
+    expect(prompts).toHaveLength(2);
+    expect(prompts.some((t) => t.includes('you can watch up to 2 more times'))).toBe(true);
+    expect(prompts.some((t) => t.includes('this is the last replay you can request'))).toBe(true);
+    for (const t of prompts) expect(t).not.toMatch(/up to (3|three)/);
   });
 });
