@@ -3,7 +3,7 @@
   "voice": "en-US-AndrewMultilingualNeural",
   "model": "edge-tts",
   "rate": "-15%",
-  "rendered_at": "2026-11-07T20:47:24.753Z",
+  "rendered_at": "2026-11-08T02:05:08.495Z",
   "entries": {
     "032c18f46c3247570791eaa2dce7d0f836157381fc30a51cc9b852d458f0ad0d": {
       "file": "032c18f46c3247570791eaa2dce7d0f836157381fc30a51cc9b852d458f0ad0d.mp3",
@@ -34899,6 +34899,204 @@
           "text": "automatically",
           "offset_ms": 17309,
           "duration_ms": 912
+        }
+      ]
+    },
+    "ea0f8e726cd5f66a5681876e81ce51c5b896a987c805e61399f063a07747a135": {
+      "file": "ea0f8e726cd5f66a5681876e81ce51c5b896a987c805e61399f063a07747a135.mp3",
+      "bytes": 154080,
+      "chars": 192,
+      "text_preview": "Please try to be as accurate as you can during the practice trials. To start each trial, press the Left and Right arrow…",
+      "word_boundaries": [
+        {
+          "text": "Please",
+          "offset_ms": 118,
+          "duration_ms": 221
+        },
+        {
+          "text": "try",
+          "offset_ms": 338,
+          "duration_ms": 162
+        },
+        {
+          "text": "to",
+          "offset_ms": 500,
+          "duration_ms": 74
+        },
+        {
+          "text": "be",
+          "offset_ms": 574,
+          "duration_ms": 147
+        },
+        {
+          "text": "as",
+          "offset_ms": 735,
+          "duration_ms": 162
+        },
+        {
+          "text": "accurate",
+          "offset_ms": 912,
+          "duration_ms": 647
+        },
+        {
+          "text": "as",
+          "offset_ms": 1735,
+          "duration_ms": 147
+        },
+        {
+          "text": "you",
+          "offset_ms": 1882,
+          "duration_ms": 118
+        },
+        {
+          "text": "can",
+          "offset_ms": 2000,
+          "duration_ms": 176
+        },
+        {
+          "text": "during",
+          "offset_ms": 2191,
+          "duration_ms": 235
+        },
+        {
+          "text": "the",
+          "offset_ms": 2426,
+          "duration_ms": 74
+        },
+        {
+          "text": "practice",
+          "offset_ms": 2515,
+          "duration_ms": 485
+        },
+        {
+          "text": "trials",
+          "offset_ms": 3015,
+          "duration_ms": 721
+        },
+        {
+          "text": "To",
+          "offset_ms": 4221,
+          "duration_ms": 44
+        },
+        {
+          "text": "start",
+          "offset_ms": 4265,
+          "duration_ms": 338
+        },
+        {
+          "text": "each",
+          "offset_ms": 4603,
+          "duration_ms": 191
+        },
+        {
+          "text": "trial",
+          "offset_ms": 4809,
+          "duration_ms": 574
+        },
+        {
+          "text": "press",
+          "offset_ms": 5838,
+          "duration_ms": 324
+        },
+        {
+          "text": "the",
+          "offset_ms": 6162,
+          "duration_ms": 132
+        },
+        {
+          "text": "Left",
+          "offset_ms": 6294,
+          "duration_ms": 500
+        },
+        {
+          "text": "and",
+          "offset_ms": 7176,
+          "duration_ms": 176
+        },
+        {
+          "text": "Right",
+          "offset_ms": 7353,
+          "duration_ms": 412
+        },
+        {
+          "text": "arrow",
+          "offset_ms": 7868,
+          "duration_ms": 309
+        },
+        {
+          "text": "keys",
+          "offset_ms": 8176,
+          "duration_ms": 471
+        },
+        {
+          "text": "at",
+          "offset_ms": 8647,
+          "duration_ms": 59
+        },
+        {
+          "text": "the",
+          "offset_ms": 8706,
+          "duration_ms": 74
+        },
+        {
+          "text": "same",
+          "offset_ms": 8779,
+          "duration_ms": 324
+        },
+        {
+          "text": "time",
+          "offset_ms": 9103,
+          "duration_ms": 397
+        },
+        {
+          "text": "A",
+          "offset_ms": 9971,
+          "duration_ms": 44
+        },
+        {
+          "text": "reminder",
+          "offset_ms": 10015,
+          "duration_ms": 618
+        },
+        {
+          "text": "is",
+          "offset_ms": 10647,
+          "duration_ms": 103
+        },
+        {
+          "text": "shown",
+          "offset_ms": 10765,
+          "duration_ms": 441
+        },
+        {
+          "text": "at",
+          "offset_ms": 11206,
+          "duration_ms": 88
+        },
+        {
+          "text": "the",
+          "offset_ms": 11294,
+          "duration_ms": 88
+        },
+        {
+          "text": "bottom",
+          "offset_ms": 11397,
+          "duration_ms": 382
+        },
+        {
+          "text": "of",
+          "offset_ms": 11779,
+          "duration_ms": 88
+        },
+        {
+          "text": "the",
+          "offset_ms": 11868,
+          "duration_ms": 74
+        },
+        {
+          "text": "screen",
+          "offset_ms": 11941,
+          "duration_ms": 485
         }
       ]
     },

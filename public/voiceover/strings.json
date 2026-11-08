@@ -628,6 +628,10 @@
     "source": "runner-intros.endOfTaskIntroNode.stimulus#0"
   },
   {
+    "text": "Please try to be as accurate as you can during the practice trials. To start each trial, press the Left and Right arrow keys at the same time . A reminder is shown at the bottom of the screen.",
+    "source": "instructions.practiceReadinessNode.stimulus#0"
+  },
+  {
     "text": "We chose Yes — that was the correct answer, so the dot turns green.",
     "source": "demos.caption64"
   },

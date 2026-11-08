@@ -134,7 +134,6 @@ export function instructionsOverview() {
 }
 
 export function practiceReadinessNode() {
-  const critPct = Math.round(config.practice.accuracy_criterion * 100);
   const node = {
     type: htmlKeyboardResponse,
     stimulus: `
@@ -148,14 +147,6 @@ export function practiceReadinessNode() {
             To start each trial, press the Left and Right arrow keys
             <strong>at the same time</strong>. A reminder is shown at the
             bottom of the screen.</p>
-          <p style="font-size: 1.05rem; line-height: 1.6;">
-            If your overall practice score falls below
-            <strong>${critPct}%</strong>, you will be returned to the
-            beginning of the instructions to read them again and repeat
-            the practice. If your score remains below
-            <strong>${critPct}%</strong> after the second attempt, the
-            session will end and you will be redirected back to
-            Prolific.</p>
         </div>
         ${continueHintHtml('Press <kbd>Space</kbd> to continue.')}
       </div>

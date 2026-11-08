@@ -174,8 +174,10 @@ describe('numbers in the text equal config-derived values', () => {
   it('practice criterion %, practice length, imagination 5 seconds, 3 seconds, rest and trial counts', () => {
     const crit = Math.round(config.practice.accuracy_criterion * 100);
     expect(crit).toBe(70);
+    /* The pass criterion is stated once, on the overview page; the
+     * "Before you begin" page no longer repeats it. */
     const ready = plain(practiceReadinessNode().stimulus);
-    expect(ready).toContain(`${crit}%`);
+    expect(ready).not.toContain('%');
     const overview = plain(instructionsOverview().stimulus);
     expect(overview).toContain(`${crit}%`);
     expect(overview).toContain(`${config.blocks.practice_trials_per_type * 5} trials in total`);
