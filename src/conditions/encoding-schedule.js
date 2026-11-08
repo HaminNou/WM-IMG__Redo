@@ -319,6 +319,9 @@ function startRun(ctx) {
     nextFrame((ts) => {
       if (w.closed) return;
       w.el = addStar(frame, star.cell);
+      /* The angle the star was actually drawn at (read from the frame), so the row
+       * records what was rendered and not only what was planned. */
+      w.drawn_rotation_deg = frame.rotation_deg;
       w.onset = ts;
       ctx.slot_onsets_ts_ms[ev.slot] = Math.round(ts);
       w.onsetLagMs = round1(ts - (t0 + ev.start_ms));
@@ -371,7 +374,7 @@ function startRun(ctx) {
       phase: star_phase,
       ...(params.trial_meta ?? {}),
       block_label: params.trial_meta?.block_label ?? ctx.block_label,
-      ...starRenderFields(star, params.rotation_deg),
+      ...starRenderFields(star, w.drawn_rotation_deg ?? params.rotation_deg),
       background_shade: params.background_shade ?? null,
       trial_index_in_block: params.trial_index_in_block,
       rotation_deg: params.rotation_deg,

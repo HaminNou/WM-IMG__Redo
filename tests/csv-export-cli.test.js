@@ -52,6 +52,7 @@ const EXPECTED_FILES = Object.freeze([
   'trials.csv',
   'stars.csv',
   'probes.csv',
+  'encoding_events.csv',
   'EXPORT_MANIFEST.json',
 ]);
 
@@ -127,7 +128,8 @@ describe('csv-export CLI smoke tests', () => {
         f !== 'EVENTS.csv' &&
         f !== 'trials.csv' &&
         f !== 'stars.csv' &&
-        f !== 'probes.csv'
+        f !== 'probes.csv' &&
+        f !== 'encoding_events.csv'
     );
     for (const file of trialTypeFiles) {
       const text = readFileSync(join(outputDir, file), 'utf-8');

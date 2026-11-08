@@ -37,7 +37,7 @@
  *   I_T_Criterion{1,2}.csv      one row per I+T trial (3 stars + 3 probes)
  *
  * Auxiliary files (not criterion-filtered):
- *   trials.csv / stars.csv / probes.csv
+ *   trials.csv / stars.csv / probes.csv / encoding_events.csv
  *                               tidy tables with unique keys, explicit condition,
  *                               presentation order and screen positions (see
  *                               scripts/tidy-tables.js and schemas/tidy-tables.schema.json)
@@ -73,6 +73,33 @@
  *   (the 0..30 band: 12 negative / 12 non-negative angles per condition per
  *   session), so a design tally of 12 / 12 counts 0 as positive, whereas this
  *   column keeps 0 apart.
+ *   Serial positions and their BASE (0 or 1). Terms: "slot" = place in the six-slot encoding
+ *   stream (includes the invisible placeholders of single-task trials); "serial position
+ *   overall" = ordinal among the VISIBLE stimuli (dual 1-6, single 1-3); "in modality" =
+ *   number among the three items of the same kind; "test position" = order of the recognition
+ *   tests (random, unrelated to encoding order).
+ *     EVENTS.csv  `Event_Index` encoding rows: slot 1-6, 1-BASED (placeholders included);
+ *                 recognition rows: test position 1-3, 1-based. `Encoding_Position` is
+ *                 0-BASED (0 = first of the three memory items of that kind) and on foil
+ *                 probes only a design label. New 1-based columns: Slot_In_Stream,
+ *                 Serial_Position_Overall, Target_Serial_Position_Overall, Pos_Frame.
+ *                 X_Mm/Y_Mm: rotated screen position for dots, stars and dot probes, but the
+ *                 UPRIGHT cell position for tone rows (Pos_Frame says which).
+ *     wide files  `Dot_n_OrderN` / `Tone_n_OrderN`: 1-based number among the three memory
+ *                 items; `Ast_n_SlotN`: star number 1-3 among the stars (NOT its slot and NOT
+ *                 its overall serial position); `Qmark_n_EncPos`: 0-BASED encoding position
+ *                 (0 = first memory item), a design label only on foils; `Qmark_n` index n is
+ *                 the test position (1-3, 1-based). The wide files have no overall serial
+ *                 position: take it from encoding_events.csv / probes.csv.
+ *     tidy tables 1-based throughout (slot_in_stream, serial_position_overall,
+ *                 serial_position_in_modality, test_position, probe_position,
+ *                 encoding_position, star_serial_position, target_*); 0-based only cell,
+ *                 cell_row, cell_col, tone_index, block_position, pool_index.
+ *                 encoding_events.csv (6 rows per trial, key participant_id +
+ *                 trial_seq_session + slot_in_stream) holds every stimulus of the encoding
+ *                 stream with its serial position and, for dots and tones, the outcome of
+ *                 the memory test of that item. The name differs from EVENTS.csv because a
+ *                 case-insensitive disk would merge the two files.
  *   Upload_Status is the status of the end-of-session upload (the first attempt).
  *   Upload_Status_Final (and, in PARTICIPANT_SUMMARY, Upload_Status_First / _Final /
  *   Upload_Retries) is the status of the LATEST upload row, so a retry that
@@ -153,6 +180,8 @@ import {
   TRIALS_COLUMNS,
   STARS_COLUMNS,
   PROBES_COLUMNS,
+  EVENTS_COLUMNS as TIDY_EVENTS_COLUMNS,
+  TIDY_FILES,
 } from './tidy-tables.js';
 
 /* The questionnaire modules import jsPsych, which registers itself on
@@ -1046,7 +1075,22 @@ function buildColumnsForIT() {
  *
  * EVENTS.csv complements the wide trial-type files with a tidy long-format
  * frame: one row per stimulus event (6 encoding events + 3 recognition probes
- * for d_only/t_only/i_d/i_t; 3 encoding star events for i_only). Rotation_Deg
+ * for d_only/t_only/i_d/i_t; 6 encoding events - 3 stars + 3 placeholders - for
+ * i_only, which has no recognition probes). The 6 encoding events include the
+ * invisible placeholders ('dummy_S' rows; in i_only the placeholders sit in the
+ * M-slots and are also 'dummy_S'). The file has no trial key beyond
+ * (Participant_ID, Block, Trial_Type, Trial): the keyed, fully documented table of
+ * the encoding stream is encoding_events.csv (tidy-tables.js). Position columns:
+ * Event_Index is 1-based (encoding rows: slot 1-6; recognition rows: test position 1-3);
+ * Encoding_Position is 0-BASED (0 = first of the three memory items); the 1-based
+ * companions are Slot_In_Stream (encoding rows, = Event_Index), Serial_Position_Overall
+ * (encoding rows of visible stimuli: ordinal among all shown stimuli, 1-6 dual / 1-3
+ * single; NA for placeholders) and Target_Serial_Position_Overall (recognition rows of
+ * TARGET probes: the serial position of the probed item; NA for foils).
+ * X_Mm / Y_Mm frame, see Pos_Frame: rotated_screen = position after the grid rotation
+ * (dots, stars, dot probes); upright_cell = tone rows, where X_Mm/Y_Mm is the UPRIGHT
+ * position of the cell the tone is paired with (a tone has no screen position);
+ * placeholder = position of an invisible placeholder (nothing was shown there). Rotation_Deg
  * is constant within a trial — repeated to keep each row self-contained for
  * downstream filtering. `Pattern_Reminder` / `Trials_Since_Pattern_Reminder` are
  * trial-level design fields repeated the same way (see reminderFields). `Pattern_Label` carries the on/off pattern membership
@@ -1089,6 +1133,11 @@ const EVENTS_COLUMNS = Object.freeze([
   'Schema_Version',
   'Pilot_Run',
   'Pilot_Label',
+  /* 1-based companions (added with tidy 1.1.0; the columns above keep their old values) */
+  'Slot_In_Stream',
+  'Serial_Position_Overall',
+  'Target_Serial_Position_Overall',
+  'Pos_Frame',
 ]);
 
 /* Trial-type → kind tags for the M-slot (memory item) and S-slot (probe).
@@ -1116,7 +1165,12 @@ function toneEventFields(enc, slot) {
   const ev = Array.isArray(enc.slot_tone_events)
     ? enc.slot_tone_events.find((e) => e.slot === slot)
     : null;
-  return { Tone_Late_Ms: numOrNA(ev?.late_ms), Tone_Error: boolOrNA(ev?.tone_error) };
+  return {
+    Tone_Late_Ms: numOrNA(ev?.late_ms),
+    Tone_Error: boolOrNA(
+      ev ? (ev.error !== null && ev.error !== undefined) || ev.tone_error === true : undefined
+    ),
+  };
 }
 
 function keypressFields(row) {
@@ -1148,6 +1202,8 @@ function composeEventsRows(group, sessionMeta = {}) {
     Pilot_Run: sessionMeta.is_pilot_run === true ? 1 : 0,
     Pilot_Label: sessionMeta.pilot_label ?? NA,
   };
+  /* Visible stimuli of the encoding stream in presentation order: serial position among
+   * ALL shown stimuli (dots/tones and stars), 1-based; placeholders are not stimuli. */
 
   /* Build the encoding-event list. Sources: M-slot memory_items (dot/tone),
    * S-slot dummies (d_only/t_only), S-slot stars (i_only/i_d/i_t). Each entry
@@ -1181,6 +1237,16 @@ function composeEventsRows(group, sessionMeta = {}) {
     }
   }
   encEvents.sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0));
+  const serialBySlot = new Map();
+  for (const ev of encEvents) {
+    if (ev.kind !== 'dummy_S' && Number.isInteger(ev.slot))
+      serialBySlot.set(ev.slot, serialBySlot.size + 1);
+  }
+  const slotOfEncodingPosition = new Map(
+    (Array.isArray(enc.memory_items) ? enc.memory_items : [])
+      .filter((m) => Number.isInteger(m.encoding_position) && Number.isInteger(m.slot))
+      .map((m) => [m.encoding_position, m.slot])
+  );
 
   const out = [];
   for (let i = 0; i < encEvents.length; i++) {
@@ -1210,6 +1276,15 @@ function composeEventsRows(group, sessionMeta = {}) {
       Displayed: NA,
       Truncated: NA,
       Guard_Flags: NA,
+      Slot_In_Stream: Number.isInteger(ev.slot) ? ev.slot + 1 : NA,
+      Serial_Position_Overall: serialBySlot.get(ev.slot) ?? NA,
+      Target_Serial_Position_Overall: NA,
+      Pos_Frame:
+        ev.kind === 'tone'
+          ? 'upright_cell'
+          : ev.kind === 'dummy_S'
+            ? 'placeholder'
+            : 'rotated_screen',
     };
     if (ev.kind === 'star' && ev.runtime) {
       Object.assign(row, keypressFields(ev.runtime), {
@@ -1265,6 +1340,13 @@ function composeEventsRows(group, sessionMeta = {}) {
         Displayed: NA,
         Truncated: NA,
         Guard_Flags: p.guard_flags ?? NA,
+        Slot_In_Stream: NA,
+        Serial_Position_Overall: NA,
+        Target_Serial_Position_Overall:
+          p.is_target === true && slotOfEncodingPosition.has(p.encoding_position)
+            ? (serialBySlot.get(slotOfEncodingPosition.get(p.encoding_position)) ?? NA)
+            : NA,
+        Pos_Frame: kinds.probe === 'probe_dot' ? 'rotated_screen' : NA,
       });
     }
   }
@@ -2192,15 +2274,20 @@ export function composeExport(perParticipant, opts = {}) {
   files['EVENTS.csv'] = toCsv(eventsRows, EVENTS_COLUMNS);
   fileList.push({ path: 'EVENTS.csv', n_rows: eventsRows.length, columns: EVENTS_COLUMNS.length });
 
-  /* Tidy tables: trials.csv, stars.csv, probes.csv (see tidy-tables.js). */
+  /* Tidy tables: trials.csv, stars.csv, probes.csv, encoding_events.csv (see tidy-tables.js). */
   const tidy = composeTidyTables(perParticipant);
   for (const [name, columns] of [
     ['trials', TRIALS_COLUMNS],
     ['stars', STARS_COLUMNS],
     ['probes', PROBES_COLUMNS],
+    ['events', TIDY_EVENTS_COLUMNS],
   ]) {
-    files[`${name}.csv`] = toCsv(tidy[name], columns);
-    fileList.push({ path: `${name}.csv`, n_rows: tidy[name].length, columns: columns.length });
+    files[TIDY_FILES[name]] = toCsv(tidy[name], columns);
+    fileList.push({
+      path: TIDY_FILES[name],
+      n_rows: tidy[name].length,
+      columns: columns.length,
+    });
   }
 
   /* Auxiliary files. */
@@ -2315,7 +2402,7 @@ export function dataProblems(manifest) {
     out.push(`duplicate_main_trial_uid for ${dup.length} trial(s): ${who}`);
   }
   for (const [name, keys] of Object.entries(manifest.tidy_tables.duplicate_keys)) {
-    if (keys.length > 0) out.push(`${keys.length} duplicate key(s) in ${name}.csv`);
+    if (keys.length > 0) out.push(`${keys.length} duplicate key(s) in ${TIDY_FILES[name] ?? name}`);
   }
   return out;
 }

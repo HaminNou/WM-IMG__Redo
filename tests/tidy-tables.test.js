@@ -144,7 +144,12 @@ describe('tidy tables from simulated sessions', () => {
   it('writes trials.csv, stars.csv and probes.csv through composeExport', () => {
     const { files, manifest } = composeExport(ps, { generatedAtIso: '2000-01-01T00:00:00Z' });
     for (const f of ['trials.csv', 'stars.csv', 'probes.csv']) expect(files[f]).toBeTruthy();
-    expect(manifest.tidy_tables.duplicate_keys).toEqual({ trials: [], stars: [], probes: [] });
+    expect(manifest.tidy_tables.duplicate_keys).toEqual({
+      trials: [],
+      stars: [],
+      probes: [],
+      events: [],
+    });
   });
 });
 

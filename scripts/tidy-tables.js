@@ -5,6 +5,20 @@
  *   trials  key: (participant_id, trial_seq_session)
  *   stars   key: (participant_id, trial_seq_session, star_serial_position)
  *   probes  key: (participant_id, trial_seq_session, probe_position)
+ *   events  key: (participant_id, trial_seq_session, slot_in_stream)
+ *           (written as encoding_events.csv: EVENTS.csv is the older long file of
+ *           csv-export.js and the two names would collide on a case-insensitive disk)
+ *
+ * Serial positions. Every trial has a six-slot encoding stream (slot_in_stream 1-6).
+ * Dual trials (i_d, i_t) show a visible stimulus in all six slots (3 dots or tones, 3
+ * stars, in mixed order); single-task trials show 3 stimuli and the other three slots
+ * are invisible placeholders. `serial_position_overall` is the 1-based ordinal of a
+ * stimulus among the VISIBLE stimuli of the trial (dual 1-6, single 1-3), so the
+ * first star can have overall position 4. `serial_position_in_modality` is the number
+ * among the three items of its own kind (dots, tones or stars), 1-3. Test position
+ * (`test_position` / `probe_position`) is the order of the memory tests, which is
+ * random and unrelated to the encoding order. All positions in these tables are
+ * 1-based unless a column doc says otherwise (cell and tone_index are 0-based ids).
  *
  * `trial_seq_session` counts the trial-start gates of the session in the
  * order they were presented (practice included), so it is unique even when a
@@ -29,7 +43,15 @@ import { onPatternCells } from '../src/grid.js';
 import { toneForCell } from '../src/audio/tones.js';
 import { ROTATION_STRATA } from '../src/scheduler/rotation-balance.js';
 
-export const TIDY_VERSION = '1.0.0';
+/* 1.1.0 (additive; no column of 1.0.0 changed meaning or position of values):
+ *   - new table `events` (encoding_events.csv): one row per encoding-stream slot per
+ *     trial, 6 per trial, placeholders included, with the serial position among ALL
+ *     visible stimuli and the memory-test outcome joined on;
+ *   - probes: test_position, target_serial_position_overall,
+ *     target_serial_position_in_modality, target_slot_in_stream, target_event_key;
+ *   - stars: serial_position_overall, serial_position_in_modality, slot_in_stream;
+ *   - the base (0 or 1) of every position-like column is documented. */
+export const TIDY_VERSION = '1.1.0';
 export const RT_FLOOR_MS = 250;
 
 const HAS_STARS = new Set(['i_only', 'i_d', 'i_t']);
@@ -232,6 +254,9 @@ export const STARS_COLUMNS = [
   'participant_id',
   'trial_seq_session',
   'star_serial_position',
+  'serial_position_overall',
+  'serial_position_in_modality',
+  'slot_in_stream',
   'trial_uid',
   'attempt',
   'condition',
@@ -312,6 +337,11 @@ export const PROBES_COLUMNS = [
   'radius_cells',
   'encoding_position',
   'target_slot',
+  'test_position',
+  'target_serial_position_overall',
+  'target_serial_position_in_modality',
+  'target_slot_in_stream',
+  'target_event_key',
   'enc1_cell',
   'enc1_pattern_label',
   'enc1_x_mm',
@@ -358,6 +388,78 @@ export const PROBES_COLUMNS = [
   'build_id',
 ];
 
+export const EVENTS_COLUMNS = [
+  'participant_id',
+  'trial_seq_session',
+  'slot_in_stream',
+  'trial_uid',
+  'attempt',
+  'condition',
+  'block_label',
+  'is_practice',
+  'presentation_index',
+  'pool_index',
+  'rotation_deg',
+  'background_shade',
+  'sequence',
+  'slot_plan_kind',
+  'event_modality',
+  'is_visible_stimulus',
+  'serial_position_overall',
+  'serial_position_in_modality',
+  'n_visible_stimuli',
+  'cell',
+  'placeholder_cell',
+  'cell_row',
+  'cell_col',
+  'cell_x_mm',
+  'cell_y_mm',
+  'stimulus_rotation_deg',
+  'position_frame',
+  'x_mm',
+  'y_mm',
+  'radius_mm',
+  'radius_cells',
+  'pattern_label',
+  'is_on_pattern',
+  'tone_index',
+  'tone_freq_hz',
+  'onset_ms',
+  'onset_source',
+  'onset_gap_ms',
+  'tone_planned_onset_ms',
+  'tone_scheduled_onset_ms',
+  'tone_event_recorded',
+  'tone_late',
+  'tone_late_ms',
+  'tone_error',
+  'tested_later',
+  'test_position',
+  'test_probe_type',
+  'test_row_recorded',
+  'test_responded',
+  'test_said_yes',
+  'test_correct',
+  'test_rt_ms',
+  'test_excluded_anticipatory',
+  'star_row_recorded',
+  'star_responded',
+  'star_said_on',
+  'star_correct',
+  'star_rt_ms',
+  'star_response_key',
+  'star_excluded_anticipatory',
+  'star_onset_lag_ms',
+  'star_window_closed_ms',
+  'star_displayed',
+  'star_truncated',
+  'position_matches_runtime',
+  'trial_star_excluded',
+  'trial_guard_excluded',
+  'px_per_mm',
+  'build_id',
+];
+
 /** Column documentation, used to generate schemas/tidy-tables.schema.json. */
 export const COLUMN_DOCS = {
   participant_id:
@@ -375,9 +477,9 @@ export const COLUMN_DOCS = {
     '1-120 over the main task in presentation order; empty in practice. Counted by the exporter.',
   presentation_index_stamped:
     'Value written by the runtime, for comparison with presentation_index.',
-  block_position: '0-based position in the block.',
+  block_position: 'Position of the trial in its block, 0-BASED (0 = first trial of the block).',
   pool_index:
-    'Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows). Not unique across conditions.',
+    'Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions.',
   rotation_deg:
     'Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only.',
   rotation_abs_deg: 'Absolute rotation.',
@@ -419,15 +521,16 @@ export const COLUMN_DOCS = {
   px_per_mm: 'Pixels per mm from the card calibration.',
   cell_size_mm: 'Cell size, mm.',
   prng_seed_uint32: 'Seed of the schedule.',
-  star_serial_position: 'Star number within the trial, 1-3, in order of presentation.',
-  slot: 'Slot of the event in the six-slot sequence, 1-6.',
-  cell: 'Cell index 0-24, row-major; 12 is the centre.',
-  cell_row: 'Row of the cell, 0-4.',
-  cell_col: 'Column of the cell, 0-4.',
+  star_serial_position:
+    'Star number among the THREE STARS of the trial, 1-3, 1-based (NOT the position among all stimuli: a star can be the 1st or the 6th stimulus). The overall position is `serial_position_overall`. Key column of stars.csv.',
+  slot: 'Position of the star in the six-slot encoding stream, 1-6, 1-based; same as `slot_in_stream`. In single-task trials the stream holds invisible placeholders, so this is NOT the serial position among the stimuli shown: use `serial_position_overall`.',
+  cell: 'Cell index 0-24, row-major, 0-BASED id (cell 0 = top-left, 12 = centre). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`).',
+  cell_row: 'Row of the cell, 0-4 (0-based).',
+  cell_col: 'Column of the cell, 0-4 (0-based).',
   cell_x_mm: 'Cell centre x in the upright grid, mm from fixation.',
   cell_y_mm: 'Cell centre y in the upright grid, mm from fixation (down positive).',
-  x_mm: 'Screen x of the stimulus after rotation, mm from fixation. Empty for tones.',
-  y_mm: 'Screen y of the stimulus after rotation, mm from fixation (down positive). Empty for tones.',
+  x_mm: 'Screen x of the stimulus after rotation, mm from fixation (x right). Empty for tones, which have no screen position, and for placeholders (invisible).',
+  y_mm: 'Screen y of the stimulus after rotation, mm from fixation (down positive). Empty for tones and placeholders.',
   radius_mm: 'Distance of the cell centre from fixation, mm.',
   radius_cells: 'Same distance in cell widths.',
   pattern_label: 'on or off the 12-cell pattern.',
@@ -436,20 +539,22 @@ export const COLUMN_DOCS = {
   responded: 'True if a valid key was pressed in the window.',
   said_on: 'True if the participant answered on-pattern.',
   star_correct: 'Correct star response.',
-  rt_ms: 'Response time, ms from stimulus onset.',
+  rt_ms: 'Response time, ms from stimulus onset (stars.csv: star onset; probes.csv: probe onset).',
   response_key: 'Key pressed.',
   excluded_anticipatory: 'True if rt_ms < 250.',
   star_onset_ms: 'Star onset relative to encoding onset, ms.',
   position_matches_runtime:
     'True if the exporter position equals the position logged at runtime; empty if none was logged.',
-  probe_position: 'Probe number within the trial, 1-3.',
+  probe_position:
+    'Test position: the order of this recognition test within the trial, 1-3, 1-based. Random with respect to the encoding order. Key column of probes.csv.',
   modality: 'dot (visual probe) or tone (auditory probe).',
   probe_type: 'T_on, T_off, F_on or F_off.',
   is_target: 'True if the probe matches an encoded item.',
   probe_frame_rotation_deg: 'Rotation of the frame the probe was drawn in (0 = upright).',
   encoding_position:
-    'Encoding position 1-3 tied to the probe. For a foil it is a design label only.',
-  target_slot: 'Slot (1-6) of the probed item; empty for foils.',
+    '1-based (1-3) number of the encoded item (among the three items of the SAME modality) that the probe is built from. For a target it is the number of the encoded item; for a foil it is a DESIGN LABEL only (the item the foil was generated against): never use it as a serial position of a foil. It is not the test position (`probe_position`) and not the serial position among all stimuli (`target_serial_position_overall`).',
+  target_slot:
+    'Slot (1-6, 1-based) of the probed item in the six-slot encoding stream; same as `target_slot_in_stream`; empty for foils. Not the serial position among visible stimuli in single-task trials (placeholders occupy slots): use `target_serial_position_overall`.',
   enc1_cell: 'Cell of the item encoded first.',
   enc1_pattern_label: 'on or off label of the first item.',
   enc1_x_mm: 'Screen x of the first encoded dot (rotated), mm. Dot conditions only.',
@@ -465,10 +570,10 @@ export const COLUMN_DOCS = {
   min_enc_dist_mm:
     'Smallest distance between the probe screen position and the screen positions of the encoded dots, mm. Dot conditions only.',
   nearest_enc_position:
-    'Encoding position (1-3) of the encoded dot nearest to the probe on screen.',
+    'Encoding position (1-3, 1-based, among the three encoded dots) of the encoded dot nearest to the probe on screen.',
   own_enc_dist_mm:
     'For a target: distance between the probe and its own encoded dot on screen, mm (0 when the probe frame and encoding frame have the same rotation).',
-  tone_index: 'Index 0-23 of the probe tone. Tone conditions only.',
+  tone_index: 'Index 0-23 (0-BASED id) of the tone. Tone conditions only.',
   tone_freq_hz: 'Frequency of the probe tone, Hz.',
   min_tone_rank_gap: 'Smallest rank distance between the probe tone and the encoded tones.',
   said_yes: 'True if the participant answered yes.',
@@ -510,7 +615,69 @@ export const COLUMN_DOCS = {
   audio_sample_rate_hz: 'AudioContext sample rate, Hz.',
   audio_state: 'AudioContext state at probe onset.',
   audio_base_latency_ms: 'AudioContext base latency, ms.',
-  tone_error: 'True if the probe tone raised an error on playback.',
+  tone_error:
+    'True if playback of this tone raised an error (slot_tone_events.error). In probes.csv: the probe tone.',
+  serial_position_overall:
+    '1-based ordinal of the stimulus among ALL visible stimuli of the trial, in presentation order: dual trials (i_d, i_t) 1-6 (dots or tones and stars mixed; the first star may be 4th), single-task and imagery-only trials 1-3 (placeholders do not count). Empty for placeholders.',
+  serial_position_in_modality:
+    '1-based number among the three items of its own kind (dots, tones or stars), 1-3. In stars.csv this equals `star_serial_position`.',
+  slot_in_stream:
+    'Slot in the six-slot encoding stream, 1-6, 1-based (planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`.',
+  test_position:
+    '1-based (1-3) position of the recognition test in the test phase; equals `probe_position`. In events rows: the test position of the target probe that tests this item (empty if no probe tests the item, always empty for stars and placeholders).',
+  target_serial_position_overall:
+    'For a TARGET probe: the encoding serial position (1-based) of the probed item among ALL visible stimuli of the trial (dual 1-6, single 1-3). Empty for foils.',
+  target_serial_position_in_modality:
+    'For a target probe: number (1-3) of the probed item among the three encoded items of its kind. Empty for foils. Equals `encoding_position` for targets.',
+  target_slot_in_stream:
+    'For a target probe: slot (1-6, 1-based) in the six-slot stream of the probed item; join to encoding_events.csv on (participant_id, trial_seq_session, slot_in_stream). Empty for foils.',
+  target_event_key:
+    'For a target probe: "participant_id|trial_seq_session|slot_in_stream" of the encoding event that this probe tests (the key of encoding_events.csv). Empty for foils.',
+  slot_plan_kind:
+    'M (memory-item slot) or S (star slot) as planned in the trial sequence. In single-task trials the other kind of slot holds an invisible placeholder.',
+  event_modality:
+    'What the slot shows: dot, tone, star, or placeholder (an invisible open square: nothing is presented).',
+  is_visible_stimulus: 'False for placeholders. Only visible stimuli have a serial position.',
+  n_visible_stimuli: 'Number of visible stimuli in the trial: 6 in dual trials, 3 otherwise.',
+  placeholder_cell:
+    'Cell (0-based id) of the invisible placeholder in this slot; empty for stimuli. Not a stimulus location.',
+  stimulus_rotation_deg:
+    'Rotation of the grid (degrees, clockwise positive) at which the dot or star was drawn. Stars: star_frame_rotation_deg of the star row, else the trial angle. Dots: the trial angle (not logged per dot; position_matches_runtime checks the drawn position). Empty for tones and placeholders.',
+  position_frame:
+    'Frame of x_mm / y_mm: rotated_screen (dots and stars: position after the grid rotation, mm from fixation) or none (tone: no screen position, x_mm / y_mm empty; the upright cell position is cell_x_mm / cell_y_mm) or invisible (placeholder, empty).',
+  onset_ms:
+    'Onset of the slot relative to encoding onset, ms. Source in `onset_source`: tones are the PLANNED onset (the tone is scheduled ahead on the audio clock; the actual onset is not recorded), dots and placeholders the animation-frame time of drawing, stars the onset logged on the star row.',
+  onset_source:
+    'tone_planned (planned onset of the scheduled tone), star_row_frame (onset of the star row), or slot_frame (frame timestamp of the slot in slot_onsets_ts_ms).',
+  onset_gap_ms:
+    'onset_ms minus onset_ms of the previous slot (slot_in_stream - 1, placeholders included), ms. Empty for slot 1 and where an onset is missing.',
+  tone_planned_onset_ms:
+    'Planned onset of the tone relative to encoding onset, ms (slot_tone_events.planned_ts_ms). Tones only.',
+  tone_scheduled_onset_ms:
+    'Onset scheduled on the AudioContext clock converted to the performance clock, relative to encoding onset, ms (scheduled_onset_perf_ms). Empty when the browser gave no timing. This is the best available estimate of the real tone onset; the real onset is not measured.',
+  tone_event_recorded: 'True if the runtime wrote a tone event for this slot. Tones only.',
+  tone_late:
+    'True if the tone was scheduled after its planned onset (slot_tone_events.late). Tones only.',
+  tone_late_ms: 'How late the tone was scheduled, ms (slot_tone_events.late_ms). Tones only.',
+  tested_later:
+    'For dots and tones: True if one of the three recognition tests is a TARGET probe of this item, False if no test probes it (the three tests are a mix of targets and foils, so some items are never tested). Empty for stars and placeholders and when no probes were planned.',
+  test_probe_type: 'T_on, T_off, F_on or F_off of the target probe that tests this item.',
+  test_row_recorded: 'False if the planned test has no row in the data.',
+  test_responded: 'True if the test of this item was answered.',
+  test_said_yes: 'True if the participant answered yes to the test of this item.',
+  test_correct: 'True if the test of this item (a target) was answered correctly, i.e. yes.',
+  test_rt_ms: 'Response time of the test of this item, ms from test onset.',
+  test_excluded_anticipatory: 'True if test_rt_ms < 250.',
+  star_row_recorded: 'False if the planned star has no row in the data.',
+  star_responded: 'True if a valid key was pressed in the star window.',
+  star_said_on: 'True if the participant answered on-pattern.',
+  star_rt_ms: 'Star response time, ms from star onset.',
+  star_response_key: 'Key pressed for the star.',
+  star_excluded_anticipatory: 'True if star_rt_ms < 250.',
+  star_displayed: 'True if the star was drawn.',
+  star_truncated: 'True if the star window was cut short when the node ended.',
+  star_window_closed_ms:
+    'Time the star window closed relative to encoding onset, ms (same as window_closed_ms in stars.csv).',
 };
 
 /* ---------------- builders ---------------- */
@@ -543,6 +710,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
   const trials = [];
   const stars = [];
   const probes = [];
+  const events = [];
   const issues = [];
 
   const info = rows.find((r) => r.phase === 'session_info') ?? null;
@@ -649,6 +817,34 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     for (const r of w.stars)
       if (Number.isInteger(r.slot_index_in_seq)) starRowBySlot.set(r.slot_index_in_seq, r);
     const plannedStars = HAS_STARS.has(cond) ? (plan.stars ?? []) : [];
+
+    /* ---- the six-slot encoding stream (what each slot is, from trial_spec) ---- */
+    const memKind = TONE_CONDITIONS.has(cond) ? 'tone' : HAS_PROBES.has(cond) ? 'dot' : null;
+    const memBySlot = new Map((plan.memory_items ?? []).map((m) => [m.slot, m]));
+    const starBySlot = new Map(plannedStars.map((x) => [x.slot, x]));
+    const dummyBySlot = new Map((plan.dummies ?? []).map((d) => [d.slot, d]));
+    const stream = plan.from_spec && typeof sequence === 'string' ? [...sequence] : [];
+    const skeleton = stream.map((ch, slot) => {
+      let modality = 'placeholder';
+      let item = dummyBySlot.get(slot) ?? null;
+      if (ch === 'M' && memKind && memBySlot.has(slot)) {
+        modality = memKind;
+        item = memBySlot.get(slot);
+      } else if (ch === 'S' && starBySlot.has(slot)) {
+        modality = 'star';
+        item = starBySlot.get(slot);
+      }
+      return { slot, ch, modality, item, visible: modality !== 'placeholder' };
+    });
+    let overallRank = 0;
+    const modalityRank = { dot: 0, tone: 0, star: 0 };
+    for (const e of skeleton) {
+      e.overall = e.visible ? ++overallRank : null;
+      e.inModality = e.visible ? ++modalityRank[e.modality] : null;
+    }
+    const nVisible = overallRank;
+    const skelBySlot = new Map(skeleton.map((e) => [e.slot, e]));
+
     const starRecords = plannedStars.map((ps, i) => {
       const row = starRowBySlot.get(ps.slot) ?? null;
       const g = geom.cell(ps.cell);
@@ -658,6 +854,11 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       const rec = {
         ...base,
         star_serial_position: Number.isInteger(ps.probe_position) ? ps.probe_position + 1 : i + 1,
+        serial_position_overall: skelBySlot.get(ps.slot)?.overall ?? null,
+        serial_position_in_modality: Number.isInteger(ps.probe_position)
+          ? ps.probe_position + 1
+          : i + 1,
+        slot_in_stream: ps.slot + 1,
         slot: ps.slot + 1,
         cell: ps.cell,
         cell_row: g?.row ?? null,
@@ -775,6 +976,11 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         radius_cells: g?.radius_cells ?? null,
         encoding_position: Number.isInteger(pp.encoding_position) ? pp.encoding_position + 1 : null,
         target_slot: null,
+        test_position: pp.probe_position + 1,
+        target_serial_position_overall: null,
+        target_serial_position_in_modality: null,
+        target_slot_in_stream: null,
+        target_event_key: null,
         row_recorded: row !== null,
         responded,
         said_yes: row ? (row.said_yes ?? null) : null,
@@ -815,6 +1021,11 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         const own = items.findIndex((m) => m.cell === pp.cell);
         if (own >= 0) {
           rec.target_slot = items[own].slot + 1;
+          const sk = skelBySlot.get(items[own].slot);
+          rec.target_slot_in_stream = items[own].slot + 1;
+          rec.target_serial_position_overall = sk?.overall ?? null;
+          rec.target_serial_position_in_modality = sk?.inModality ?? null;
+          rec.target_event_key = `${participantId}|${seqNo}|${items[own].slot + 1}`;
           if (!isTone) rec.own_enc_dist_mm = r3(dist(pos, itemScreen[own]));
         }
       }
@@ -839,6 +1050,139 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       p.rotation_deg = rotation;
       probes.push(p);
     });
+
+    /* ---- events: one row per slot of the encoding stream ---- */
+    const slotOnsets = Array.isArray(enc?.slot_onsets_ts_ms) ? enc.slot_onsets_ts_ms : [];
+    const starRecBySlot = new Map(starRecords.map((x) => [x.slot_in_stream - 1, x]));
+    const onsetOf = (e) => {
+      if (e.modality === 'star') {
+        const sr = starRecBySlot.get(e.slot);
+        if (sr?.star_onset_ms !== null && sr?.star_onset_ms !== undefined) return sr.star_onset_ms;
+      }
+      return rel(slotOnsets[e.slot], t0);
+    };
+    const onsets = skeleton.map(onsetOf);
+    for (const e of skeleton) {
+      const it = e.item;
+      const memItem = e.modality === 'dot' || e.modality === 'tone';
+      const g = e.visible ? geom.cell(it.cell) : null;
+      const pos =
+        e.modality === 'dot' || e.modality === 'star'
+          ? geom.screen(it.cell, rotation ?? 0)
+          : { x_mm: null, y_mm: null };
+      const sr = e.modality === 'star' ? (starRecBySlot.get(e.slot) ?? null) : null;
+      const te = e.modality === 'tone' ? (toneEvents.find((x) => x.slot === e.slot) ?? null) : null;
+      const pr = memItem
+        ? (probeRecords.find(
+            (x) => x.is_target === true && x.target_slot_in_stream === e.slot + 1
+          ) ?? null)
+        : null;
+      const runtimePos = Array.isArray(enc?.slot_positions_mm)
+        ? enc.slot_positions_mm.find((x) => x.slot === e.slot)
+        : null;
+      const label = e.visible ? (it.pattern_label ?? g?.pattern_label ?? null) : null;
+      const inModalityLabel = memItem
+        ? it.encoding_position
+        : e.modality === 'star'
+          ? it.probe_position
+          : null;
+      if (Number.isInteger(inModalityLabel) && inModalityLabel + 1 !== e.inModality) {
+        issues.push({
+          participant_id: participantId,
+          trial_seq_session: seqNo,
+          issue: 'serial_position_in_modality_label_mismatch',
+        });
+      }
+      const tone = e.modality === 'tone' ? toneForCell(it.cell) : null;
+      const tested = memItem && plannedProbes.length > 0 ? pr !== null : null;
+      events.push({
+        ...base,
+        slot_in_stream: e.slot + 1,
+        slot_plan_kind: e.ch,
+        event_modality: e.modality,
+        is_visible_stimulus: e.visible,
+        serial_position_overall: e.overall,
+        serial_position_in_modality: e.inModality,
+        n_visible_stimuli: nVisible,
+        cell: e.visible ? it.cell : null,
+        placeholder_cell: e.visible ? null : (it?.cell ?? null),
+        cell_row: g?.row ?? null,
+        cell_col: g?.col ?? null,
+        cell_x_mm: g?.x_mm ?? null,
+        cell_y_mm: g?.y_mm ?? null,
+        stimulus_rotation_deg:
+          e.modality === 'star'
+            ? Number.isFinite(starRowBySlot.get(e.slot)?.star_frame_rotation_deg)
+              ? starRowBySlot.get(e.slot).star_frame_rotation_deg
+              : rotation
+            : e.modality === 'dot'
+              ? rotation
+              : null,
+        position_frame:
+          e.modality === 'dot' || e.modality === 'star'
+            ? 'rotated_screen'
+            : e.modality === 'tone'
+              ? 'none'
+              : 'invisible',
+        x_mm: pos.x_mm,
+        y_mm: pos.y_mm,
+        radius_mm: g?.radius_mm ?? null,
+        radius_cells: g?.radius_cells ?? null,
+        pattern_label: label,
+        is_on_pattern: e.visible ? label === 'on' : null,
+        tone_index: tone?.index ?? null,
+        tone_freq_hz: tone?.freq_hz ?? null,
+        onset_ms: onsets[e.slot],
+        onset_source:
+          e.modality === 'tone'
+            ? 'tone_planned'
+            : e.modality === 'star' && sr?.star_onset_ms !== null && sr?.star_onset_ms !== undefined
+              ? 'star_row_frame'
+              : 'slot_frame',
+        onset_gap_ms:
+          e.slot > 0 && onsets[e.slot] !== null && onsets[e.slot - 1] !== null
+            ? onsets[e.slot] - onsets[e.slot - 1]
+            : null,
+        tone_planned_onset_ms: te ? rel(te.planned_ts_ms, t0) : null,
+        tone_scheduled_onset_ms: te ? rel(te.scheduled_onset_perf_ms, t0) : null,
+        tone_event_recorded: e.modality === 'tone' ? te !== null : null,
+        tone_late: te && typeof te.late === 'boolean' ? te.late : null,
+        tone_late_ms: te && Number.isFinite(te.late_ms) ? te.late_ms : null,
+        tone_error: te
+          ? (te.error !== null && te.error !== undefined) || te.tone_error === true
+          : null,
+        tested_later: tested,
+        test_position: pr ? pr.test_position : null,
+        test_probe_type: pr ? pr.probe_type : null,
+        test_row_recorded: pr ? pr.row_recorded : null,
+        test_responded: pr ? pr.responded : null,
+        test_said_yes: pr ? pr.said_yes : null,
+        test_correct: pr ? pr.probe_correct : null,
+        test_rt_ms: pr ? pr.rt_ms : null,
+        test_excluded_anticipatory: pr ? pr.excluded_anticipatory : null,
+        star_row_recorded: sr ? sr.row_recorded : null,
+        star_responded: sr ? sr.responded : null,
+        star_said_on: sr ? sr.said_on : null,
+        star_correct: sr ? sr.star_correct : null,
+        star_rt_ms: sr ? sr.rt_ms : null,
+        star_response_key: sr ? sr.response_key : null,
+        star_excluded_anticipatory: sr ? sr.excluded_anticipatory : null,
+        star_onset_lag_ms: sr ? sr.star_onset_lag_ms : null,
+        star_window_closed_ms: sr ? sr.window_closed_ms : null,
+        star_displayed: sr ? sr.displayed : null,
+        star_truncated: sr ? sr.truncated : null,
+        position_matches_runtime:
+          (e.modality === 'dot' || e.modality === 'star') &&
+          Number.isFinite(runtimePos?.x_mm) &&
+          pos.x_mm !== null
+            ? Math.abs(runtimePos.x_mm - pos.x_mm) < 0.01 &&
+              Math.abs(runtimePos.y_mm - pos.y_mm) < 0.01
+            : null,
+        trial_star_excluded: trialStarExcluded,
+        px_per_mm: session.px_per_mm,
+        build_id: session.build_id,
+      });
+    }
 
     const cnt = (arr, f) => arr.filter(f).length;
     trials.push({
@@ -894,7 +1238,11 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       key_log_overflow: enc?.key_log_overflow ?? null,
       key_log_t0_offset_ms: rel(enc?.key_log_t0_ms, t0),
       n_tones_late: enc ? toneEvents.filter((e) => e.late === true).length : null,
-      n_tone_errors: enc ? toneEvents.filter((e) => e.tone_error === true).length : null,
+      n_tone_errors: enc
+        ? toneEvents.filter(
+            (e) => (e.error !== null && e.error !== undefined) || e.tone_error === true
+          ).length
+        : null,
       ...session,
     });
     if (plannedStars.length === 0 && w.stars.length > 0) {
@@ -906,16 +1254,17 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     }
   });
 
-  return { trials, stars, probes, issues };
+  return { trials, stars, probes, events, issues };
 }
 
 export function composeTidyTables(perParticipant) {
-  const out = { trials: [], stars: [], probes: [], issues: [] };
+  const out = { trials: [], stars: [], probes: [], events: [], issues: [] };
   for (const p of perParticipant) {
     const t = buildTidyForParticipant(p.participant_id, p.rows ?? [], p.session ?? {});
     out.trials.push(...t.trials);
     out.stars.push(...t.stars);
     out.probes.push(...t.probes);
+    out.events.push(...t.events);
     out.issues.push(...t.issues);
   }
   return out;
@@ -937,10 +1286,36 @@ export const TIDY_KEYS = {
   trials: ['participant_id', 'trial_seq_session'],
   stars: ['participant_id', 'trial_seq_session', 'star_serial_position'],
   probes: ['participant_id', 'trial_seq_session', 'probe_position'],
+  events: ['participant_id', 'trial_seq_session', 'slot_in_stream'],
+};
+
+/** File written for each table by scripts/csv-export.js. */
+export const TIDY_FILES = {
+  trials: 'trials.csv',
+  stars: 'stars.csv',
+  probes: 'probes.csv',
+  events: 'encoding_events.csv',
 };
 
 /* Column types for the schema file. Anything not listed is a string. */
 const INTEGER_COLUMNS = new Set([
+  'serial_position_overall',
+  'serial_position_in_modality',
+  'slot_in_stream',
+  'test_position',
+  'target_serial_position_overall',
+  'target_serial_position_in_modality',
+  'target_slot_in_stream',
+  'n_visible_stimuli',
+  'placeholder_cell',
+  'stimulus_rotation_deg',
+  'onset_ms',
+  'onset_gap_ms',
+  'tone_planned_onset_ms',
+  'tone_scheduled_onset_ms',
+  'test_rt_ms',
+  'star_rt_ms',
+  'star_window_closed_ms',
   'trial_seq_session',
   'attempt',
   'presentation_index',
@@ -1009,6 +1384,7 @@ const INTEGER_COLUMNS = new Set([
   'audio_sample_rate_hz',
 ]);
 const NUMBER_COLUMNS = new Set([
+  'tone_late_ms',
   'px_per_mm',
   'cell_size_mm',
   'cell_x_mm',
@@ -1033,6 +1409,22 @@ const NUMBER_COLUMNS = new Set([
   'audio_base_latency_ms',
 ]);
 const BOOLEAN_COLUMNS = new Set([
+  'is_visible_stimulus',
+  'tone_event_recorded',
+  'tone_late',
+  'tested_later',
+  'test_row_recorded',
+  'test_responded',
+  'test_said_yes',
+  'test_correct',
+  'test_excluded_anticipatory',
+  'star_row_recorded',
+  'star_responded',
+  'star_said_on',
+  'star_correct',
+  'star_excluded_anticipatory',
+  'star_displayed',
+  'star_truncated',
   'is_practice',
   'pattern_phase_before_trial',
   'pattern_reminder',
@@ -1082,12 +1474,13 @@ export function buildTidySchema() {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: 'Tidy tables - WM x Imagery follow-up experiment',
     description:
-      'Rows of trials.csv, stars.csv and probes.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid.',
+      'Rows of trials.csv, stars.csv, probes.csv and encoding_events.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid. Serial position = ordinal among ALL visible stimuli of the trial (dual 1-6, single-task 1-3, 1-based); slot_in_stream = slot in the six-slot encoding stream including invisible placeholders (1-6); test position = order of the recognition tests. Every position-like column is 1-based except cell, tone_index and block_position/pool_index (0-based), as stated in each column description.',
     version: TIDY_VERSION,
     $defs: {
       trial: table('trial row', TRIALS_COLUMNS, TIDY_KEYS.trials),
       star: table('star row', STARS_COLUMNS, TIDY_KEYS.stars),
       probe: table('probe row', PROBES_COLUMNS, TIDY_KEYS.probes),
+      event: table('event row', EVENTS_COLUMNS, TIDY_KEYS.events),
     },
   };
 }

@@ -183,9 +183,26 @@ export function getRecentRows() {
   return recentRows.slice();
 }
 
+/* A write that fails (a transient IndexedDB abort, a momentary quota error) is
+ * tried again, so one hiccup does not remove a row from the data: uploads read
+ * storage, not jsPsych's in-memory copy. The first attempt starts synchronously,
+ * so rows still reach the backend in the order they were produced. */
+const WRITE_RETRY_DELAYS_MS = [25, 150];
+
+async function writeWithRetry(backend, full) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await backend.appendTrialRow(full);
+    } catch (err) {
+      if (attempt >= WRITE_RETRY_DELAYS_MS.length) throw err;
+      await new Promise((resolve) => setTimeout(resolve, WRITE_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 export async function appendTrialRow(row) {
   const full = { run_id: RUN_ID, wall_ms: Date.now(), ...row };
-  const write = require_active().appendTrialRow(full);
+  const write = writeWithRetry(require_active(), full);
   pendingWrites.add(write);
   const settled = () => pendingWrites.delete(write);
   write.then(settled, settled);

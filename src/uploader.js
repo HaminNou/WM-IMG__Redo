@@ -628,6 +628,7 @@ export async function uploadConsentAndPractice({ session, signal } = {}) {
     return { uploaded: [], failed: 'no_endpoint' };
   }
 
+  await flushPendingWrites();
   const allRows = currentRunRows(await getAllTrialRows());
   const partitioned = partitionRowsIntoBuckets(allRows);
   const targetIds = new Set(['consent_demographics', 'practice']);
@@ -721,6 +722,7 @@ export async function uploadCheckpoint({
   if (isUploaderUnprovisioned({ url, provider, uploadKey: resolvedUploadKey })) {
     return { status: 'no_endpoint' };
   }
+  await flushPendingWrites();
   const rows = currentRunRows(await getAllTrialRows()).filter((r) => r.seq > checkpointCursor);
   if (rows.length === 0) return { status: 'nothing' };
   let sent = 0;
@@ -1054,6 +1056,8 @@ export async function uploadPendingData({
       lastError: null,
     };
   }
+  /* Rows still being written (the last probe of the last trial) must be in the read below. */
+  await flushPendingWrites();
   const cursor = await getUploadCursor();
   /* The recovery page (`allRuns`) sends whatever is pending in any run; each
    * run has its own cursor. */

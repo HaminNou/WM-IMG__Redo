@@ -1245,8 +1245,8 @@ describe('composeExport', () => {
     const { files, manifest } = composeExport(perParticipant, {
       generatedAtIso: '2000-01-01T11:00:00Z',
     });
-    /* 5 trial types × 2 criteria + 9 auxiliary files + 3 tidy tables = 22 entries. */
-    expect(Object.keys(files)).toHaveLength(22);
+    /* 5 trial types × 2 criteria + 9 auxiliary files + 4 tidy tables = 23 entries. */
+    expect(Object.keys(files)).toHaveLength(23);
     expect(files['D_ONLY_Criterion1.csv']).toContain(
       '"Participant_ID","Block","Trial_Type","Trial"'
     );
