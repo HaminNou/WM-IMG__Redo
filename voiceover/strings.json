@@ -208,10 +208,6 @@
     "source": "demos.caption62"
   },
   {
-    "text": "Would you like to watch the demonstration again? (you can watch up to 3 more times) Click the button below to watch it again.",
-    "source": "demos.caption58"
-  },
-  {
     "text": "A few more things to know. You will have 3 seconds for each star. Try to get it right rather than answer quickly, but please don't take too long either. If you answer in time, the star can turn green if you were correct, or red if you were not. This colour change happens while the star is still on the screen, so you can learn from each star. Be honest about what you actually see in your mind. If your picture is fuzzy, just do your best — there is no expectation of a perfect mental picture. When you're ready, press Space to start the practice for Task 3.",
     "source": "imagery.iOnlyInstructionNode.page3#0:script"
   },
@@ -580,6 +576,10 @@
     "source": "imagery.iOnlyInstructionNode.page3#0:script"
   },
   {
+    "text": "Then 6 things happen one at a time, mixed together. 3 stars inside the circle – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And 3 tones – remember each tone you hear, for the tone tests at the end of the trial. Respond to each star as fast and as accurately as you can.",
+    "source": "dual.iTInstructionNode.page1#0:script"
+  },
+  {
     "text": "Star 3 — judge it against your turned pattern.",
     "source": "demos.caption45"
   },
@@ -628,6 +628,10 @@
     "source": "runner-intros.endOfTaskIntroNode.stimulus#0"
   },
   {
+    "text": "Respond to each star as fast and as accurately as you can. You have 3 seconds for each star. If you answer in time, the star turns green for correct or red for incorrect while it is still on screen. Be honest about your mental picture – if it's fuzzy, just do your best. Keep your eyes on the small bull's-eye in the center of the circle throughout the trial.",
+    "source": "imagery.iOnlyInstructionNode.page3#0:script"
+  },
+  {
     "text": "Please try to be as accurate as you can during the practice trials. To start each trial, press the Left and Right arrow keys at the same time . A reminder is shown at the bottom of the screen.",
     "source": "instructions.practiceReadinessNode.stimulus#0"
   },
@@ -650,6 +654,10 @@
   {
     "text": "Then 3 bright stars will flash inside the circle, one at a time. For each star, decide whether it lands in a location that would be covered by the rotated pattern you are picturing. Press On-pattern if the star falls on your pictured pattern. Press Not on-pattern if it does not.",
     "source": "imagery.iOnlyInstructionNode.page2#0:script"
+  },
+  {
+    "text": "Then 6 things appear inside the circle one at a time, mixed together. 3 stars – for each star, press On-pattern, the right arrow, if it lands on your rotated pattern, or Not on-pattern, the left arrow, if it does not. And 3 dots – remember which locations they appear in, for the dot tests at the end of the trial. Respond to each star as fast and as accurately as you can.",
+    "source": "dual.iDInstructionNode.page1#0:script"
   },
   {
     "text": "Last block. 60 more trials, same controls, with 30-second rests after trials 20 and 40. Press Space to begin Block 2.",
