@@ -256,14 +256,23 @@ describe('parseExportArgs', () => {
 /* ---------- Pure helpers ---------- */
 
 describe('cellToRowCol', () => {
-  it('maps cell index 0 to [0, 0] (top-left)', () => {
-    expect(cellToRowCol(0)).toEqual([0, 0]);
+  /* 1-based [row, col] since tidy 1.2.0; the cell id itself stays 0-24 (0-based identifier) */
+  it('maps cell id 0 to [1, 1] (top-left)', () => {
+    expect(cellToRowCol(0)).toEqual([1, 1]);
   });
-  it('maps cell index 12 to [2, 2] (centre of the 5x5)', () => {
-    expect(cellToRowCol(12)).toEqual([2, 2]);
+  it('maps cell id 12 to [3, 3] (centre of the 5x5)', () => {
+    expect(cellToRowCol(12)).toEqual([3, 3]);
   });
-  it('maps cell index 24 to [4, 4] (bottom-right)', () => {
-    expect(cellToRowCol(24)).toEqual([4, 4]);
+  it('maps cell id 24 to [5, 5] (bottom-right)', () => {
+    expect(cellToRowCol(24)).toEqual([5, 5]);
+  });
+  it('inverts as id = (row - 1) * 5 + (col - 1) for all 25 cells', () => {
+    for (let id = 0; id < 25; id++) {
+      const [r, c] = cellToRowCol(id);
+      expect(r).toBeGreaterThanOrEqual(1);
+      expect(c).toBeLessThanOrEqual(5);
+      expect((r - 1) * 5 + (c - 1)).toBe(id);
+    }
   });
   it('returns null for out-of-range or non-integer input', () => {
     expect(cellToRowCol(-1)).toBeNull();
@@ -279,7 +288,7 @@ describe('formatCell', () => {
     expect(formatCell([1, 2])).toBe('[1, 2]');
   });
   it('accepts a raw cell index', () => {
-    expect(formatCell(12)).toBe('[2, 2]');
+    expect(formatCell(12)).toBe('[3, 3]');
   });
   it('returns NA for null / undefined / invalid', () => {
     expect(formatCell(null)).toBe('NA');
@@ -542,12 +551,12 @@ describe('buildWideRowDOnly', () => {
     expect(row.Participant_ID).toBe('P1');
     expect(row.Block).toBe('main_a');
     expect(row.Trial).toBe(1);
-    expect(row.Dot_1_Cell).toBe('[1, 1]');
+    expect(row.Dot_1_Cell).toBe('[2, 2]');
     expect(row.Dot_1_CellTY).toBe(1);
-    expect(row.Dot_3_Cell).toBe('[1, 2]');
+    expect(row.Dot_3_Cell).toBe('[2, 3]');
     expect(row.Dot_3_CellTY).toBe(0);
     expect(row.Qmark_1_Type).toBe(1);
-    expect(row.Qmark_1_Cell).toBe('[1, 1]');
+    expect(row.Qmark_1_Cell).toBe('[2, 2]');
     expect(row.Qmark_1_Res).toBe(1);
     expect(row.Qmark_1_ResVA).toBe(1);
     expect(row.Qmark_1_RecTI).toBe(800);
@@ -636,7 +645,7 @@ describe('buildWideRowTOnly', () => {
     expect(row.Tone_1_ToneFreqHz).toBe(311.13);
     expect(row.Qmark_1_ToneIdx).toBe(5);
     expect(row.Qmark_1_ToneFreqHz).toBe(311.13);
-    expect(row.Qmark_1_Cell).toBe('[1, 1]');
+    expect(row.Qmark_1_Cell).toBe('[2, 2]');
   });
 });
 
@@ -690,7 +699,7 @@ describe('buildWideRowIOnly', () => {
     const row = buildWideRowIOnly(group, 1, sessionMeta());
     expect(row.Rotation_Deg).toBe(-45);
     expect(row.Dummy_Mode).toBeUndefined();
-    expect(row.Ast_1_Cell).toBe('[1, 1]');
+    expect(row.Ast_1_Cell).toBe('[2, 2]');
     expect(row.Ast_1_CellTY).toBe(1);
     expect(row.Ast_1_RecTI).toBe(700);
     expect(row.Ast_2_RecTI_1).toBe('NA'); /* RT < 250 */
@@ -703,7 +712,7 @@ describe('buildWideRowIOnly', () => {
 });
 
 describe('buildWideRowID and buildWideRowIT', () => {
-  it('I+D row contains both Ast_* and Qmark_* with EncPos passthrough', () => {
+  it('I+D row contains both Ast_* and Qmark_* with 1-based EncPos and SlotN', () => {
     const encoding = {
       phase: 'i_d_encoding',
       block_label: 'main_a',
@@ -760,14 +769,16 @@ describe('buildWideRowID and buildWideRowIT', () => {
     };
     const row = buildWideRowID(group, 1, sessionMeta());
     expect(row.Rotation_Deg).toBe(90);
-    expect(row.Dot_1_Cell).toBe('[1, 1]');
+    expect(row.Dot_1_Cell).toBe('[2, 2]');
     expect(row.Dot_1_OrderN).toBe(1);
-    expect(row.Ast_1_SlotN).toBe(1);
-    expect(row.Ast_1_Cell).toBe('[1, 2]');
+    /* the star of slot_index_in_seq 1 is in slot 2 of the six-slot stream (1-based) */
+    expect(row.Ast_1_SlotN).toBe(2);
+    expect(row.Ast_1_Cell).toBe('[2, 3]');
     expect(row.Ast_1_RecTI).toBe(950);
-    expect(row.Qmark_1_Cell).toBe('[1, 1]');
+    expect(row.Qmark_1_Cell).toBe('[2, 2]');
     expect(row.Qmark_1_Type).toBe(1);
-    expect(row.Qmark_1_EncPos).toBe(1);
+    /* raw encoding_position 1 (the second memory item) is exported as 2 */
+    expect(row.Qmark_1_EncPos).toBe(2);
   });
 
   it('I+T row carries tone columns on both Tone_ and Qmark_ groups', () => {
@@ -818,7 +829,8 @@ describe('buildWideRowID and buildWideRowIT', () => {
     const row = buildWideRowIT(group, 1, sessionMeta());
     expect(row.Tone_1_ToneIdx).toBe(5);
     expect(row.Qmark_1_ToneIdx).toBe(5);
-    expect(row.Qmark_1_EncPos).toBe(1);
+    expect(row.Qmark_1_EncPos).toBe(2);
+    /* tone_index is a 0-based identifier: unchanged */
   });
 });
 
@@ -1290,8 +1302,8 @@ describe('composeExport', () => {
     /* But the body up to "Qmark_2_RecTI_1" should match. We can't easily
      * isolate that without parsing — instead, verify the trial-level columns
      * by checking the Cell columns appear in both. */
-    expect(c1Lines[1]).toContain('"[1, 1]"'); /* Dot_1_Cell */
-    expect(c2Lines[1]).toContain('"[1, 1]"');
+    expect(c1Lines[1]).toContain('"[2, 2]"'); /* Dot_1_Cell: cell id 6 = row 2, col 2 (1-based) */
+    expect(c2Lines[1]).toContain('"[2, 2]"');
   });
 });
 
@@ -1730,7 +1742,7 @@ describe('EVENTS.csv and wide files: new fields', () => {
     expect(field(probeLine, 'Tone_Error')).toBe('0');
   });
 
-  it('D_ONLY and T_ONLY wide files carry the probe encoding position', () => {
+  it('D_ONLY and T_ONLY wide files carry the probe encoding position, 1-based', () => {
     expect(COLUMNS_D_ONLY).toContain('Qmark_3_EncPos');
     expect(COLUMNS_T_ONLY).toContain('Qmark_3_EncPos');
     const row = buildWideRowDOnly(
@@ -1746,7 +1758,8 @@ describe('EVENTS.csv and wide files: new fields', () => {
       1,
       sessionMeta()
     );
-    expect(row.Qmark_1_EncPos).toBe(0);
+    /* raw encoding_position 0 (first memory item) is exported as 1 */
+    expect(row.Qmark_1_EncPos).toBe(1);
     expect(row.Qmark_2_EncPos).toBe('NA');
   });
 });

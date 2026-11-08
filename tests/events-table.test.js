@@ -160,7 +160,7 @@ describe('events table: structure', () => {
   const byTrial = () => groupBy(tidy.events, trialKey);
 
   it('has 6 rows per trial, slots 1-6, unique keys, and the declared version', () => {
-    expect(TIDY_VERSION).toBe('1.1.0');
+    expect(TIDY_VERSION).toBe('1.2.0');
     expect(tidy.events).toHaveLength(tidy.trials.length * 6);
     for (const t of tidy.trials) {
       const ev = byTrial().get(trialKey(t));
@@ -553,7 +553,7 @@ describe('export: files, schema and EVENTS.csv companions', () => {
     expect(rows.length - 1).toBe(tidy.events.length + (rows.at(-1).length === 1 ? -1 : 0));
   });
 
-  it('EVENTS.csv keeps its 0-based Encoding_Position and gains 1-based companions', () => {
+  it('EVENTS.csv: Encoding_Position and every companion are 1-based, timing columns match the tidy table', () => {
     const [header, ...body] = parseCsv(exported.files['EVENTS.csv']).filter((r) => r.length > 1);
     const col = (r, name) => r[header.indexOf(name)];
     expect(header).toEqual(
@@ -565,9 +565,9 @@ describe('export: files, schema and EVENTS.csv companions', () => {
       ])
     );
     /* EVENTS.csv is sorted by trial type, the tidy tables by session order: join on the
-     * trial (Participant_ID, Block, Trial_Type, Trial = pool index + 1) and the slot. */
+     * trial (Participant_ID, Block, Trial_Type, Trial = pool_index, 1-based in both) and the slot. */
     const evKey = (e) =>
-      `${e.participant_id}|${e.block_label}|${e.condition}|${e.pool_index + 1}|${e.slot_in_stream}`;
+      `${e.participant_id}|${e.block_label}|${e.condition}|${e.pool_index}|${e.slot_in_stream}`;
     const tidyEvents = new Map(tidy.events.map((e) => [evKey(e), e]));
     const enc = body.filter((r) => col(r, 'Phase') === 'encoding');
     expect(enc.length).toBe(tidy.events.length);
@@ -582,7 +582,21 @@ describe('export: files, schema and EVENTS.csv companions', () => {
       const kind = col(r, 'Event_Kind');
       expect(kind === 'dummy_S' ? 'placeholder' : kind).toBe(e.event_modality);
       if (e.event_modality === 'dot' || e.event_modality === 'tone') {
-        expect(Number(col(r, 'Encoding_Position'))).toBe(e.serial_position_in_modality - 1);
+        expect(Number(col(r, 'Encoding_Position'))).toBe(e.serial_position_in_modality);
+      }
+      /* timing columns of every slot (placeholders too) equal the tidy table */
+      for (const [c, k] of [
+        ['Offset_Ms', 'offset_ms'],
+        ['Duration_Ms', 'duration_ms'],
+        ['Planned_Onset_Ms', 'planned_onset_ms'],
+        ['Planned_Offset_Ms', 'planned_offset_ms'],
+        ['Onset_Error_Ms', 'onset_error_ms'],
+        ['Silence_Before_Ms', 'silence_before_ms'],
+        ['Silence_After_Ms', 'silence_after_ms'],
+        ['Offset_Source', 'offset_source'],
+      ]) {
+        const v = col(r, c);
+        expect(v === 'NA' ? null : c === 'Offset_Source' ? v : Number(v), `${c}`).toEqual(e[k]);
       }
       expect(col(r, 'Pos_Frame')).toBe(
         e.event_modality === 'tone'
@@ -593,7 +607,7 @@ describe('export: files, schema and EVENTS.csv companions', () => {
       );
     }
     const probeKey = (p) =>
-      `${p.participant_id}|${p.block_label}|${p.condition}|${p.pool_index + 1}|${p.probe_position}`;
+      `${p.participant_id}|${p.block_label}|${p.condition}|${p.pool_index}|${p.probe_position}`;
     const tidyProbes = new Map(tidy.probes.map((p) => [probeKey(p), p]));
     const rec = body.filter((r) => col(r, 'Phase') === 'recognition');
     expect(rec.length).toBe(tidy.probes.length);
@@ -605,6 +619,8 @@ describe('export: files, schema and EVENTS.csv companions', () => {
       const t = col(r, 'Target_Serial_Position_Overall');
       expect(t === 'NA' ? null : Number(t)).toBe(p.target_serial_position_overall);
       expect(col(r, 'Slot_In_Stream')).toBe('NA');
+      expect(col(r, 'Offset_Ms')).toBe('NA');
+      expect(Number(col(r, 'Encoding_Position'))).toBeGreaterThanOrEqual(1);
     }
   });
 });

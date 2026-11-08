@@ -216,6 +216,7 @@ export function timedResponseWindowNode({
     frame: null,
     response_key: null,
     response_rt_ms: null,
+    response_ts_ms: null,
     onset_ts: null,
     onset_closed: false,
     key_handler: null,
@@ -259,6 +260,7 @@ export function timedResponseWindowNode({
       teardown();
       state.response_key = null;
       state.response_rt_ms = null;
+      state.response_ts_ms = null;
       state.onset_ts = null;
       state.onset_closed = false;
       state.early_keypresses = 0;
@@ -292,6 +294,9 @@ export function timedResponseWindowNode({
         }
         state.response_key = key;
         state.response_rt_ms = Math.max(1, Math.round(elapsedMs));
+        /* The key event's own timestamp (same scale as the onset stamp), so that
+         * response_rt_ms can be re-derived as response_ts_ms - <phase>_onset_ts_ms. */
+        state.response_ts_ms = Math.round(t);
         on_response?.(state.frame, state, key);
       };
       window.addEventListener('keydown', state.key_handler, { capture: true });
@@ -313,6 +318,7 @@ export function timedResponseWindowNode({
       closeOnset();
       trialData.response = state.response_key;
       trialData.rt = state.response_rt_ms;
+      trialData.response_ts_ms = state.response_ts_ms;
       trialData.early_keypresses = state.early_keypresses;
       trialData.late_keypresses = state.late_keypresses;
       trialData.extra_keypresses = state.extra_keypresses;

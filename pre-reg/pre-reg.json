@@ -281,7 +281,7 @@
   "data_record": {
     "schema_path": "schemas/trial.schema.json",
     "claim": "Every per-trial data row written by the runner validates against schemas/trial.schema.json (the per-row JSON Schema). Phase tags listed in the schema's `phase` enum are exhaustive — adding a phase requires editing both the runner emitter and the schema.",
-    "csv_export_compatibility": "Analysis scripts read column conventions from `Ast_*`, `Dot_*`, `Qmark_*` and `Mid_Q_*` prefixes. The CSV export transforms the per-row JSON to those columns; it is not pre-registered (it is a downstream transform of the locked raw record)."
+    "csv_export_compatibility": "Analysis scripts read column conventions from `Ast_*`, `Dot_*`, `Qmark_*` and `Mid_Q_*` prefixes. The CSV export transforms the per-row JSON to those columns; it is not pre-registered (it is a downstream transform of the locked raw record). From tidy-table version 1.2.0 every exported ordinal or position (slot, serial position, test position, encoding position, star number, trial and block numbers, grid row and column) is 1-based; the only 0-based exported values are the identifiers of the grid cell (0-24, centre 12) and of the tone (0-23, rank = tone index + 1), which are the keys used in the locked configuration. The raw record keeps the 0-based values it was written with."
   },
   "instrumentation": {
     "strategy": {

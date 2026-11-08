@@ -77,6 +77,9 @@ export async function runTrial(cond, params, policy = {}) {
     lateStarSkewMs = null,
     abortEncodingAtMs = null,
     spamKeys = false,
+    /* probeRtMs: ms after the loop first sees a probe node that a key is pressed; null = never
+     * (the window times out). probeExtraPressMs: a second press this long after the first. */
+    probeExtraPressMs = null,
   } = policy;
   const added = [];
   const removed = [];
@@ -125,6 +128,9 @@ export async function runTrial(cond, params, policy = {}) {
   let lastStarCount = 0;
   const seenStarAt = new Map();
   const probeSeenAt = new Map();
+  /* What the simulated participant pressed on every probe, with the clock reading at the press
+   * (the oracle that the recorded response times are checked against). */
+  const probePresses = [];
   for (let t = 0; t < 120000 && !done; t += STEP_MS) {
     await vi.advanceTimersByTimeAsync(STEP_MS);
     const now = performance.now();
@@ -167,10 +173,23 @@ export async function runTrial(cond, params, policy = {}) {
       }
     }
     if (phase.endsWith('_probe')) {
-      if (!probeSeenAt.has(trial)) probeSeenAt.set(trial, { t: now, done: false });
+      if (!probeSeenAt.has(trial))
+        probeSeenAt.set(trial, { t: now, done: false, order: probeSeenAt.size });
       const p = probeSeenAt.get(trial);
-      if (!p.done && now - p.t >= probeRtMs) {
+      if (probeRtMs !== null && !p.done && now - p.t >= probeRtMs) {
         p.done = true;
+        p.firstAt = performance.now();
+        probePresses.push({ probe: p.order, t: p.firstAt, key: probeKey });
+        press(probeKey);
+      }
+      if (
+        probeExtraPressMs !== null &&
+        p.done &&
+        !p.extra &&
+        performance.now() - p.firstAt >= probeExtraPressMs
+      ) {
+        p.extra = true;
+        probePresses.push({ probe: p.order, t: performance.now(), key: probeKey });
         press(probeKey);
       }
     }
@@ -180,10 +199,22 @@ export async function runTrial(cond, params, policy = {}) {
   window.removeEventListener = origRemove;
   const rows = jsPsych.data.get().values();
   const unbalanced = added.filter((fn) => !removed.includes(fn)).length;
-  return { rows, unbalancedKeydownListeners: unbalanced, jsPsych, emitPhases };
+  return { rows, unbalancedKeydownListeners: unbalanced, jsPsych, emitPhases, probePresses };
 }
 
 export const REAL_FAKE_TIMERS = FAKE;
+
+/** Trial parameters of the first trials of Main A, by condition, for one seed. */
+export function plannedTrials(seed) {
+  setSessionPRNG(seed);
+  resetSequencePools();
+  const plan = generateMainPlan({});
+  const want = {};
+  plan.mainA.trialParams.forEach((p, i) => {
+    (want[plan.mainA.schedule[i]] ??= []).push(p);
+  });
+  return want;
+}
 
 /**
  * Rows of `perCondition` trials of every condition for one seed, with a

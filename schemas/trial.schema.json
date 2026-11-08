@@ -143,7 +143,7 @@
     "trial_index_in_block": {
       "type": "integer",
       "minimum": 0,
-      "description": "Index of the trial in its condition's 24-trial pool (0-23). It is NOT the order of presentation and it repeats across conditions and across main_a / main_b; identify a trial with `trial_uid`, order trials with `presentation_index`. On `pattern_phase` rows the value is the presentation position in the block of the trial that follows."
+      "description": "RAW value, 0-based: index of the trial in its condition's 24-trial pool (0-23; exported 1-24 as `pool_index` and in the wide files' `Trial`). It is NOT the order of presentation and it repeats across conditions and across main_a / main_b; identify a trial with `trial_uid`, order trials with `presentation_index`. On `pattern_phase` rows the value is the presentation position in the block of the trial that follows."
     },
     "rotation_deg": {
       "type": "number",
@@ -157,13 +157,13 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 2,
-      "description": "Serial position of the probe within the trial's 3-probe sequence (0-indexed)."
+      "description": "RAW value, 0-based: order of this recognition test (or of this star) within the trial's 3 tests (0-2; exported 1-3 as `probe_position` / `test_position`)."
     },
     "encoding_position": {
       "type": ["integer", "null"],
       "minimum": 0,
       "maximum": 2,
-      "description": "Encoding position (0-2) tied to the probe by the scheduler. For a target probe it is the position of the item that was probed. For a foil it is a label only (no item was encoded for it). Present on probe rows of all four memory conditions."
+      "description": "RAW value, 0-based (0-2; exported 1-3): encoding position, among the three memory items of one kind, tied to the probe by the scheduler. For a target probe it is the position of the item that was probed. For a foil it is a label only (no item was encoded for it). Present on probe rows of all four memory conditions."
     },
     "probe_type": {
       "type": "string",
@@ -214,7 +214,11 @@
     },
     "response_rt_ms": {
       "type": ["number", "null"],
-      "description": "Response time in ms relative to stimulus onset (`performance.now()` deltas). Null if no response."
+      "description": "Response time in ms of the FIRST valid key press relative to the onset stamp of the same stimulus (star: `star_onset_ts_ms`; recognition probe: `probe_onset_ts_ms`, written in `rt`), from the key event timestamp, rounded, at least 1. Null if no response (then `responded` is false). `response_ts_ms` is the timestamp of that key press, so the value can be re-derived as `response_ts_ms - <onset stamp>` (+-1 ms rounding)."
+    },
+    "response_ts_ms": {
+      "type": ["integer", "null"],
+      "description": "performance.now() timestamp (rounded ms) of the first valid key press (the key event's own timestamp), on the same scale as `probe_onset_ts_ms` / `star_onset_ts_ms`. Stamped on every recognition-probe row (`*_probe`) and star row (`*_star`); null if the stimulus was not answered. Re-derive the response time as `response_ts_ms - probe_onset_ts_ms` (or `- star_onset_ts_ms`), +-1 ms rounding."
     },
     "probe_correct": {
       "type": "boolean",
@@ -228,7 +232,7 @@
       "type": "integer",
       "minimum": 0,
       "maximum": 5,
-      "description": "Slot index within the trial's 6-slot M/S sequence (0-indexed; design §8.1)."
+      "description": "RAW value, 0-based: slot within the trial's 6-slot M/S sequence (0-5; exported 1-6 as `slot_in_stream`)."
     },
     "pattern_label": {
       "type": "string",
@@ -382,6 +386,43 @@
       },
       "description": "Per-slot performance.now() timestamps (rounded ms) captured at the moment each of the 6 encoding-sequence slots began. Index aligns with `slot_index_in_seq` (0..5). Slots with no event in this trial remain null. Stamped on every `*_encoding` row. For T-only / I+T M-slots the visible event is the tone, but the timestamp still marks the slot's local start (the planned time at which the tone was handed to the audio clock; the measured scheduling is in `slot_tone_events`)."
     },
+    "slot_offsets_ts_ms": {
+      "type": "array",
+      "items": {
+        "type": ["integer", "null"]
+      },
+      "description": "Per-slot OFFSET timestamps (rounded ms) on the same performance.now() scale as `slot_onsets_ts_ms`; index aligns with `slot_index_in_seq` (0..5); placeholders (dummies) included. Dots, stars and placeholders: the animation-frame time of the first frame without the element (source 'frame'), or the time of the removal call ('removal_call') if no frame arrived before the node ended. Tones: the PLANNED onset plus the nominal tone duration (`slot_tone_events[].nominal_duration_ms`; source 'scheduled': scheduled, not measured). Null if the slot's event never happened (aborted trial) or was still running when the node was cut short (source 'aborted'). Stamped on every `*_encoding` row."
+    },
+    "slot_offset_sources": {
+      "type": "array",
+      "items": {
+        "type": ["string", "null"],
+        "enum": ["frame", "removal_call", "scheduled", "aborted", null]
+      },
+      "description": "How each entry of `slot_offsets_ts_ms` was obtained: 'frame', 'removal_call', 'scheduled' (tones: not measured) or 'aborted' (event cut short: offset is null). Null if there is no offset. Same indexing as `slot_offsets_ts_ms`. The onset of a tone in `slot_onsets_ts_ms` is likewise scheduled (planned), not measured."
+    },
+    "slot_planned_onsets_ts_ms": {
+      "type": "array",
+      "items": {
+        "type": ["integer", "null"]
+      },
+      "description": "Planned onset of each slot on the performance.now() scale (the run origin t0 taken in the encoding node plus the planned time: 1500 ms pre-encoding pad, 1500 ms per memory slot, 3500 ms per star slot). Filled for all six slots as soon as the node starts, so it is complete even in an aborted trial. `slot_onsets_ts_ms - slot_planned_onsets_ts_ms` is the onset error (0 for tones, whose recorded onset is the planned one)."
+    },
+    "slot_planned_offsets_ts_ms": {
+      "type": "array",
+      "items": {
+        "type": ["integer", "null"]
+      },
+      "description": "Planned offset of each slot on the same scale: planned onset plus 1000 ms (dot or placeholder in a memory slot), 3000 ms (star or placeholder in a star slot) or 350 ms (tone). The 500 ms after a dot or star and the remaining 1150 ms after a tone are the planned silence before the next slot."
+    },
+    "slot_event_kinds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["dot", "tone", "star", "dummy"]
+      },
+      "description": "What each of the six slots shows, by slot (0..5): 'dot', 'tone', 'star', or 'dummy' (an invisible placeholder that only equalises trial length: nothing is presented). Dummies are not perceptible; the silence between perceptible events includes their intervals."
+    },
     "slot_audio_context_times_ms": {
       "type": "array",
       "items": {
@@ -436,13 +477,13 @@
     "block_position": {
       "type": "integer",
       "minimum": 0,
-      "description": "0-based position of the trial inside its block, in presentation order."
+      "description": "RAW value, 0-based: position of the trial inside its block, in presentation order. The exported tables (tidy 1.2.0) write it 1-based."
     },
     "pool_index": {
       "type": "integer",
       "minimum": 0,
       "maximum": 23,
-      "description": "Same value as `trial_index_in_block` (index in the condition's 24-trial pool); stamped under an unambiguous name."
+      "description": "Same RAW value as `trial_index_in_block` (0-based index in the condition's 24-trial pool; exported 1-based); stamped under an unambiguous name."
     },
     "pattern_reminder": {
       "type": "boolean",
@@ -474,7 +515,7 @@
     },
     "trial_spec": {
       "type": "object",
-      "description": "Plan of the whole trial as drawn by the scheduler, stamped on the encoding row: condition, rotation_deg (imagery conditions, else null), display_rotation_deg (d_only, else null), sequence, memory_items [{slot, encoding_position, cell, pattern_label}], stars [{slot, probe_position, cell, pattern_label}], dummies [{slot, cell}] (placeholders; never visible) and probes [{probe_position, encoding_position, type, cell, is_target, pattern_label}]. Slots are 0-based. The exporter reads it so that a star or probe row that was not recorded can still be listed."
+      "description": "Plan of the whole trial as drawn by the scheduler, stamped on the encoding row: condition, rotation_deg (imagery conditions, else null), display_rotation_deg (d_only, else null), sequence, memory_items [{slot, encoding_position, cell, pattern_label}], stars [{slot, probe_position, cell, pattern_label}], dummies [{slot, cell}] (placeholders; never visible) and probes [{probe_position, encoding_position, type, cell, is_target, pattern_label}]. Slots, probe_position and encoding_position are RAW 0-based values (the exported tables add 1). The exporter reads it so that a star or probe row that was not recorded can still be listed."
     },
     "probe_frame_rotation_deg": {
       "type": "number",
@@ -1173,7 +1214,7 @@
     },
     "slot_tone_events": {
       "type": "array",
-      "description": "Encoding row: one entry per tone: slot, cell, tone_index, `planned_ts_ms`, `perf_at_schedule_ms` and `ac_time_at_schedule_ms` (both clocks when the tone was scheduled), `when_ms` (scheduled start on the audio clock), `scheduled_onset_perf_ms` (time on the performance.now() scale at which the device is expected to emit the tone, from the context's output timestamp, so it includes the output delay; null if the browser gives no clock pairing), `late` and `late_ms` (scheduling came after the planned onset, and by how much), `error` (message if playing failed, else null)."
+      "description": "Encoding row: one entry per tone: slot, cell, tone_index, `planned_ts_ms`, `perf_at_schedule_ms` and `ac_time_at_schedule_ms` (both clocks when the tone was scheduled), `when_ms` (scheduled start on the audio clock), `scheduled_onset_perf_ms` (time on the performance.now() scale at which the device is expected to emit the tone, from the context's output timestamp, so it includes the output delay; null if the browser gives no clock pairing), `nominal_duration_ms` (350) and `scheduled_offset_perf_ms` (scheduled onset plus nominal duration; null if there is no scheduled onset), `late` and `late_ms` (scheduling came after the planned onset, and by how much), `error` (message if playing failed, else null)."
     },
     "tone_error": {
       "type": "boolean",

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Tidy tables - WM x Imagery follow-up experiment",
-  "description": "Rows of trials.csv, stars.csv, probes.csv and encoding_events.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid. Serial position = ordinal among ALL visible stimuli of the trial (dual 1-6, single-task 1-3, 1-based); slot_in_stream = slot in the six-slot encoding stream including invisible placeholders (1-6); test position = order of the recognition tests. Every position-like column is 1-based except cell, tone_index and block_position/pool_index (0-based), as stated in each column description.",
-  "version": "1.1.0",
+  "description": "Rows of trials.csv, stars.csv, probes.csv and encoding_events.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid. Serial position = ordinal among ALL visible stimuli of the trial (dual 1-6, single-task 1-3, 1-based); slot_in_stream = slot in the six-slot encoding stream including invisible placeholders (1-6); test position = order of the recognition tests. Indexing: every ordinal / position / sequence column is 1-based (first = 1), including cell_row, cell_col, block_position and pool_index; the only 0-based values are the identifiers cell (0-24, centre 12) and tone_index (0-23), which are keys into src/config.js and src/grid.js, not counts (cell = (cell_row - 1) * 5 + (cell_col - 1)). Raw rows keep their recorded 0-based values. Timing: the encoding_events table gives onset, offset, duration, planned values, onset error and the silence before / after each slot, all in ms from encoding onset (tone onsets and offsets are scheduled, not measured).",
+  "version": "1.2.0",
   "$defs": {
     "trial": {
       "title": "trial row",
@@ -41,7 +41,7 @@
         },
         "presentation_index": {
           "type": ["integer", "null"],
-          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+          "description": "1-120, 1-based, over the main task in presentation order; empty in practice. Counted by the exporter."
         },
         "presentation_index_stamped": {
           "type": ["integer", "null"],
@@ -49,11 +49,11 @@
         },
         "block_position": {
           "type": ["integer", "null"],
-          "description": "Position of the trial in its block, 0-BASED (0 = first trial of the block)."
+          "description": "Position of the trial in its block in presentation order, 1-based (1 = first trial of the block). Raw: block_position, 0-based."
         },
         "pool_index": {
           "type": ["integer", "null"],
-          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions."
+          "description": "Number of the trial in the condition pool of 24, 1-24, 1-based (raw trial_index_in_block + 1; the `Trial` column of the wide files). Not unique across conditions."
         },
         "rotation_deg": {
           "type": ["integer", "null"],
@@ -101,7 +101,7 @@
         },
         "trials_since_pattern_phase": {
           "type": ["integer", "null"],
-          "description": "Trials since the last pattern reminder (0 when this trial had one); empty before the first."
+          "description": "Interval COUNT (not an ordinal position): trials since the last pattern reminder, 0 when this trial had one; empty before the first."
         },
         "pattern_reminder": {
           "type": ["boolean", "null"],
@@ -109,7 +109,7 @@
         },
         "trials_since_pattern_reminder": {
           "type": ["integer", "null"],
-          "description": "Scheduler plan: trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped."
+          "description": "Scheduler plan, an interval COUNT (not an ordinal position): trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped."
         },
         "rest_before_trial": {
           "type": ["boolean", "null"],
@@ -302,7 +302,7 @@
         },
         "slot_in_stream": {
           "type": ["integer", "null"],
-          "description": "Slot in the six-slot encoding stream, 1-6, 1-based (planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`."
+          "description": "Slot in the six-slot encoding stream, 1-6, 1-based (raw slot_index_in_seq + 1; identical meaning in all five trial types and for dots, stars, tones and placeholders; planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`."
         },
         "trial_uid": {
           "type": ["string", "null"],
@@ -326,11 +326,11 @@
         },
         "presentation_index": {
           "type": ["integer", "null"],
-          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+          "description": "1-120, 1-based, over the main task in presentation order; empty in practice. Counted by the exporter."
         },
         "pool_index": {
           "type": ["integer", "null"],
-          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions."
+          "description": "Number of the trial in the condition pool of 24, 1-24, 1-based (raw trial_index_in_block + 1; the `Trial` column of the wide files). Not unique across conditions."
         },
         "rotation_deg": {
           "type": ["integer", "null"],
@@ -358,15 +358,15 @@
         },
         "cell": {
           "type": ["integer", "null"],
-          "description": "Cell index 0-24, row-major, 0-BASED id (cell 0 = top-left, 12 = centre). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
+          "description": "Cell id 0-24, row-major, a stable 0-BASED IDENTIFIER (key into src/config.js, src/grid.js and the pre-registration; cell 0 = top-left, 12 = centre), not a count. Relation to the 1-based grid position: cell = (cell_row - 1) * 5 + (cell_col - 1). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
         },
         "cell_row": {
           "type": ["integer", "null"],
-          "description": "Row of the cell, 0-4 (0-based)."
+          "description": "Row of the cell in the 5 x 5 grid, 1-5, 1-based (1 = top row, 3 = centre row); cell = (cell_row - 1) * 5 + (cell_col - 1). Raw session_info.cell_table.row is 0-based."
         },
         "cell_col": {
           "type": ["integer", "null"],
-          "description": "Column of the cell, 0-4 (0-based)."
+          "description": "Column of the cell in the 5 x 5 grid, 1-5, 1-based (1 = left column, 3 = centre column)."
         },
         "cell_x_mm": {
           "type": ["number", "null"],
@@ -418,7 +418,7 @@
         },
         "rt_ms": {
           "type": ["integer", "null"],
-          "description": "Response time, ms from stimulus onset (stars.csv: star onset; probes.csv: probe onset)."
+          "description": "Response time of the FIRST valid key press, ms from the onset of the same stimulus (stars.csv: star onset, `star_onset_ms`; probes.csv: onset of that probe, `probe_onset_ms`), from the key event timestamp, rounded, at least 1. A press counts only inside the 3000 ms window [onset, onset + 3000); extra presses are counted in `extra_keypresses`, presses before the onset in `early_keypresses`, after the window in `late_keypresses`. Empty when not answered (then `responded` is false); rows that were not recorded have row_recorded = false."
         },
         "response_key": {
           "type": ["string", "null"],
@@ -426,11 +426,19 @@
         },
         "excluded_anticipatory": {
           "type": ["boolean", "null"],
-          "description": "True if rt_ms < 250."
+          "description": "True if the response was given and rt_ms < 250 ms (anticipation floor, RT_FLOOR_MS). Not applied to the data: it is a flag."
         },
         "star_onset_ms": {
           "type": ["integer", "null"],
-          "description": "Star onset relative to encoding onset, ms."
+          "description": "Star onset (animation-frame time of the first frame with the star) relative to encoding onset, ms. Equals `onset_ms` of the star slot in encoding_events.csv."
+        },
+        "star_offset_ms": {
+          "type": ["integer", "null"],
+          "description": "Star offset relative to encoding onset, ms: frame time of the first frame without the star (raw slot_offsets_ts_ms of the star slot; the star row itself is written at the removal call, see `window_closed_ms`). Empty if the star was cut short by the end of the node (truncated) or never drawn. `star_offset_ms - star_onset_ms` is the time the star was on screen (about 3000 ms)."
+        },
+        "response_ms": {
+          "type": ["integer", "null"],
+          "description": "Time of the first valid key press relative to encoding onset, ms (the key event timestamp: raw response_ts_ms minus encoding_onset_ts_ms). Empty if not answered. `rt_ms` = `response_ms` minus the onset of the same table (`star_onset_ms` in stars.csv, `probe_onset_ms` in probes.csv) up to the 1 ms rounding of the two timestamps (rt_ms is rounded from the unrounded difference and is at least 1)."
         },
         "trial_star_excluded": {
           "type": ["boolean", "null"],
@@ -539,11 +547,11 @@
         },
         "presentation_index": {
           "type": ["integer", "null"],
-          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+          "description": "1-120, 1-based, over the main task in presentation order; empty in practice. Counted by the exporter."
         },
         "pool_index": {
           "type": ["integer", "null"],
-          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions."
+          "description": "Number of the trial in the condition pool of 24, 1-24, 1-based (raw trial_index_in_block + 1; the `Trial` column of the wide files). Not unique across conditions."
         },
         "rotation_deg": {
           "type": ["integer", "null"],
@@ -575,15 +583,15 @@
         },
         "cell": {
           "type": ["integer", "null"],
-          "description": "Cell index 0-24, row-major, 0-BASED id (cell 0 = top-left, 12 = centre). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
+          "description": "Cell id 0-24, row-major, a stable 0-BASED IDENTIFIER (key into src/config.js, src/grid.js and the pre-registration; cell 0 = top-left, 12 = centre), not a count. Relation to the 1-based grid position: cell = (cell_row - 1) * 5 + (cell_col - 1). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
         },
         "cell_row": {
           "type": ["integer", "null"],
-          "description": "Row of the cell, 0-4 (0-based)."
+          "description": "Row of the cell in the 5 x 5 grid, 1-5, 1-based (1 = top row, 3 = centre row); cell = (cell_row - 1) * 5 + (cell_col - 1). Raw session_info.cell_table.row is 0-based."
         },
         "cell_col": {
           "type": ["integer", "null"],
-          "description": "Column of the cell, 0-4 (0-based)."
+          "description": "Column of the cell in the 5 x 5 grid, 1-5, 1-based (1 = left column, 3 = centre column)."
         },
         "cell_x_mm": {
           "type": ["number", "null"],
@@ -703,7 +711,7 @@
         },
         "tone_index": {
           "type": ["integer", "null"],
-          "description": "Index 0-23 (0-BASED id) of the tone. Tone conditions only."
+          "description": "Tone id 0-23, a stable 0-BASED IDENTIFIER (index in the 24-tone bank of src/audio/tones.js; the pre-registered rank is tone_index + 1), not a count. Tone conditions only."
         },
         "tone_freq_hz": {
           "type": ["number", "null"],
@@ -731,7 +739,7 @@
         },
         "rt_ms": {
           "type": ["integer", "null"],
-          "description": "Response time, ms from stimulus onset (stars.csv: star onset; probes.csv: probe onset)."
+          "description": "Response time of the FIRST valid key press, ms from the onset of the same stimulus (stars.csv: star onset, `star_onset_ms`; probes.csv: onset of that probe, `probe_onset_ms`), from the key event timestamp, rounded, at least 1. A press counts only inside the 3000 ms window [onset, onset + 3000); extra presses are counted in `extra_keypresses`, presses before the onset in `early_keypresses`, after the window in `late_keypresses`. Empty when not answered (then `responded` is false); rows that were not recorded have row_recorded = false."
         },
         "response_key": {
           "type": ["string", "null"],
@@ -739,11 +747,15 @@
         },
         "excluded_anticipatory": {
           "type": ["boolean", "null"],
-          "description": "True if rt_ms < 250."
+          "description": "True if the response was given and rt_ms < 250 ms (anticipation floor, RT_FLOOR_MS). Not applied to the data: it is a flag."
         },
         "probe_onset_ms": {
           "type": ["integer", "null"],
-          "description": "Probe onset relative to encoding onset, ms."
+          "description": "Probe onset (animation-frame time of the first frame of the probe node) relative to encoding onset, ms; the origin of `rt_ms`."
+        },
+        "response_ms": {
+          "type": ["integer", "null"],
+          "description": "Time of the first valid key press relative to encoding onset, ms (the key event timestamp: raw response_ts_ms minus encoding_onset_ts_ms). Empty if not answered. `rt_ms` = `response_ms` minus the onset of the same table (`star_onset_ms` in stars.csv, `probe_onset_ms` in probes.csv) up to the 1 ms rounding of the two timestamps (rt_ms is rounded from the unrounded difference and is at least 1)."
         },
         "trial_star_excluded": {
           "type": ["boolean", "null"],
@@ -836,7 +848,7 @@
         },
         "slot_in_stream": {
           "type": ["integer", "null"],
-          "description": "Slot in the six-slot encoding stream, 1-6, 1-based (planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`."
+          "description": "Slot in the six-slot encoding stream, 1-6, 1-based (raw slot_index_in_seq + 1; identical meaning in all five trial types and for dots, stars, tones and placeholders; planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`."
         },
         "trial_uid": {
           "type": ["string", "null"],
@@ -860,11 +872,11 @@
         },
         "presentation_index": {
           "type": ["integer", "null"],
-          "description": "1-120 over the main task in presentation order; empty in practice. Counted by the exporter."
+          "description": "1-120, 1-based, over the main task in presentation order; empty in practice. Counted by the exporter."
         },
         "pool_index": {
           "type": ["integer", "null"],
-          "description": "Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions."
+          "description": "Number of the trial in the condition pool of 24, 1-24, 1-based (raw trial_index_in_block + 1; the `Trial` column of the wide files). Not unique across conditions."
         },
         "rotation_deg": {
           "type": ["integer", "null"],
@@ -904,19 +916,19 @@
         },
         "cell": {
           "type": ["integer", "null"],
-          "description": "Cell index 0-24, row-major, 0-BASED id (cell 0 = top-left, 12 = centre). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
+          "description": "Cell id 0-24, row-major, a stable 0-BASED IDENTIFIER (key into src/config.js, src/grid.js and the pre-registration; cell 0 = top-left, 12 = centre), not a count. Relation to the 1-based grid position: cell = (cell_row - 1) * 5 + (cell_col - 1). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`)."
         },
         "placeholder_cell": {
           "type": ["integer", "null"],
-          "description": "Cell (0-based id) of the invisible placeholder in this slot; empty for stimuli. Not a stimulus location."
+          "description": "Cell id (0-24, 0-based identifier, see `cell`) of the invisible placeholder in this slot; empty for stimuli. Not a stimulus location."
         },
         "cell_row": {
           "type": ["integer", "null"],
-          "description": "Row of the cell, 0-4 (0-based)."
+          "description": "Row of the cell in the 5 x 5 grid, 1-5, 1-based (1 = top row, 3 = centre row); cell = (cell_row - 1) * 5 + (cell_col - 1). Raw session_info.cell_table.row is 0-based."
         },
         "cell_col": {
           "type": ["integer", "null"],
-          "description": "Column of the cell, 0-4 (0-based)."
+          "description": "Column of the cell in the 5 x 5 grid, 1-5, 1-based (1 = left column, 3 = centre column)."
         },
         "cell_x_mm": {
           "type": ["number", "null"],
@@ -960,7 +972,7 @@
         },
         "tone_index": {
           "type": ["integer", "null"],
-          "description": "Index 0-23 (0-BASED id) of the tone. Tone conditions only."
+          "description": "Tone id 0-23, a stable 0-BASED IDENTIFIER (index in the 24-tone bank of src/audio/tones.js; the pre-registered rank is tone_index + 1), not a count. Tone conditions only."
         },
         "tone_freq_hz": {
           "type": ["number", "null"],
@@ -968,15 +980,59 @@
         },
         "onset_ms": {
           "type": ["integer", "null"],
-          "description": "Onset of the slot relative to encoding onset, ms. Source in `onset_source`: tones are the PLANNED onset (the tone is scheduled ahead on the audio clock; the actual onset is not recorded), dots and placeholders the animation-frame time of drawing, stars the onset logged on the star row."
+          "description": "Onset of the slot relative to encoding onset (the moment the grid was mounted, performance.now() scale), ms. Source in `onset_source`: tones are the PLANNED onset (the tone is scheduled ahead on the audio clock; the actual onset is not measured), dots and placeholders the animation-frame time of drawing, stars the onset logged on the star row. Placeholders are invisible: the row records when the (invisible) slot element was added."
         },
         "onset_source": {
           "type": ["string", "null"],
-          "description": "tone_planned (planned onset of the scheduled tone), star_row_frame (onset of the star row), or slot_frame (frame timestamp of the slot in slot_onsets_ts_ms)."
+          "description": "tone_planned (planned onset of the scheduled tone: scheduled, NOT measured), star_row_frame (onset of the star row), or slot_frame (frame timestamp of the slot in slot_onsets_ts_ms)."
+        },
+        "offset_ms": {
+          "type": ["integer", "null"],
+          "description": "Offset of the slot relative to encoding onset, ms, on the same scale as `onset_ms`: the frame time of the first frame without the element (dots, stars and placeholders; source in `offset_source`), or for a tone the planned onset plus the nominal tone duration (350 ms; scheduled, NOT measured). Empty if the event never happened or was still running when the node was cut short."
+        },
+        "offset_source": {
+          "type": ["string", "null"],
+          "description": "frame (first animation frame without the element), removal_call (time of the removal call: no frame arrived before the node ended), scheduled (tone: planned onset + nominal duration, not measured), aborted (the node was cut short while the event was running: no offset), or empty (no event / no offset recorded, e.g. data from before offsets were recorded)."
+        },
+        "duration_ms": {
+          "type": ["integer", "null"],
+          "description": "Actual duration of the event, ms: `offset_ms - onset_ms`. For a placeholder it is the length of the invisible placeholder element, which only stands for the event it replaces (nothing was presented). Tones: the nominal duration (scheduled, not measured). Empty if either time is missing."
+        },
+        "planned_onset_ms": {
+          "type": ["integer", "null"],
+          "description": "Planned onset relative to encoding onset, ms: raw slot_planned_onsets_ts_ms (plan origin t0 + planned time; t0 is taken inside the encoding node less than a millisecond after encoding onset), else from the plan constants (1500 ms pre-encoding pad, then 1500 ms per M slot and 3500 ms per S slot)."
+        },
+        "planned_offset_ms": {
+          "type": ["integer", "null"],
+          "description": "Planned offset relative to encoding onset, ms: planned onset plus the planned duration (dots and placeholders in M slots 1000 ms, stars and placeholders in S slots 3000 ms, tones 350 ms)."
+        },
+        "planned_duration_ms": {
+          "type": ["integer", "null"],
+          "description": "`planned_offset_ms - planned_onset_ms`."
+        },
+        "onset_error_ms": {
+          "type": ["integer", "null"],
+          "description": "Actual minus planned onset, ms (`onset_ms - planned_onset_ms`). Tones: always 0 or about 0, because the recorded onset of a tone IS the planned one."
+        },
+        "offset_error_ms": {
+          "type": ["integer", "null"],
+          "description": "Actual minus planned offset, ms (`offset_ms - planned_offset_ms`). Tones: always about 0 (scheduled offset)."
+        },
+        "silence_before_ms": {
+          "type": ["integer", "null"],
+          "description": "Time with nothing perceptible (no dot, star or tone) before this slot, ms: `onset_ms` of this slot minus the offset of the previous PERCEPTIBLE event (dots, stars, tones; invisible placeholders are not perceptible, so a placeholder interval counts as silence). For the first perceptible event, and for placeholders before any perceptible event, it is measured from the start of the encoding phase (encoding onset, time 0, which includes the 1500 ms pre-encoding pad) (`silence_before_ref` = encoding_start). For a placeholder row it is the silence from the previous perceptible event to the start of this placeholder."
+        },
+        "silence_before_ref": {
+          "type": ["string", "null"],
+          "description": "Reference of `silence_before_ms`: previous_event_offset (offset of the previous perceptible event) or encoding_start (no perceptible event before this slot: time 0 = encoding onset)."
+        },
+        "silence_after_ms": {
+          "type": ["integer", "null"],
+          "description": "Time with nothing perceptible after this slot, ms: onset of the next PERCEPTIBLE event minus `offset_ms` of this slot (placeholders in between count as silence). Empty for the last perceptible event of the trial (nothing follows inside the encoding phase) and where a time is missing. For a placeholder row it is the silence from the end of this placeholder to the next perceptible event."
         },
         "onset_gap_ms": {
           "type": ["integer", "null"],
-          "description": "onset_ms minus onset_ms of the previous slot (slot_in_stream - 1, placeholders included), ms. Empty for slot 1 and where an onset is missing."
+          "description": "onset_ms minus onset_ms of the previous slot (slot_in_stream - 1, placeholders included), ms: the slot-to-slot onset interval (1500 after a memory slot, 3500 after a star slot). Empty for slot 1 and where an onset is missing."
         },
         "tone_planned_onset_ms": {
           "type": ["integer", "null"],
@@ -985,6 +1041,10 @@
         "tone_scheduled_onset_ms": {
           "type": ["integer", "null"],
           "description": "Onset scheduled on the AudioContext clock converted to the performance clock, relative to encoding onset, ms (scheduled_onset_perf_ms). Empty when the browser gave no timing. This is the best available estimate of the real tone onset; the real onset is not measured."
+        },
+        "tone_scheduled_offset_ms": {
+          "type": ["integer", "null"],
+          "description": "Scheduled device offset of the tone relative to encoding onset, ms: `tone_scheduled_onset_ms` plus the nominal duration (scheduled_offset_perf_ms). Empty when the browser gave no timing. Tones only; not measured."
         },
         "tone_event_recorded": {
           "type": ["boolean", "null"],
@@ -1032,11 +1092,11 @@
         },
         "test_rt_ms": {
           "type": ["integer", "null"],
-          "description": "Response time of the test of this item, ms from test onset."
+          "description": "Response time of the test of this item (the target probe of this item), ms from that probe own onset: `rt_ms` of the joined row of probes.csv. Empty if the item was not tested or the test was not answered (test_responded false). Foil probes have no item and appear only in probes.csv."
         },
         "test_excluded_anticipatory": {
           "type": ["boolean", "null"],
-          "description": "True if test_rt_ms < 250."
+          "description": "True if the test was answered and test_rt_ms < 250 (flag only)."
         },
         "star_row_recorded": {
           "type": ["boolean", "null"],

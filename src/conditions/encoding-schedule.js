@@ -30,6 +30,27 @@
  *   - Response time is taken from the key event's own timestamp, not from the
  *     time the handler ran. A key counts only if it lies in [onset, onset +
  *     3000 ms).
+ *
+ * Event record (what the encoding row stores for every one of the six slots,
+ * placeholders included; all arrays are aligned by slot, 0-based at the raw
+ * level, and hold null for an event that never happened):
+ *   - `slot_onsets_ts_ms`    onset: frame time for dots, stars and placeholders,
+ *                            PLANNED time for tones;
+ *   - `slot_offsets_ts_ms`   offset on the same performance.now() scale: the frame
+ *                            time of the first frame without the element (source
+ *                            'frame'; the time of the removal call, source
+ *                            'removal_call', when no frame arrived before the node
+ *                            ended); for a tone the planned onset plus the nominal
+ *                            tone duration (source 'scheduled': not measured). An
+ *                            event that was still on when the node was cut short
+ *                            gets null and source 'aborted';
+ *   - `slot_offset_sources`  how each offset was obtained (null if there is none);
+ *   - `slot_planned_onsets_ts_ms` / `slot_planned_offsets_ts_ms`  the plan on the
+ *                            same scale (t0 + planned time), complete from the
+ *                            moment the node starts;
+ *   - `slot_event_kinds`     'dot' | 'tone' | 'star' | 'dummy' (placeholder) per slot.
+ * Recording an offset adds one animation-frame request after a removal that
+ * already happens; no timer, onset or removal is moved by it.
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
@@ -39,6 +60,7 @@ import {
   slotPositionsMm,
   postEncodingRotationDeg,
 } from './trial-record.js';
+import { config } from '../config.js';
 import { createGridFrame, clearStimuli, setFixation, setRotation } from '../visuals/frame.js';
 import { addDot, removeElement } from '../visuals/dot.js';
 import { addStar, recolourStar } from '../visuals/star.js';
@@ -70,6 +92,9 @@ const ENCODING_WATCHDOG_MARGIN_MS = 1000;
 /* Tones are handed to the audio clock this long before their planned time. */
 const AUDIO_LEAD_MS = 80;
 const KEY_LOG_MAX = 80;
+/* Nominal length of a tone (envelope including its ramps). Tones are scheduled on
+ * the audio clock, so their offset is planned, not measured. */
+const TONE_NOMINAL_MS = config.tones.duration_ms;
 
 /**
  * Build the event plan. Times are offsets from t0 in ms.
@@ -144,6 +169,10 @@ export function createEncodingNode(cfg) {
   const angle_deg = postEncodingRotationDeg(params);
   const plan = planEncoding({ sequence, pre_ms: PRE_ENCODING_PAD_MS });
   const slot_onsets_ts_ms = new Array(sequence.length).fill(null);
+  const slot_offsets_ts_ms = new Array(sequence.length).fill(null);
+  const slot_offset_sources = new Array(sequence.length).fill(null);
+  const slot_planned_onsets_ts_ms = new Array(sequence.length).fill(null);
+  const slot_planned_offsets_ts_ms = new Array(sequence.length).fill(null);
   const slot_audio_context_times_ms = new Array(sequence.length).fill(null);
   const slot_tone_events = [];
   const key_log = [];
@@ -155,6 +184,11 @@ export function createEncodingNode(cfg) {
   };
   let run = null;
 
+  const slot_positions_mm = slotPositionsMm(params, {
+    rotationDeg: rotate ? angle_deg : frame_rotation_deg,
+    m_kind,
+    s_kind,
+  });
   const nodeData = {
     phase,
     trial_index_in_block: params.trial_index_in_block,
@@ -162,12 +196,13 @@ export function createEncodingNode(cfg) {
     sequence: sequence.join(''),
     planned_total_ms: plan.total_ms,
     trial_spec: encodingRecord(params),
-    slot_positions_mm: slotPositionsMm(params, {
-      rotationDeg: rotate ? angle_deg : frame_rotation_deg,
-      m_kind,
-      s_kind,
-    }),
+    slot_positions_mm,
+    slot_event_kinds: slot_positions_mm.map((p) => p.kind),
     slot_onsets_ts_ms,
+    slot_offsets_ts_ms,
+    slot_offset_sources,
+    slot_planned_onsets_ts_ms,
+    slot_planned_offsets_ts_ms,
     slot_audio_context_times_ms,
     slot_tone_events,
     key_log,
@@ -181,6 +216,10 @@ export function createEncodingNode(cfg) {
     trial_duration: plan.total_ms + ENCODING_WATCHDOG_MARGIN_MS,
     on_load: () => {
       slot_onsets_ts_ms.fill(null);
+      slot_offsets_ts_ms.fill(null);
+      slot_offset_sources.fill(null);
+      slot_planned_onsets_ts_ms.fill(null);
+      slot_planned_offsets_ts_ms.fill(null);
       slot_audio_context_times_ms.fill(null);
       slot_tone_events.length = 0;
       key_log.length = 0;
@@ -208,6 +247,10 @@ export function createEncodingNode(cfg) {
         s_kind,
         star_phase,
         slot_onsets_ts_ms,
+        slot_offsets_ts_ms,
+        slot_offset_sources,
+        slot_planned_onsets_ts_ms,
+        slot_planned_offsets_ts_ms,
         slot_audio_context_times_ms,
         slot_tone_events,
         key_log,
@@ -219,6 +262,10 @@ export function createEncodingNode(cfg) {
       if (run) run.abort('finish');
       /* Copies, so a replayed node (practice re-loop) cannot overwrite them. */
       trialData.slot_onsets_ts_ms = slot_onsets_ts_ms.slice();
+      trialData.slot_offsets_ts_ms = slot_offsets_ts_ms.slice();
+      trialData.slot_offset_sources = slot_offset_sources.slice();
+      trialData.slot_planned_onsets_ts_ms = slot_planned_onsets_ts_ms.slice();
+      trialData.slot_planned_offsets_ts_ms = slot_planned_offsets_ts_ms.slice();
       trialData.slot_audio_context_times_ms = slot_audio_context_times_ms.slice();
       trialData.slot_tone_events = slot_tone_events.slice();
       trialData.tone_error = slot_tone_events.some((e) => e.error !== null);
@@ -246,6 +293,7 @@ function startRun(ctx) {
   let aborted = false;
   let openWindow = null;
   const closedSlots = new Set();
+  const toneSlots = new Set();
 
   let audioLatencyMs = null;
   try {
@@ -281,6 +329,21 @@ function startRun(ctx) {
     frames.add(id);
   };
 
+  /* Take an element off the grid and record the offset of its slot. The offset is the
+   * time of the removal call at first and is replaced by the time of the next animation
+   * frame (the first frame in which the element is gone: the same kind of timestamp as
+   * the onset, which is the frame the element first appears in) when that frame arrives.
+   * The extra frame request changes nothing about when the element is removed. */
+  const removeAndRecordOffset = (slot, el) => {
+    removeElement(el);
+    ctx.slot_offsets_ts_ms[slot] = Math.round(performance.now());
+    ctx.slot_offset_sources[slot] = 'removal_call';
+    nextFrame((ts) => {
+      ctx.slot_offsets_ts_ms[slot] = Math.round(ts);
+      ctx.slot_offset_sources[slot] = 'frame';
+    });
+  };
+
   /* One key listener for the whole node. It logs every arrow key and routes
    * it to the open star window, if there is one. */
   const onKey = (e) => {
@@ -309,6 +372,7 @@ function startRun(ctx) {
       said_on: null,
       response_key: null,
       response_rt_ms: null,
+      response_ts_ms: null,
       correct: null,
       early: 0,
       late: 0,
@@ -350,6 +414,7 @@ function startRun(ctx) {
       w.responded = true;
       w.response_key = k;
       w.response_rt_ms = Math.max(1, Math.round(rt));
+      w.response_ts_ms = Math.round(t);
       const judged = judgeStarResponse(k, star.is_on_pattern);
       w.said_on = judged.said_on;
       w.correct = judged.correct;
@@ -364,7 +429,16 @@ function startRun(ctx) {
     w.closed = true;
     if (openWindow === w) openWindow = null;
     closedSlots.add(w.slot);
-    if (w.el) removeElement(w.el);
+    if (w.el) {
+      if (truncated) {
+        /* Cut short by the end of the node: the star was on for less than its
+         * window, so no offset is recorded (see `abort`). */
+        removeElement(w.el);
+        ctx.slot_offset_sources[w.slot] = 'aborted';
+      } else {
+        removeAndRecordOffset(w.slot, w.el);
+      }
+    }
     writeStarRow(w, truncated);
   }
 
@@ -387,6 +461,7 @@ function startRun(ctx) {
       said_on: w.said_on,
       response_key: w.response_key,
       response_rt_ms: w.response_rt_ms,
+      response_ts_ms: w.response_ts_ms ?? null,
       star_correct: w.correct === true,
       star_onset_ts_ms: w.onset === null ? null : Math.round(w.onset),
       star_onset_lag_ms: w.onsetLagMs,
@@ -419,6 +494,13 @@ function startRun(ctx) {
 
   /* ---- Slots ---- */
   for (const ev of plan.events) {
+    /* The plan on the timeline of the recorded onsets and offsets. */
+    const plannedMs =
+      ev.kind === 'M' && m_kind === 'tone' && byMemory.has(ev.slot)
+        ? TONE_NOMINAL_MS
+        : ev.visible_ms;
+    ctx.slot_planned_onsets_ts_ms[ev.slot] = Math.round(t0 + ev.start_ms);
+    ctx.slot_planned_offsets_ts_ms[ev.slot] = Math.round(t0 + ev.start_ms + plannedMs);
     if (ev.kind === 'M') {
       const item = byMemory.get(ev.slot);
       const dummy = byDummy.get(ev.slot);
@@ -426,6 +508,10 @@ function startRun(ctx) {
         at(ev.start_ms - AUDIO_LEAD_MS, () => {
           const planned = t0 + ev.start_ms;
           ctx.slot_onsets_ts_ms[ev.slot] = Math.round(planned);
+          /* Scheduled, not measured: the planned onset plus the nominal duration. */
+          ctx.slot_offsets_ts_ms[ev.slot] = Math.round(planned + TONE_NOMINAL_MS);
+          ctx.slot_offset_sources[ev.slot] = 'scheduled';
+          toneSlots.add(ev.slot);
           const event = {
             slot: ev.slot,
             cell: item.cell,
@@ -435,6 +521,8 @@ function startRun(ctx) {
             ac_time_at_schedule_ms: null,
             when_ms: null,
             scheduled_onset_perf_ms: null,
+            nominal_duration_ms: TONE_NOMINAL_MS,
+            scheduled_offset_perf_ms: null,
             late_ms: null,
             late: null,
             error: null,
@@ -448,6 +536,10 @@ function startRun(ctx) {
             event.ac_time_at_schedule_ms = round1(ac.currentTime * 1000);
             event.when_ms = Math.round(when * 1000);
             event.scheduled_onset_perf_ms = scheduledOnsetPerfMs(ac, when);
+            event.scheduled_offset_perf_ms =
+              event.scheduled_onset_perf_ms === null
+                ? null
+                : round1(event.scheduled_onset_perf_ms + TONE_NOMINAL_MS);
             event.late_ms = round1(Math.max(0, perfNow - planned));
             event.late = perfNow > planned;
             ctx.slot_audio_context_times_ms[ev.slot] = Math.round(when * 1000);
@@ -468,7 +560,9 @@ function startRun(ctx) {
               m_kind === 'dot' && item
                 ? addDot(frame, cell)
                 : addOpenSquare(frame, cell, { visible: false });
-            afterMs(ts + ev.visible_ms - performance.now(), () => removeElement(el));
+            afterMs(ts + ev.visible_ms - performance.now(), () =>
+              removeAndRecordOffset(ev.slot, el)
+            );
           });
         });
       }
@@ -484,7 +578,9 @@ function startRun(ctx) {
             ctx.slot_onsets_ts_ms[ev.slot] = Math.round(ts);
             if (cell === undefined) return;
             const el = addOpenSquare(frame, cell, { visible: false });
-            afterMs(ts + ev.visible_ms - performance.now(), () => removeElement(el));
+            afterMs(ts + ev.visible_ms - performance.now(), () =>
+              removeAndRecordOffset(ev.slot, el)
+            );
           });
         });
       }
@@ -524,6 +620,21 @@ function startRun(ctx) {
             true
           );
         }
+      }
+    }
+    /* An event that was still running when the node was cut short has no offset: what
+     * was shown is shorter than planned, so a value here would be wrong. A tone is
+     * scheduled ahead, so its planned offset is kept only if it had already passed. */
+    const nowTs = performance.now();
+    for (let slot = 0; slot < ctx.slot_onsets_ts_ms.length; slot++) {
+      if (ctx.slot_onsets_ts_ms[slot] === null) continue;
+      if (toneSlots.has(slot)) {
+        if (nowTs < ctx.slot_planned_offsets_ts_ms[slot]) {
+          ctx.slot_offsets_ts_ms[slot] = null;
+          ctx.slot_offset_sources[slot] = 'aborted';
+        }
+      } else if (ctx.slot_offsets_ts_ms[slot] === null && ctx.slot_offset_sources[slot] === null) {
+        ctx.slot_offset_sources[slot] = 'aborted';
       }
     }
     aborted = true;

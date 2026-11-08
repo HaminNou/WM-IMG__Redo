@@ -73,33 +73,52 @@
  *   (the 0..30 band: 12 negative / 12 non-negative angles per condition per
  *   session), so a design tally of 12 / 12 counts 0 as positive, whereas this
  *   column keeps 0 apart.
- *   Serial positions and their BASE (0 or 1). Terms: "slot" = place in the six-slot encoding
- *   stream (includes the invisible placeholders of single-task trials); "serial position
- *   overall" = ordinal among the VISIBLE stimuli (dual 1-6, single 1-3); "in modality" =
- *   number among the three items of the same kind; "test position" = order of the recognition
- *   tests (random, unrelated to encoding order).
- *     EVENTS.csv  `Event_Index` encoding rows: slot 1-6, 1-BASED (placeholders included);
- *                 recognition rows: test position 1-3, 1-based. `Encoding_Position` is
- *                 0-BASED (0 = first of the three memory items of that kind) and on foil
- *                 probes only a design label. New 1-based columns: Slot_In_Stream,
- *                 Serial_Position_Overall, Target_Serial_Position_Overall, Pos_Frame.
+ *   Indexing (tidy 1.2.0): ONE convention for everything exported. Every ordinal / position /
+ *   sequence number is 1-BASED (the first one is 1) and means the same in all five trial
+ *   types and for dots, stars, tones and placeholders: slot_in_stream (place in the
+ *   six-slot encoding stream, 1-6, placeholders included), serial position overall
+ *   (ordinal among the VISIBLE stimuli: dual 1-6, single 1-3), serial position in modality
+ *   (1-3 among the items of the same kind), test position (order of the three recognition
+ *   tests, 1-3, unrelated to encoding order), encoding position (1-3 among the memory items
+ *   of one kind), star number (1-3), Trial / pool_index (1-24 in the condition pool of a
+ *   block), block_position, presentation_index (1-120), cell_row / cell_col (1-5). The only
+ *   0-based exported values are stable identifiers, not counts: the grid cell id `cell`
+ *   (0-24 row-major, centre 12; tidy columns cell, placeholder_cell, enc1_cell ... enc3_cell) and the
+ *   tone id `tone_index` / `Tone_Idx` / `Tone_n_ToneIdx` (0-23). cell = (cell_row - 1) * 5 +
+ *   (cell_col - 1). The raw runtime rows (JSON dumps) keep the values as they were recorded
+ *   (slot_index_in_seq, probe_position, encoding_position, trial_index_in_block,
+ *   block_position, pool_index and the slot in trial_spec are 0-based); the exporter adds 1.
+ *   Per-column bases:
+ *     EVENTS.csv  `Event_Index` encoding rows: slot 1-6 (placeholders included);
+ *                 recognition rows: test position 1-3. `Encoding_Position` 1-3 (1 = first of
+ *                 the three memory items of that kind; on foil probes a design label only).
+ *                 `Slot_In_Stream`, `Serial_Position_Overall`,
+ *                 `Target_Serial_Position_Overall`, `Pos_Frame`. `Cell` is the text
+ *                 "[row, col]" with 1-5 (it was 0-4 before tidy 1.2.0).
  *                 X_Mm/Y_Mm: rotated screen position for dots, stars and dot probes, but the
  *                 UPRIGHT cell position for tone rows (Pos_Frame says which).
- *     wide files  `Dot_n_OrderN` / `Tone_n_OrderN`: 1-based number among the three memory
- *                 items; `Ast_n_SlotN`: star number 1-3 among the stars (NOT its slot and NOT
- *                 its overall serial position); `Qmark_n_EncPos`: 0-BASED encoding position
- *                 (0 = first memory item), a design label only on foils; `Qmark_n` index n is
- *                 the test position (1-3, 1-based). The wide files have no overall serial
- *                 position: take it from encoding_events.csv / probes.csv.
+ *     wide files  `Trial` 1-24; `Dot_n_OrderN` / `Tone_n_OrderN` 1-3 among the memory
+ *                 items; `Ast_n_SlotN` the slot of the n-th star in the six-slot stream, 1-6
+ *                 (it was the constant n before tidy 1.2.0); `Qmark_n_EncPos` 1-3 (it was
+ *                 0-2 before tidy 1.2.0; a design label only on foils); `Qmark_n` index n is
+ *                 the test position; `*_Cell` "[row, col]" 1-5. The wide files have no overall
+ *                 serial position: take it from encoding_events.csv / probes.csv.
  *     tidy tables 1-based throughout (slot_in_stream, serial_position_overall,
  *                 serial_position_in_modality, test_position, probe_position,
- *                 encoding_position, star_serial_position, target_*); 0-based only cell,
- *                 cell_row, cell_col, tone_index, block_position, pool_index.
- *                 encoding_events.csv (6 rows per trial, key participant_id +
+ *                 encoding_position, star_serial_position, target_*, cell_row, cell_col,
+ *                 block_position, pool_index); 0-based only the identifiers cell and
+ *                 tone_index. encoding_events.csv (6 rows per trial, key participant_id +
  *                 trial_seq_session + slot_in_stream) holds every stimulus of the encoding
  *                 stream with its serial position and, for dots and tones, the outcome of
  *                 the memory test of that item. The name differs from EVENTS.csv because a
  *                 case-insensitive disk would merge the two files.
+ *   Timing of the encoding stream (tidy 1.2.0; encoding_events.csv, EVENTS.csv encoding rows):
+ *   every slot has an onset, an offset, a duration, the planned values, the onset error
+ *   and the silence before and after it. Silence = time with nothing perceptible (no dot,
+ *   star or tone; the invisible placeholders are not perceptible) between this slot and the
+ *   previous / next perceptible event; for the first perceptible event it is measured from
+ *   the start of the encoding phase (time 0 = encoding onset, which includes the 1500 ms
+ *   pre-encoding pad). Tone onsets and offsets are SCHEDULED, not measured.
  *   Upload_Status is the status of the end-of-session upload (the first attempt).
  *   Upload_Status_Final (and, in PARTICIPANT_SUMMARY, Upload_Status_First / _Final /
  *   Upload_Retries) is the status of the LATEST upload row, so a retry that
@@ -174,6 +193,7 @@ import {
 
 import {
   composeTidyTables,
+  slotTiming,
   duplicateKeys,
   TIDY_KEYS,
   TIDY_VERSION,
@@ -240,6 +260,21 @@ function reminderFields(enc) {
 }
 const REMINDER_COLUMNS = Object.freeze(['Pattern_Reminder', 'Trials_Since_Pattern_Reminder']);
 const KEYBOARD_RECTY = 1;
+
+/* The raw runtime `encoding_position` is 0-based (0 = first of the three memory items);
+ * every exported position is 1-based. `item` is a raw probe row or a trial_spec entry. */
+function encodingPosition1(item) {
+  return Number.isInteger(item?.encoding_position) ? item.encoding_position + 1 : NA;
+}
+
+/* Slot of a star in the six-slot stream, 1-6 (the raw slot is 0-based): from its runtime row
+ * (`slot_index_in_seq`) or else from the trial plan. */
+function starSlot1(starRow, plannedStar) {
+  const slot = Number.isInteger(starRow?.slot_index_in_seq)
+    ? starRow.slot_index_in_seq
+    : plannedStar?.slot;
+  return Number.isInteger(slot) ? slot + 1 : NA;
+}
 
 /* ---------- Pure helpers ---------- */
 
@@ -352,18 +387,21 @@ export function expandInputPaths(inputPaths, opts = {}) {
 }
 
 /**
- * Cell index 0–24 → [row, col] pair on the 5×5 grid (row-major, 0-indexed).
- * the original experiment convention: row first, then col, both 0-indexed. Returns null
- * for invalid input (the caller decides whether to surface as NA).
+ * Cell id 0-24 (0-based identifier, row-major) → [row, col] pair on the 5×5 grid, 1-BASED:
+ * row first, then col, both 1-5 (centre cell 12 = [3, 3]); id = (row - 1) * 5 + (col - 1).
+ * Until tidy 1.2.0 the pair was 0-based (the original experiment's convention); the exported
+ * data now use one base for every position (see "Indexing" in the header). Returns null for
+ * invalid input (the caller decides whether to surface as NA).
  */
 export function cellToRowCol(cellIndex) {
   if (!Number.isInteger(cellIndex) || cellIndex < 0 || cellIndex > 24) return null;
-  return [Math.floor(cellIndex / 5), cellIndex % 5];
+  return [Math.floor(cellIndex / 5) + 1, (cellIndex % 5) + 1];
 }
 
 /**
- * Format a [row, col] pair as "[row, col]" — exactly the original experiment's format.
- * Accepts the [row, col] pair OR the raw cell index. Returns NA for null.
+ * Format a [row, col] pair as "[row, col]" (the original experiment's text format, now with
+ * 1-based numbers). Accepts an already 1-based [row, col] pair OR the cell id 0-24.
+ * Returns NA for null.
  */
 export function formatCell(input) {
   if (input === null || input === undefined) return NA;
@@ -790,8 +828,7 @@ export function buildWideRowDOnly(group, criterion, sessionMeta = {}) {
   const probes = sortedProbes(group.probes);
   for (let i = 0; i < 3; i++) {
     addProbeColumns(out, `Qmark_${i + 1}`, probes[i], criterion, group.encoding);
-    out[`Qmark_${i + 1}_EncPos`] =
-      probes[i] && Number.isInteger(probes[i].encoding_position) ? probes[i].encoding_position : NA;
+    out[`Qmark_${i + 1}_EncPos`] = encodingPosition1(probes[i]);
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -849,8 +886,7 @@ export function buildWideRowTOnly(group, criterion, sessionMeta = {}) {
       p && Number.isInteger(p.probed_tone_index) ? p.probed_tone_index : NA;
     out[`Qmark_${i + 1}_ToneFreqHz`] =
       p && Number.isFinite(p.probed_tone_freq_hz) ? p.probed_tone_freq_hz : NA;
-    out[`Qmark_${i + 1}_EncPos`] =
-      p && Number.isInteger(p.encoding_position) ? p.encoding_position : NA;
+    out[`Qmark_${i + 1}_EncPos`] = encodingPosition1(p);
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -901,8 +937,10 @@ export function buildWideRowIOnly(group, criterion, sessionMeta = {}) {
    * row's `stars` array gives presentation order; on-screen ordering matches
    * `probe_position` 1-3. Dummies are uniform open-circle fillers (Step
    * 13.16) so there is no per-trial dummy-mode column to emit. */
+  const encStars = sortedEncodedStars(group.encoding);
   const stars = sortedStars(group.stars);
   for (let i = 0; i < 3; i++) {
+    out[`Ast_${i + 1}_SlotN`] = starSlot1(stars[i], encStars[i]);
     addStarColumns(out, `Ast_${i + 1}`, stars[i], criterion, group.encoding);
   }
   addSessionMeta(out, sessionMeta);
@@ -920,7 +958,10 @@ function buildColumnsForIOnly() {
     'Rotation_Deg',
     ...REMINDER_COLUMNS,
   ];
-  for (let i = 1; i <= 3; i++) addStarColumnNames(cols, `Ast_${i}`);
+  for (let i = 1; i <= 3; i++) {
+    cols.push(`Ast_${i}_SlotN`);
+    addStarColumnNames(cols, `Ast_${i}`);
+  }
   cols.push(...SESSION_META_COLUMNS);
   return cols;
 }
@@ -952,16 +993,14 @@ export function buildWideRowID(group, criterion, sessionMeta = {}) {
     /* Encoding-time star slot gives the cell at trial-design time; the
      * runtime `stars` array carries the participant's response. the original experiment
      * recorded both, so we keep the parallel here. */
-    const e = encStars[i];
-    out[`Ast_${i + 1}_SlotN`] = e ? i + 1 : NA;
+    out[`Ast_${i + 1}_SlotN`] = starSlot1(stars[i], encStars[i]);
     addStarColumns(out, `Ast_${i + 1}`, stars[i], criterion, group.encoding);
   }
   const probes = sortedProbes(group.probes);
   for (let i = 0; i < 3; i++) {
     const p = probes[i];
     addProbeColumns(out, `Qmark_${i + 1}`, p, criterion, group.encoding);
-    out[`Qmark_${i + 1}_EncPos`] =
-      p && Number.isInteger(p.encoding_position) ? p.encoding_position : NA;
+    out[`Qmark_${i + 1}_EncPos`] = encodingPosition1(p);
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -1019,8 +1058,7 @@ export function buildWideRowIT(group, criterion, sessionMeta = {}) {
   const encStars = sortedEncodedStars(group.encoding);
   const stars = sortedStars(group.stars);
   for (let i = 0; i < 3; i++) {
-    const e = encStars[i];
-    out[`Ast_${i + 1}_SlotN`] = e ? i + 1 : NA;
+    out[`Ast_${i + 1}_SlotN`] = starSlot1(stars[i], encStars[i]);
     addStarColumns(out, `Ast_${i + 1}`, stars[i], criterion, group.encoding);
   }
   const probes = sortedProbes(group.probes);
@@ -1031,8 +1069,7 @@ export function buildWideRowIT(group, criterion, sessionMeta = {}) {
       p && Number.isInteger(p.probed_tone_index) ? p.probed_tone_index : NA;
     out[`Qmark_${i + 1}_ToneFreqHz`] =
       p && Number.isFinite(p.probed_tone_freq_hz) ? p.probed_tone_freq_hz : NA;
-    out[`Qmark_${i + 1}_EncPos`] =
-      p && Number.isInteger(p.encoding_position) ? p.encoding_position : NA;
+    out[`Qmark_${i + 1}_EncPos`] = encodingPosition1(p);
   }
   addSessionMeta(out, sessionMeta);
   return out;
@@ -1082,7 +1119,7 @@ function buildColumnsForIT() {
  * (Participant_ID, Block, Trial_Type, Trial): the keyed, fully documented table of
  * the encoding stream is encoding_events.csv (tidy-tables.js). Position columns:
  * Event_Index is 1-based (encoding rows: slot 1-6; recognition rows: test position 1-3);
- * Encoding_Position is 0-BASED (0 = first of the three memory items); the 1-based
+ * Encoding_Position is 1-based since tidy 1.2.0 (1 = first of the three memory items); the
  * companions are Slot_In_Stream (encoding rows, = Event_Index), Serial_Position_Overall
  * (encoding rows of visible stimuli: ordinal among all shown stimuli, 1-6 dual / 1-3
  * single; NA for placeholders) and Target_Serial_Position_Overall (recognition rows of
@@ -1138,7 +1175,28 @@ const EVENTS_COLUMNS = Object.freeze([
   'Serial_Position_Overall',
   'Target_Serial_Position_Overall',
   'Pos_Frame',
+  /* timing of every encoding slot (tidy 1.2.0; NA on recognition rows), definitions as in
+   * encoding_events.csv: offset_ms, duration_ms, planned_*, onset_error_ms, silence_* */
+  'Offset_Ms',
+  'Offset_Source',
+  'Duration_Ms',
+  'Planned_Onset_Ms',
+  'Planned_Offset_Ms',
+  'Onset_Error_Ms',
+  'Silence_Before_Ms',
+  'Silence_After_Ms',
 ]);
+
+const TIMING_COLUMN_OF = Object.freeze({
+  Offset_Ms: 'offset_ms',
+  Offset_Source: 'offset_source',
+  Duration_Ms: 'duration_ms',
+  Planned_Onset_Ms: 'planned_onset_ms',
+  Planned_Offset_Ms: 'planned_offset_ms',
+  Onset_Error_Ms: 'onset_error_ms',
+  Silence_Before_Ms: 'silence_before_ms',
+  Silence_After_Ms: 'silence_after_ms',
+});
 
 /* Trial-type → kind tags for the M-slot (memory item) and S-slot (probe).
  * The encoding-side dummy is the same kind ('dummy_S') across all conditions
@@ -1261,9 +1319,7 @@ function composeEventsRows(group, sessionMeta = {}) {
       Tone_Idx: Number.isInteger(ev.item?.tone_index) ? ev.item.tone_index : NA,
       Tone_Freq_Hz: Number.isFinite(ev.item?.tone_freq_hz) ? ev.item.tone_freq_hz : NA,
       Probe_Type: NA,
-      Encoding_Position: Number.isInteger(ev.item?.encoding_position)
-        ? ev.item.encoding_position
-        : NA,
+      Encoding_Position: encodingPosition1(ev.item),
       Onset_Ms: slotOnsetMs(enc, ev.slot),
       Response_Key: NA,
       Res: NA,
@@ -1305,6 +1361,31 @@ function composeEventsRows(group, sessionMeta = {}) {
     out.push(row);
   }
 
+  /* Timing of every slot (placeholders included); reference of the silences: encoding onset. */
+  const nSlots = typeof enc.sequence === 'string' ? enc.sequence.length : 6;
+  const modalities = Array.from({ length: nSlots }, () => 'placeholder');
+  const onsets = Array.from({ length: nSlots }, () => null);
+  out.forEach((row, i) => {
+    const ev = encEvents[i];
+    if (!Number.isInteger(ev.slot) || ev.slot >= nSlots) return;
+    modalities[ev.slot] = ev.kind === 'dummy_S' ? 'placeholder' : ev.kind;
+    onsets[ev.slot] = row.Onset_Ms === NA ? null : row.Onset_Ms;
+  });
+  const timing = slotTiming({
+    enc,
+    modalities,
+    onsets,
+    t0: enc.encoding_onset_ts_ms,
+  });
+  out.forEach((row, i) => {
+    const ev = encEvents[i];
+    const tm = Number.isInteger(ev.slot) && ev.slot < nSlots ? timing[ev.slot] : null;
+    for (const [col, key] of Object.entries(TIMING_COLUMN_OF)) {
+      const v = tm?.[key];
+      row[col] = v === null || v === undefined ? NA : v;
+    }
+  });
+
   /* Recognition events. Probes are sorted by `probe_position` (0-indexed at
    * the runtime layer). Event_Index is 1-indexed for the CSV. */
   if (kinds.probe && Array.isArray(group.probes) && group.probes.length > 0) {
@@ -1325,7 +1406,7 @@ function composeEventsRows(group, sessionMeta = {}) {
         Tone_Idx: Number.isInteger(p.probed_tone_index) ? p.probed_tone_index : NA,
         Tone_Freq_Hz: Number.isFinite(p.probed_tone_freq_hz) ? p.probed_tone_freq_hz : NA,
         Probe_Type: probeTypeCode(p.probe_type),
-        Encoding_Position: Number.isInteger(p.encoding_position) ? p.encoding_position : NA,
+        Encoding_Position: encodingPosition1(p),
         Onset_Ms: relativeOnsetMs(p.probe_onset_ts_ms, enc.encoding_onset_ts_ms),
         Response_Key: extractResponseKey(p),
         Res: res,
@@ -1347,6 +1428,7 @@ function composeEventsRows(group, sessionMeta = {}) {
             ? (serialBySlot.get(slotOfEncodingPosition.get(p.encoding_position)) ?? NA)
             : NA,
         Pos_Frame: kinds.probe === 'probe_dot' ? 'rotated_screen' : NA,
+        ...Object.fromEntries(Object.keys(TIMING_COLUMN_OF).map((c) => [c, NA])),
       });
     }
   }

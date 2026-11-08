@@ -9,6 +9,18 @@
  *           (written as encoding_events.csv: EVENTS.csv is the older long file of
  *           csv-export.js and the two names would collide on a case-insensitive disk)
  *
+ * INDEXING (one convention for everything exported). Every ordinal, position, sequence or
+ * count-from-the-start column is 1-BASED (the first one is 1): slot_in_stream 1-6,
+ * serial positions, test_position / probe_position, encoding_position, star number,
+ * trial_seq_session, presentation_index, block_position, pool_index, cell_row, cell_col,
+ * attempt, rotation_stratum. The only 0-based columns are stable IDENTIFIERS that are keys
+ * into src/config.js, src/grid.js and the pre-registration, not counts: `cell` (grid cell id
+ * 0-24, row-major, centre = 12; also placeholder_cell, enc1_cell..enc3_cell) and `tone_index`
+ * (rank in the 24-tone bank, 0-23). The id and the 1-based grid position are related by
+ * cell = (cell_row - 1) * 5 + (cell_col - 1). The raw runtime rows keep the values they were
+ * recorded with (0-based slot_index_in_seq, probe_position, encoding_position,
+ * trial_index_in_block, block_position, pool_index, slot in trial_spec); the exporter adds 1.
+ *
  * Serial positions. Every trial has a six-slot encoding stream (slot_in_stream 1-6).
  * Dual trials (i_d, i_t) show a visible stimulus in all six slots (3 dots or tones, 3
  * stars, in mixed order); single-task trials show 3 stimuli and the other three slots
@@ -18,7 +30,7 @@
  * among the three items of its own kind (dots, tones or stars), 1-3. Test position
  * (`test_position` / `probe_position`) is the order of the memory tests, which is
  * random and unrelated to the encoding order. All positions in these tables are
- * 1-based unless a column doc says otherwise (cell and tone_index are 0-based ids).
+ * 1-based; cell and tone_index are 0-based ids (see INDEXING above).
  *
  * `trial_seq_session` counts the trial-start gates of the session in the
  * order they were presented (practice included), so it is unique even when a
@@ -51,7 +63,19 @@ import { ROTATION_STRATA } from '../src/scheduler/rotation-balance.js';
  *     target_serial_position_in_modality, target_slot_in_stream, target_event_key;
  *   - stars: serial_position_overall, serial_position_in_modality, slot_in_stream;
  *   - the base (0 or 1) of every position-like column is documented. */
-export const TIDY_VERSION = '1.1.0';
+/* 1.2.0 (breaking where stated; everything else additive):
+ *   - ONE indexing convention (see INDEXING in the header): `block_position` and `pool_index`
+ *     (trials, stars, probes, events) and `cell_row` / `cell_col` are now 1-BASED (they were
+ *     0-based; BREAKING: add 1 to old values). `cell` and `tone_index` stay 0-based ids and
+ *     are documented as identifiers. Wide files and EVENTS.csv follow (csv-export.js);
+ *   - events: actual offsets and timing of EVERY slot including placeholders: offset_ms,
+ *     offset_source, duration_ms, planned_onset_ms, planned_offset_ms, planned_duration_ms,
+ *     onset_error_ms, offset_error_ms, silence_before_ms, silence_before_ref, silence_after_ms,
+ *     tone_scheduled_offset_ms (raw: slot_offsets_ts_ms, slot_offset_sources,
+ *     slot_planned_onsets_ts_ms, slot_planned_offsets_ts_ms, slot_event_kinds);
+ *   - stars: star_offset_ms, response_ms; probes: response_ms (raw: response_ts_ms on star and
+ *     probe rows, so that rt_ms can be re-derived as response_ms - onset). */
+export const TIDY_VERSION = '1.2.0';
 export const RT_FLOOR_MS = 250;
 
 const HAS_STARS = new Set(['i_only', 'i_d', 'i_t']);
@@ -71,16 +95,20 @@ export function buildGeometry(sessionInfo) {
   const size = sessionInfo?.cell_size_mm ?? config.grid.cell_size_mm;
   const table = new Map();
   if (Array.isArray(sessionInfo?.cell_table) && sessionInfo.cell_table.length === n * n) {
-    for (const c of sessionInfo.cell_table) table.set(c.cell, c);
+    /* session_info.cell_table is the raw record: 0-based row / col. */
+    for (const c of sessionInfo.cell_table)
+      table.set(c.cell, { ...c, row: c.row + 1, col: c.col + 1 });
   } else {
     const onSet = new Set(onPatternCells());
     const centre = config.grid.centre_cell_index;
     const mid = (n * size) / 2;
     for (let cell = 0; cell < n * n; cell++) {
-      const row = Math.floor(cell / n);
-      const col = cell % n;
-      const x = col * size + size / 2 - mid;
-      const y = row * size + size / 2 - mid;
+      const row0 = Math.floor(cell / n);
+      const col0 = cell % n;
+      const row = row0 + 1; /* exported 1-based: cell = (row - 1) * n + (col - 1) */
+      const col = col0 + 1;
+      const x = col0 * size + size / 2 - mid;
+      const y = row0 * size + size / 2 - mid;
       const radius = Math.hypot(x, y);
       table.set(cell, {
         cell,
@@ -289,6 +317,8 @@ export const STARS_COLUMNS = [
   'response_key',
   'excluded_anticipatory',
   'star_onset_ms',
+  'star_offset_ms',
+  'response_ms',
   'trial_star_excluded',
   'star_correct_all',
   'position_matches_runtime',
@@ -368,6 +398,7 @@ export const PROBES_COLUMNS = [
   'response_key',
   'excluded_anticipatory',
   'probe_onset_ms',
+  'response_ms',
   'trial_star_excluded',
   'star_correct_all',
   'position_matches_runtime',
@@ -426,9 +457,21 @@ export const EVENTS_COLUMNS = [
   'tone_freq_hz',
   'onset_ms',
   'onset_source',
+  'offset_ms',
+  'offset_source',
+  'duration_ms',
+  'planned_onset_ms',
+  'planned_offset_ms',
+  'planned_duration_ms',
+  'onset_error_ms',
+  'offset_error_ms',
+  'silence_before_ms',
+  'silence_before_ref',
+  'silence_after_ms',
   'onset_gap_ms',
   'tone_planned_onset_ms',
   'tone_scheduled_onset_ms',
+  'tone_scheduled_offset_ms',
   'tone_event_recorded',
   'tone_late',
   'tone_late_ms',
@@ -474,12 +517,13 @@ export const COLUMN_DOCS = {
   block_label: 'practice, main_a or main_b.',
   is_practice: 'True for practice trials.',
   presentation_index:
-    '1-120 over the main task in presentation order; empty in practice. Counted by the exporter.',
+    '1-120, 1-based, over the main task in presentation order; empty in practice. Counted by the exporter.',
   presentation_index_stamped:
     'Value written by the runtime, for comparison with presentation_index.',
-  block_position: 'Position of the trial in its block, 0-BASED (0 = first trial of the block).',
+  block_position:
+    'Position of the trial in its block in presentation order, 1-based (1 = first trial of the block). Raw: block_position, 0-based.',
   pool_index:
-    'Index of the trial in the condition pool of 24 (trial_index_in_block of the raw rows), 0-BASED. Not unique across conditions.',
+    'Number of the trial in the condition pool of 24, 1-24, 1-based (raw trial_index_in_block + 1; the `Trial` column of the wide files). Not unique across conditions.',
   rotation_deg:
     'Rotation of the grid for the trial, -90..90, clockwise positive: the angle imagined in the imagery conditions and the angle the grid is shown at in d_only. Empty for t_only.',
   rotation_abs_deg: 'Absolute rotation.',
@@ -494,11 +538,11 @@ export const COLUMN_DOCS = {
   n_probe_rows: 'Probe rows recorded.',
   pattern_phase_before_trial: 'True if the pattern reminder was shown at the start of this trial.',
   trials_since_pattern_phase:
-    'Trials since the last pattern reminder (0 when this trial had one); empty before the first.',
+    'Interval COUNT (not an ordinal position): trials since the last pattern reminder, 0 when this trial had one; empty before the first.',
   pattern_reminder:
     'Scheduler plan: True if this trial was planned to carry the pattern reminder (only imagery trials can). Compare pattern_phase_before_trial, which records what was shown.',
   trials_since_pattern_reminder:
-    'Scheduler plan: trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped.',
+    'Scheduler plan, an interval COUNT (not an ordinal position): trials since the last planned reminder (0 on the reminded trial); empty on memory-only trials and when the plan was not stamped.',
   rest_before_trial: 'True if a rest screen came directly before this trial.',
   trial_has_stars: 'True for conditions that contain stars.',
   n_stars_correct: 'Stars answered correctly.',
@@ -524,9 +568,11 @@ export const COLUMN_DOCS = {
   star_serial_position:
     'Star number among the THREE STARS of the trial, 1-3, 1-based (NOT the position among all stimuli: a star can be the 1st or the 6th stimulus). The overall position is `serial_position_overall`. Key column of stars.csv.',
   slot: 'Position of the star in the six-slot encoding stream, 1-6, 1-based; same as `slot_in_stream`. In single-task trials the stream holds invisible placeholders, so this is NOT the serial position among the stimuli shown: use `serial_position_overall`.',
-  cell: 'Cell index 0-24, row-major, 0-BASED id (cell 0 = top-left, 12 = centre). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`).',
-  cell_row: 'Row of the cell, 0-4 (0-based).',
-  cell_col: 'Column of the cell, 0-4 (0-based).',
+  cell: 'Cell id 0-24, row-major, a stable 0-BASED IDENTIFIER (key into src/config.js, src/grid.js and the pre-registration; cell 0 = top-left, 12 = centre), not a count. Relation to the 1-based grid position: cell = (cell_row - 1) * 5 + (cell_col - 1). Empty in encoding_events.csv rows of placeholders (see `placeholder_cell`).',
+  cell_row:
+    'Row of the cell in the 5 x 5 grid, 1-5, 1-based (1 = top row, 3 = centre row); cell = (cell_row - 1) * 5 + (cell_col - 1). Raw session_info.cell_table.row is 0-based.',
+  cell_col:
+    'Column of the cell in the 5 x 5 grid, 1-5, 1-based (1 = left column, 3 = centre column).',
   cell_x_mm: 'Cell centre x in the upright grid, mm from fixation.',
   cell_y_mm: 'Cell centre y in the upright grid, mm from fixation (down positive).',
   x_mm: 'Screen x of the stimulus after rotation, mm from fixation (x right). Empty for tones, which have no screen position, and for placeholders (invisible).',
@@ -539,10 +585,17 @@ export const COLUMN_DOCS = {
   responded: 'True if a valid key was pressed in the window.',
   said_on: 'True if the participant answered on-pattern.',
   star_correct: 'Correct star response.',
-  rt_ms: 'Response time, ms from stimulus onset (stars.csv: star onset; probes.csv: probe onset).',
+  rt_ms:
+    'Response time of the FIRST valid key press, ms from the onset of the same stimulus (stars.csv: star onset, `star_onset_ms`; probes.csv: onset of that probe, `probe_onset_ms`), from the key event timestamp, rounded, at least 1. A press counts only inside the 3000 ms window [onset, onset + 3000); extra presses are counted in `extra_keypresses`, presses before the onset in `early_keypresses`, after the window in `late_keypresses`. Empty when not answered (then `responded` is false); rows that were not recorded have row_recorded = false.',
   response_key: 'Key pressed.',
-  excluded_anticipatory: 'True if rt_ms < 250.',
-  star_onset_ms: 'Star onset relative to encoding onset, ms.',
+  excluded_anticipatory:
+    'True if the response was given and rt_ms < 250 ms (anticipation floor, RT_FLOOR_MS). Not applied to the data: it is a flag.',
+  star_onset_ms:
+    'Star onset (animation-frame time of the first frame with the star) relative to encoding onset, ms. Equals `onset_ms` of the star slot in encoding_events.csv.',
+  star_offset_ms:
+    'Star offset relative to encoding onset, ms: frame time of the first frame without the star (raw slot_offsets_ts_ms of the star slot; the star row itself is written at the removal call, see `window_closed_ms`). Empty if the star was cut short by the end of the node (truncated) or never drawn. `star_offset_ms - star_onset_ms` is the time the star was on screen (about 3000 ms).',
+  response_ms:
+    'Time of the first valid key press relative to encoding onset, ms (the key event timestamp: raw response_ts_ms minus encoding_onset_ts_ms). Empty if not answered. `rt_ms` = `response_ms` minus the onset of the same table (`star_onset_ms` in stars.csv, `probe_onset_ms` in probes.csv) up to the 1 ms rounding of the two timestamps (rt_ms is rounded from the unrounded difference and is at least 1).',
   position_matches_runtime:
     'True if the exporter position equals the position logged at runtime; empty if none was logged.',
   probe_position:
@@ -573,12 +626,14 @@ export const COLUMN_DOCS = {
     'Encoding position (1-3, 1-based, among the three encoded dots) of the encoded dot nearest to the probe on screen.',
   own_enc_dist_mm:
     'For a target: distance between the probe and its own encoded dot on screen, mm (0 when the probe frame and encoding frame have the same rotation).',
-  tone_index: 'Index 0-23 (0-BASED id) of the tone. Tone conditions only.',
+  tone_index:
+    'Tone id 0-23, a stable 0-BASED IDENTIFIER (index in the 24-tone bank of src/audio/tones.js; the pre-registered rank is tone_index + 1), not a count. Tone conditions only.',
   tone_freq_hz: 'Frequency of the probe tone, Hz.',
   min_tone_rank_gap: 'Smallest rank distance between the probe tone and the encoded tones.',
   said_yes: 'True if the participant answered yes.',
   probe_correct: 'Correct probe response.',
-  probe_onset_ms: 'Probe onset relative to encoding onset, ms.',
+  probe_onset_ms:
+    'Probe onset (animation-frame time of the first frame of the probe node) relative to encoding onset, ms; the origin of `rt_ms`.',
   trial_guard_excluded:
     'True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion.',
   guard_flags:
@@ -622,7 +677,7 @@ export const COLUMN_DOCS = {
   serial_position_in_modality:
     '1-based number among the three items of its own kind (dots, tones or stars), 1-3. In stars.csv this equals `star_serial_position`.',
   slot_in_stream:
-    'Slot in the six-slot encoding stream, 1-6, 1-based (planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`.',
+    'Slot in the six-slot encoding stream, 1-6, 1-based (raw slot_index_in_seq + 1; identical meaning in all five trial types and for dots, stars, tones and placeholders; planned order of the trial_spec sequence; includes invisible placeholders). In stars.csv same as `slot`.',
   test_position:
     '1-based (1-3) position of the recognition test in the test phase; equals `probe_position`. In events rows: the test position of the target probe that tests this item (empty if no probe tests the item, always empty for stars and placeholders).',
   target_serial_position_overall:
@@ -640,22 +695,45 @@ export const COLUMN_DOCS = {
   is_visible_stimulus: 'False for placeholders. Only visible stimuli have a serial position.',
   n_visible_stimuli: 'Number of visible stimuli in the trial: 6 in dual trials, 3 otherwise.',
   placeholder_cell:
-    'Cell (0-based id) of the invisible placeholder in this slot; empty for stimuli. Not a stimulus location.',
+    'Cell id (0-24, 0-based identifier, see `cell`) of the invisible placeholder in this slot; empty for stimuli. Not a stimulus location.',
   stimulus_rotation_deg:
     'Rotation of the grid (degrees, clockwise positive) at which the dot or star was drawn. Stars: star_frame_rotation_deg of the star row, else the trial angle. Dots: the trial angle (not logged per dot; position_matches_runtime checks the drawn position). Empty for tones and placeholders.',
   position_frame:
     'Frame of x_mm / y_mm: rotated_screen (dots and stars: position after the grid rotation, mm from fixation) or none (tone: no screen position, x_mm / y_mm empty; the upright cell position is cell_x_mm / cell_y_mm) or invisible (placeholder, empty).',
   onset_ms:
-    'Onset of the slot relative to encoding onset, ms. Source in `onset_source`: tones are the PLANNED onset (the tone is scheduled ahead on the audio clock; the actual onset is not recorded), dots and placeholders the animation-frame time of drawing, stars the onset logged on the star row.',
+    'Onset of the slot relative to encoding onset (the moment the grid was mounted, performance.now() scale), ms. Source in `onset_source`: tones are the PLANNED onset (the tone is scheduled ahead on the audio clock; the actual onset is not measured), dots and placeholders the animation-frame time of drawing, stars the onset logged on the star row. Placeholders are invisible: the row records when the (invisible) slot element was added.',
   onset_source:
-    'tone_planned (planned onset of the scheduled tone), star_row_frame (onset of the star row), or slot_frame (frame timestamp of the slot in slot_onsets_ts_ms).',
+    'tone_planned (planned onset of the scheduled tone: scheduled, NOT measured), star_row_frame (onset of the star row), or slot_frame (frame timestamp of the slot in slot_onsets_ts_ms).',
+  offset_ms:
+    'Offset of the slot relative to encoding onset, ms, on the same scale as `onset_ms`: the frame time of the first frame without the element (dots, stars and placeholders; source in `offset_source`), or for a tone the planned onset plus the nominal tone duration (350 ms; scheduled, NOT measured). Empty if the event never happened or was still running when the node was cut short.',
+  offset_source:
+    'frame (first animation frame without the element), removal_call (time of the removal call: no frame arrived before the node ended), scheduled (tone: planned onset + nominal duration, not measured), aborted (the node was cut short while the event was running: no offset), or empty (no event / no offset recorded, e.g. data from before offsets were recorded).',
+  duration_ms:
+    'Actual duration of the event, ms: `offset_ms - onset_ms`. For a placeholder it is the length of the invisible placeholder element, which only stands for the event it replaces (nothing was presented). Tones: the nominal duration (scheduled, not measured). Empty if either time is missing.',
+  planned_onset_ms:
+    'Planned onset relative to encoding onset, ms: raw slot_planned_onsets_ts_ms (plan origin t0 + planned time; t0 is taken inside the encoding node less than a millisecond after encoding onset), else from the plan constants (1500 ms pre-encoding pad, then 1500 ms per M slot and 3500 ms per S slot).',
+  planned_offset_ms:
+    'Planned offset relative to encoding onset, ms: planned onset plus the planned duration (dots and placeholders in M slots 1000 ms, stars and placeholders in S slots 3000 ms, tones 350 ms).',
+  planned_duration_ms: '`planned_offset_ms - planned_onset_ms`.',
+  onset_error_ms:
+    'Actual minus planned onset, ms (`onset_ms - planned_onset_ms`). Tones: always 0 or about 0, because the recorded onset of a tone IS the planned one.',
+  offset_error_ms:
+    'Actual minus planned offset, ms (`offset_ms - planned_offset_ms`). Tones: always about 0 (scheduled offset).',
+  silence_before_ms:
+    'Time with nothing perceptible (no dot, star or tone) before this slot, ms: `onset_ms` of this slot minus the offset of the previous PERCEPTIBLE event (dots, stars, tones; invisible placeholders are not perceptible, so a placeholder interval counts as silence). For the first perceptible event, and for placeholders before any perceptible event, it is measured from the start of the encoding phase (encoding onset, time 0, which includes the 1500 ms pre-encoding pad) (`silence_before_ref` = encoding_start). For a placeholder row it is the silence from the previous perceptible event to the start of this placeholder.',
+  silence_before_ref:
+    'Reference of `silence_before_ms`: previous_event_offset (offset of the previous perceptible event) or encoding_start (no perceptible event before this slot: time 0 = encoding onset).',
+  silence_after_ms:
+    'Time with nothing perceptible after this slot, ms: onset of the next PERCEPTIBLE event minus `offset_ms` of this slot (placeholders in between count as silence). Empty for the last perceptible event of the trial (nothing follows inside the encoding phase) and where a time is missing. For a placeholder row it is the silence from the end of this placeholder to the next perceptible event.',
   onset_gap_ms:
-    'onset_ms minus onset_ms of the previous slot (slot_in_stream - 1, placeholders included), ms. Empty for slot 1 and where an onset is missing.',
+    'onset_ms minus onset_ms of the previous slot (slot_in_stream - 1, placeholders included), ms: the slot-to-slot onset interval (1500 after a memory slot, 3500 after a star slot). Empty for slot 1 and where an onset is missing.',
   tone_planned_onset_ms:
     'Planned onset of the tone relative to encoding onset, ms (slot_tone_events.planned_ts_ms). Tones only.',
   tone_scheduled_onset_ms:
     'Onset scheduled on the AudioContext clock converted to the performance clock, relative to encoding onset, ms (scheduled_onset_perf_ms). Empty when the browser gave no timing. This is the best available estimate of the real tone onset; the real onset is not measured.',
   tone_event_recorded: 'True if the runtime wrote a tone event for this slot. Tones only.',
+  tone_scheduled_offset_ms:
+    'Scheduled device offset of the tone relative to encoding onset, ms: `tone_scheduled_onset_ms` plus the nominal duration (scheduled_offset_perf_ms). Empty when the browser gave no timing. Tones only; not measured.',
   tone_late:
     'True if the tone was scheduled after its planned onset (slot_tone_events.late). Tones only.',
   tone_late_ms: 'How late the tone was scheduled, ms (slot_tone_events.late_ms). Tones only.',
@@ -666,8 +744,9 @@ export const COLUMN_DOCS = {
   test_responded: 'True if the test of this item was answered.',
   test_said_yes: 'True if the participant answered yes to the test of this item.',
   test_correct: 'True if the test of this item (a target) was answered correctly, i.e. yes.',
-  test_rt_ms: 'Response time of the test of this item, ms from test onset.',
-  test_excluded_anticipatory: 'True if test_rt_ms < 250.',
+  test_rt_ms:
+    'Response time of the test of this item (the target probe of this item), ms from that probe own onset: `rt_ms` of the joined row of probes.csv. Empty if the item was not tested or the test was not answered (test_responded false). Foil probes have no item and appear only in probes.csv.',
+  test_excluded_anticipatory: 'True if the test was answered and test_rt_ms < 250 (flag only).',
   star_row_recorded: 'False if the planned star has no row in the data.',
   star_responded: 'True if a valid key was pressed in the star window.',
   star_said_on: 'True if the participant answered on-pattern.',
@@ -704,6 +783,111 @@ function stratumOf(angle) {
   if (!Number.isFinite(angle)) return null;
   const i = STRATA.findIndex(([lo, hi]) => angle >= lo && angle <= hi);
   return i < 0 ? null : i + 1;
+}
+
+/* ---------------- timing of the encoding stream ---------------- */
+
+const PLAN = {
+  pre_ms: config.imagery.rotation_animation_ms + config.imagery.post_rotation_delay_ms,
+  m_slot_ms: config.memory.dot_duration_ms + config.memory.inter_stimulus_interval_ms,
+  s_slot_ms: config.imagery.star_duration_ms + config.imagery.inter_star_interval_ms,
+  dot_ms: config.memory.dot_duration_ms,
+  star_ms: config.imagery.star_duration_ms,
+  tone_ms: config.tones.duration_ms,
+};
+
+/* Plan relative to encoding onset, from the constants, for rows that carry no planned
+ * arrays. `modalities[slot]` decides the duration of an M slot (tone or dot/placeholder). */
+function planFromConstants(sequence, modalities) {
+  const on = [];
+  const off = [];
+  let t = PLAN.pre_ms;
+  [...sequence].forEach((ch, slot) => {
+    const isM = ch === 'M';
+    const dur = isM ? (modalities[slot] === 'tone' ? PLAN.tone_ms : PLAN.dot_ms) : PLAN.star_ms;
+    on.push(t);
+    off.push(t + dur);
+    t += isM ? PLAN.m_slot_ms : PLAN.s_slot_ms;
+  });
+  return { on, off };
+}
+
+/**
+ * Timing of every slot of the encoding stream (placeholders included), all in ms relative to
+ * encoding onset `t0`. Pure; shared by encoding_events.csv and EVENTS.csv.
+ *
+ * @param {object} p
+ * @param {object|null} p.enc          raw encoding row
+ * @param {string[]} p.modalities      per slot (0-based index): dot, tone, star or placeholder
+ * @param {(number|null)[]} p.onsets   onset of each slot relative to t0 (null = none)
+ * @param {number|null} p.t0           encoding_onset_ts_ms
+ * @returns {object[]} per slot: offset_ms, offset_source, duration_ms, planned_onset_ms,
+ *   planned_offset_ms, planned_duration_ms, onset_error_ms, offset_error_ms,
+ *   silence_before_ms, silence_before_ref, silence_after_ms
+ */
+export function slotTiming({ enc, modalities, onsets, t0 }) {
+  const list = (k) => (Array.isArray(enc?.[k]) ? enc[k] : []);
+  const offs = list('slot_offsets_ts_ms');
+  const srcs = list('slot_offset_sources');
+  const pOn = list('slot_planned_onsets_ts_ms');
+  const pOff = list('slot_planned_offsets_ts_ms');
+  const sequence = typeof enc?.sequence === 'string' ? enc.sequence : null;
+  const fb =
+    sequence && sequence.length === modalities.length
+      ? planFromConstants(sequence, modalities)
+      : null;
+  const n = modalities.length;
+  const perceptible = modalities.map((m) => m !== 'placeholder');
+  const rows = modalities.map((_, slot) => {
+    const aborted = srcs[slot] === 'aborted';
+    const offset = aborted ? null : rel(offs[slot], t0);
+    const onset = onsets[slot] ?? null;
+    const plannedOn = Number.isFinite(pOn[slot]) ? rel(pOn[slot], t0) : (fb?.on[slot] ?? null);
+    const plannedOff = Number.isFinite(pOff[slot]) ? rel(pOff[slot], t0) : (fb?.off[slot] ?? null);
+    const sub = (a, b) => (a !== null && b !== null ? a - b : null);
+    return {
+      offset_ms: offset,
+      offset_source: typeof srcs[slot] === 'string' ? srcs[slot] : null,
+      duration_ms: sub(offset, onset),
+      planned_onset_ms: plannedOn,
+      planned_offset_ms: plannedOff,
+      planned_duration_ms: sub(plannedOff, plannedOn),
+      onset_error_ms: sub(onset, plannedOn),
+      offset_error_ms: sub(offset, plannedOff),
+      silence_before_ms: null,
+      silence_before_ref: null,
+      silence_after_ms: null,
+    };
+  });
+  for (let s = 0; s < n; s++) {
+    let prev = -1;
+    for (let k = s - 1; k >= 0; k--) {
+      if (perceptible[k]) {
+        prev = k;
+        break;
+      }
+    }
+    let next = -1;
+    for (let k = s + 1; k < n; k++) {
+      if (perceptible[k]) {
+        next = k;
+        break;
+      }
+    }
+    const onset = onsets[s] ?? null;
+    if (prev < 0) {
+      rows[s].silence_before_ref = 'encoding_start';
+      rows[s].silence_before_ms = onset;
+    } else {
+      rows[s].silence_before_ref = 'previous_event_offset';
+      const po = rows[prev].offset_ms;
+      rows[s].silence_before_ms = onset !== null && po !== null ? onset - po : null;
+    }
+    const o = rows[s].offset_ms;
+    const nx = next < 0 ? null : (onsets[next] ?? null);
+    rows[s].silence_after_ms = o !== null && nx !== null ? nx - o : null;
+  }
+  return rows;
 }
 
 function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
@@ -743,9 +927,11 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     const cond = w.condition;
     const block = gate.block_label ?? w.encoding?.block_label ?? null;
     const isPractice = block === 'practice';
-    const poolIndex = Number.isInteger(gate.pool_index)
+    /* raw pool_index / trial_index_in_block are 0-based; the table exports them 1-based */
+    const poolIndexRaw = Number.isInteger(gate.pool_index)
       ? gate.pool_index
       : (gate.trial_index_in_block ?? null);
+    const poolIndex = Number.isInteger(poolIndexRaw) ? poolIndexRaw + 1 : null;
     if (!isPractice) mainCount += 1;
     const presentation = isPractice ? null : mainCount;
     const stamped = Number.isInteger(gate.presentation_index) ? gate.presentation_index : null;
@@ -759,7 +945,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     const uid =
       gate.trial_uid ??
       (isPractice
-        ? `practice-${cond}-${pad((poolIndex ?? 0) + 1, 2)}`
+        ? `practice-${cond}-${pad(poolIndex ?? 1, 2)}`
         : `${block}-${pad(presentation, 3)}-${cond}`);
     const attemptKey = `${uid}`;
     const attempt = (attempts.get(attemptKey) ?? 0) + 1;
@@ -879,6 +1065,8 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         response_key: keyOf(row),
         excluded_anticipatory: row ? responded === true && rt !== null && rt < RT_FLOOR_MS : null,
         star_onset_ms: rel(row?.star_onset_ts_ms, t0),
+        star_offset_ms: null,
+        response_ms: rel(row?.response_ts_ms, t0),
         early_keypresses: row?.early_keypresses ?? null,
         late_keypresses: row?.late_keypresses ?? null,
         extra_keypresses: row?.extra_keypresses ?? null,
@@ -989,6 +1177,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
         response_key: keyOf(row),
         excluded_anticipatory: row ? responded === true && rt !== null && rt < RT_FLOOR_MS : null,
         probe_onset_ms: rel(row?.probe_onset_ts_ms, t0),
+        response_ms: rel(row?.response_ts_ms, t0),
         trial_star_excluded: trialStarExcluded,
         star_correct_all: starCorrectAll,
         early_keypresses: row?.early_keypresses ?? null,
@@ -1062,6 +1251,16 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
       return rel(slotOnsets[e.slot], t0);
     };
     const onsets = skeleton.map(onsetOf);
+    const timing = slotTiming({
+      enc,
+      modalities: skeleton.map((e) => e.modality),
+      onsets,
+      t0,
+    });
+    for (const e of skeleton) {
+      const srec = e.modality === 'star' ? starRecBySlot.get(e.slot) : null;
+      if (srec) srec.star_offset_ms = timing[e.slot].offset_ms;
+    }
     for (const e of skeleton) {
       const it = e.item;
       const memItem = e.modality === 'dot' || e.modality === 'tone';
@@ -1139,12 +1338,14 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
             : e.modality === 'star' && sr?.star_onset_ms !== null && sr?.star_onset_ms !== undefined
               ? 'star_row_frame'
               : 'slot_frame',
+        ...timing[e.slot],
         onset_gap_ms:
           e.slot > 0 && onsets[e.slot] !== null && onsets[e.slot - 1] !== null
             ? onsets[e.slot] - onsets[e.slot - 1]
             : null,
         tone_planned_onset_ms: te ? rel(te.planned_ts_ms, t0) : null,
         tone_scheduled_onset_ms: te ? rel(te.scheduled_onset_perf_ms, t0) : null,
+        tone_scheduled_offset_ms: te ? rel(te.scheduled_offset_perf_ms, t0) : null,
         tone_event_recorded: e.modality === 'tone' ? te !== null : null,
         tone_late: te && typeof te.late === 'boolean' ? te.late : null,
         tone_late_ms: te && Number.isFinite(te.late_ms) ? te.late_ms : null,
@@ -1188,7 +1389,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
     trials.push({
       ...base,
       presentation_index_stamped: stamped,
-      block_position: Number.isInteger(gate.block_position) ? gate.block_position : null,
+      block_position: Number.isInteger(gate.block_position) ? gate.block_position + 1 : null,
       rotation_abs_deg: Number.isFinite(rotation) ? Math.abs(rotation) : null,
       rotation_sign: Number.isFinite(rotation) ? Math.sign(rotation) : null,
       rotation_stratum: stratumOf(rotation),
@@ -1311,8 +1512,20 @@ const INTEGER_COLUMNS = new Set([
   'stimulus_rotation_deg',
   'onset_ms',
   'onset_gap_ms',
+  'offset_ms',
+  'duration_ms',
+  'planned_onset_ms',
+  'planned_offset_ms',
+  'planned_duration_ms',
+  'onset_error_ms',
+  'offset_error_ms',
+  'silence_before_ms',
+  'silence_after_ms',
   'tone_planned_onset_ms',
   'tone_scheduled_onset_ms',
+  'tone_scheduled_offset_ms',
+  'star_offset_ms',
+  'response_ms',
   'test_rt_ms',
   'star_rt_ms',
   'star_window_closed_ms',
@@ -1474,7 +1687,7 @@ export function buildTidySchema() {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: 'Tidy tables - WM x Imagery follow-up experiment',
     description:
-      'Rows of trials.csv, stars.csv, probes.csv and encoding_events.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid. Serial position = ordinal among ALL visible stimuli of the trial (dual 1-6, single-task 1-3, 1-based); slot_in_stream = slot in the six-slot encoding stream including invisible placeholders (1-6); test position = order of the recognition tests. Every position-like column is 1-based except cell, tone_index and block_position/pool_index (0-based), as stated in each column description.',
+      'Rows of trials.csv, stars.csv, probes.csv and encoding_events.csv written by scripts/csv-export.js (generator scripts/tidy-tables.js). Positions are in mm in the fixed grid frame: origin at fixation, x right, y down; x_mm / y_mm are after rotation, cell_x_mm / cell_y_mm are in the upright grid. Serial position = ordinal among ALL visible stimuli of the trial (dual 1-6, single-task 1-3, 1-based); slot_in_stream = slot in the six-slot encoding stream including invisible placeholders (1-6); test position = order of the recognition tests. Indexing: every ordinal / position / sequence column is 1-based (first = 1), including cell_row, cell_col, block_position and pool_index; the only 0-based values are the identifiers cell (0-24, centre 12) and tone_index (0-23), which are keys into src/config.js and src/grid.js, not counts (cell = (cell_row - 1) * 5 + (cell_col - 1)). Raw rows keep their recorded 0-based values. Timing: the encoding_events table gives onset, offset, duration, planned values, onset error and the silence before / after each slot, all in ms from encoding onset (tone onsets and offsets are scheduled, not measured).',
     version: TIDY_VERSION,
     $defs: {
       trial: table('trial row', TRIALS_COLUMNS, TIDY_KEYS.trials),
