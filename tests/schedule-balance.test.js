@@ -1,6 +1,15 @@
 /**
  * Counterbalance checks for the main-task schedule, run over many seeds.
  *
+ * Per condition and per 60-trial block (12 trials of the condition; Main A and Main B alike), EXACT:
+ *   - M / S slot occupancy 6 / 6 at every slot (6 complement pairs of the 14 strings)
+ *   - memory items on / off 3 / 3 among the 6 trials with an item at each slot, 6 / 6 per ordinal
+ *   - stars on / off 3 / 3 among the 6 trials with a star at each slot, 6 / 6 per ordinal,
+ *     3 / 3 per rotation stratum
+ *   - probe type x test position 3 per cell, encoding ordinal x test position 4 per cell,
+ *     target class x ordinal x position 1 per cell, 3 probed targets per slot
+ *   - rotation 2 angles per stratum, 6 shade each
+ *   - per-trial on-count histogram (2,4,4,2) / (1,5,5,1) (memory and stars separately)
  * Per condition (24-trial pool) and per session:
  *   - probe type x probe position: 6 in each of the 12 cells
  *   - encoding position x probe position: 8 in each of the 9 cells (all probes)
@@ -220,4 +229,120 @@ describe('blocks and session', () => {
     expect(a).toBe(b);
     expect(a).not.toBe(c);
   });
+});
+
+describe('per block (12 trials of one condition), exact; recomputed from the SHIPPED trials', () => {
+  const HIST_OK = new Set(['2,4,4,2', '1,5,5,1']);
+  const hist = (counts) => [0, 1, 2, 3].map((k) => counts.filter((x) => x === k).length).join();
+  for (const seed of SEEDS.slice(0, 20)) {
+    it(`block balance holds for ${seed}`, () => {
+      const pair = build(seed);
+      for (const type of TYPES) {
+        const halves = [
+          pair.mainA.trialParams.filter((p) => p.trial_type === type),
+          pair.mainB.trialParams.filter((p) => p.trial_type === type),
+        ];
+        const poolHist = { mem: [0, 0, 0, 0], star: [0, 0, 0, 0] };
+        halves.forEach((blk, b) => {
+          expect(blk).toHaveLength(12);
+          const mSlot = Array(6).fill(0);
+          for (const p of blk) p.sequence.forEach((c, i) => c === 'M' && mSlot[i]++);
+          expect(mSlot).toEqual(Array(6).fill(6));
+          expect(blk.filter((p) => p.background_shade === 'white')).toHaveLength(6);
+          if (type !== 't_only') {
+            const key = type === 'd_only' ? 'display_rotation_deg' : 'rotation_deg';
+            const per = Array(6).fill(0);
+            blk.forEach((p) => per[rotationStratumIndex(p[key])]++);
+            expect(per).toEqual(Array(6).fill(2));
+            expect(blk.filter((p) => p[key] < 0)).toHaveLength(6);
+          }
+          if (MEMORY.includes(type)) {
+            const n = Array(6).fill(0);
+            const on = Array(6).fill(0);
+            const ordOn = Array(3).fill(0);
+            const counts = [];
+            for (const p of blk) {
+              let c = 0;
+              for (const m of p.memory_items) {
+                n[m.slot_index_in_seq]++;
+                if (m.pattern_label === 'on') {
+                  on[m.slot_index_in_seq]++;
+                  ordOn[m.encoding_position]++;
+                  c++;
+                }
+              }
+              counts.push(c);
+            }
+            expect(n).toEqual(Array(6).fill(6));
+            expect(on).toEqual(Array(6).fill(3));
+            expect(ordOn).toEqual(Array(3).fill(6));
+            expect(HIST_OK.has(hist(counts))).toBe(true);
+            counts.forEach((c) => poolHist.mem[c]++);
+            const typePos = count2d(
+              4,
+              3,
+              blk.flatMap((p) =>
+                p.probes.map((q) => [PROBE_TYPES.indexOf(q.type), q.probe_position])
+              )
+            );
+            expect(all(typePos, 3)).toBe(true);
+            const encPos = count2d(
+              3,
+              3,
+              blk.flatMap((p) => p.probes.map((q) => [q.encoding_position, q.probe_position]))
+            );
+            expect(all(encPos, 4)).toBe(true);
+            for (const cls of ['T_on', 'T_off']) {
+              const t = count2d(
+                3,
+                3,
+                blk.flatMap((p) =>
+                  p.probes
+                    .filter((q) => q.type === cls)
+                    .map((q) => [q.encoding_position, q.probe_position])
+                )
+              );
+              expect(all(t, 1)).toBe(true);
+            }
+            const targetsAtSlot = Array(6).fill(0);
+            for (const p of blk)
+              for (const q of p.probes)
+                if (q.is_target)
+                  targetsAtSlot[p.memory_items[q.encoding_position].slot_index_in_seq]++;
+            expect(targetsAtSlot).toEqual(Array(6).fill(3));
+          }
+          if (IMAGERY.includes(type)) {
+            const n = Array(6).fill(0);
+            const on = Array(6).fill(0);
+            const ordOn = Array(3).fill(0);
+            const strOn = Array(6).fill(0);
+            const counts = [];
+            for (const p of blk) {
+              let c = 0;
+              for (const s of p.stars) {
+                n[s.slot_index_in_seq]++;
+                if (s.pattern_label === 'on') {
+                  on[s.slot_index_in_seq]++;
+                  ordOn[s.probe_position]++;
+                  strOn[rotationStratumIndex(p.rotation_deg)]++;
+                  c++;
+                }
+              }
+              counts.push(c);
+            }
+            expect(n).toEqual(Array(6).fill(6));
+            expect(on).toEqual(Array(6).fill(3));
+            expect(ordOn).toEqual(Array(3).fill(6));
+            expect(strOn).toEqual(Array(6).fill(3));
+            expect(HIST_OK.has(hist(counts))).toBe(true);
+            counts.forEach((c) => poolHist.star[c]++);
+          }
+          void b;
+        });
+        /* pool: the two histograms add up to (3, 9, 9, 3) */
+        if (MEMORY.includes(type)) expect(poolHist.mem).toEqual([3, 9, 9, 3]);
+        if (IMAGERY.includes(type)) expect(poolHist.star).toEqual([3, 9, 9, 3]);
+      }
+    });
+  }
 });

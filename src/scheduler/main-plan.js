@@ -1,13 +1,10 @@
-/**
- * Pure part of the main-task plan: the 24-trial pool of every condition,
- * the stratified split into Main A and Main B, and the ordered trial lists
- * of the two blocks. Shared by the runtime (`main-blocks.js`) and the pilot
- * simulator so both follow the same code path for the same seed.
- */
 import { getSessionPRNG } from '../prng.js';
-import { generateMemoryBlock } from './memory-block.js';
-import { generateImageryBlock } from './imagery-block.js';
-import { generateDualBlock } from './dual-block.js';
+import {
+  generateBalancedPool,
+  createAttemptBudget,
+  AttemptBudgetExceeded,
+} from './balanced-pool.js';
+import { assertPoolInvariants, assertPlanInvariants } from './balance-invariants.js';
 import { planBlockTrials, trailingRun } from './block-plan.js';
 import { orderViolations } from './rotation-balance.js';
 
@@ -20,27 +17,26 @@ const MAX_GENERATION_TRIES = 25;
 const MAX_BOUNDARY_TRIES = 25;
 /* Whole-plan redraws when the reminder totals of the session are not within one. */
 const MAX_PLAN_TRIES = 25;
+/* Global attempt budget of one generateMainPlan call (units: see createAttemptBudget).
+ * Measured over 70000 seeds: a plan needs 22 to 49 units (mean about 24); budget 500 (10x
+ * margin). A degenerate stream (constant PRNG) spends the
+ * budget in about 1 to 1.5 s and then throws. */
+export const MAX_TOTAL_ATTEMPTS = 500;
 const IMAGERY_TYPES = Object.freeze(['i_only', 'i_d', 'i_t']);
 
-function generatePerTypeOnce(type, blockSize, sequencePoolLabel, prng) {
-  if (type === 'd_only' || type === 't_only') {
-    return generateMemoryBlock({ trialType: type, blockSize, sequencePoolLabel, prng });
-  }
-  if (type === 'i_only') {
-    return generateImageryBlock({ blockSize, sequencePoolLabel, prng });
-  }
-  if (type === 'i_d' || type === 'i_t') {
-    return generateDualBlock({ trialType: type, blockSize, sequencePoolLabel, prng });
-  }
-  throw new Error(`generateMainPools: unknown trial type '${type}'`);
-}
-
-function generatePerType(type, blockSize, sequencePoolLabel, prng) {
+/* One condition's pool as its two 12-trial halves (Main A, Main B), generated
+ * half by half so the counterbalance is exact inside every block, and checked
+ * against the independent validator before it is used. */
+function generatePerType(type, prng, budget) {
   let lastError;
   for (let attempt = 0; attempt < MAX_GENERATION_TRIES; attempt++) {
     try {
-      return generatePerTypeOnce(type, blockSize, sequencePoolLabel, prng);
+      budget.spend('pool generation');
+      const pool = generateBalancedPool(type, prng, { budget });
+      assertPoolInvariants(pool.halfA, pool.halfB, type);
+      return pool;
     } catch (err) {
+      if (err instanceof AttemptBudgetExceeded) throw err;
       lastError = err;
     }
   }
@@ -48,54 +44,23 @@ function generatePerType(type, blockSize, sequencePoolLabel, prng) {
 }
 
 /**
- * Stratified split: partition a per-type pool into halfA + halfB so each
- * half carries the same background-shade composition (6 white + 6 gray per
- * half at 24 trials; within one trial for odd counts).
- */
-function stratifiedSplitByShade(pool, rng) {
-  const byShade = new Map();
-  for (const trial of pool) {
-    const key = trial.background_shade;
-    if (!byShade.has(key)) byShade.set(key, []);
-    byShade.get(key).push(trial);
-  }
-  const halfA = [];
-  const halfB = [];
-  for (const [, trials] of byShade) {
-    const shuffled = rng.shuffle(trials.slice());
-    const cut = Math.floor(shuffled.length / 2);
-    const leftover = shuffled.length - cut * 2;
-    const flipExtra = leftover === 1 && rng.int(2) === 1;
-    const aTake = flipExtra ? cut + 1 : cut;
-    halfA.push(...shuffled.slice(0, aTake));
-    halfB.push(...shuffled.slice(aTake));
-  }
-  return { halfA: rng.shuffle(halfA), halfB: rng.shuffle(halfB) };
-}
-
-/**
- * The 24-trial pool of each condition and its two halves.
+ * The 24-trial pool of each condition and its two halves. Each pool is built as
+ * two exact 12-trial halves (`balanced-pool.js`); nothing is partitioned afterwards.
  * @returns {{trialParamsByType: object, halfA: object, halfB: object}}
  */
-function generateMainPools({ sequencePoolLabelPrefix = 'main', prng } = {}) {
+function generateMainPools({ prng, budget } = {}) {
   const rng = prng ?? getSessionPRNG();
   const trialParamsByType = {};
   const halfA = {};
   const halfB = {};
   for (const type of TRIAL_TYPES) {
-    const all24 = generatePerType(
-      type,
-      TRIALS_PER_TYPE_TOTAL,
-      `${sequencePoolLabelPrefix}__${type}`,
-      rng
-    );
-    const split = stratifiedSplitByShade(all24, rng);
-    halfA[type] = split.halfA;
-    halfB[type] = split.halfB;
+    const pool = generatePerType(type, rng, budget);
+    halfA[type] = pool.halfA.slice();
+    halfB[type] = pool.halfB.slice();
     trialParamsByType[type] = Object.freeze({
-      all: Object.freeze(all24),
-      halfA: Object.freeze(split.halfA.slice()),
-      halfB: Object.freeze(split.halfB.slice()),
+      all: Object.freeze([...pool.halfA, ...pool.halfB]),
+      halfA: Object.freeze(pool.halfA.slice()),
+      halfB: Object.freeze(pool.halfB.slice()),
     });
   }
   return { trialParamsByType, halfA, halfB };
@@ -111,10 +76,11 @@ function countsOf(half) {
  * Pools plus the ordered trial lists of Main A and Main B (condition
  * sequence, trial order and identity fields), without building any nodes.
  */
-export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
+export function generateMainPlan({ prng, budget = createAttemptBudget(MAX_TOTAL_ATTEMPTS) } = {}) {
   const rng = prng ?? getSessionPRNG();
-  const pools = generateMainPools({ sequencePoolLabelPrefix, prng: rng });
+  const pools = generateMainPools({ prng: rng, budget });
   const planMainA = () =>
+    budget.spend('Main A plan') ||
     planBlockTrials({
       blockLabel: 'main_a',
       queues: pools.halfA,
@@ -123,6 +89,7 @@ export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
       prng: rng,
     });
   const planMainB = (mainA) =>
+    budget.spend('Main B plan') ||
     planBlockTrials({
       blockLabel: 'main_b',
       queues: pools.halfB,
@@ -149,8 +116,7 @@ export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
    * returned, because the reminder schedule is not a hard requirement.
    *
    * Every retry draws from the same seeded stream, so the result is still
-   * reproducible from the seed, and a seed that satisfied everything at the first
-   * try gives exactly the plan it always did. */
+   * reproducible from the seed. */
   let best = null;
   for (let plan = 0; plan < MAX_PLAN_TRIES; plan++) {
     const mainA = planMainA();
@@ -164,7 +130,7 @@ export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
     }
     if (mainB === null) continue; /* a hard rule failed in every try: draw the plan again */
     const spread = reminderSpread(mainB.reminderCounts);
-    if (spread <= 1) return { ...pools, mainA, mainB };
+    if (spread <= 1) return finalise({ ...pools, mainA, mainB });
     if (best === null || spread < best.spread) best = { mainA, mainB, spread };
   }
   if (best === null) {
@@ -172,7 +138,14 @@ export function generateMainPlan({ sequencePoolLabelPrefix, prng } = {}) {
       `generateMainPlan: no plan satisfied the order rules across the block boundary in ${MAX_PLAN_TRIES} × ${MAX_BOUNDARY_TRIES} tries`
     );
   }
-  return { ...pools, mainA: best.mainA, mainB: best.mainB };
+  return finalise({ ...pools, mainA: best.mainA, mainB: best.mainB });
+}
+
+/* Last line of defence: whatever path produced the plan (re-plans, the soft
+ * reminder fallback), a plan that is not block-exact is never returned. */
+function finalise(plan) {
+  assertPlanInvariants(plan);
+  return plan;
 }
 
 /** Largest minus smallest per-condition reminder count (imagery conditions only). */

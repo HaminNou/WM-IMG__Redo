@@ -25,7 +25,7 @@ describe('boundary rules that cannot be met', () => {
   it('throws instead of returning a plan that violates them', () => {
     resetSequencePools();
     expect(() => generateMainPlan({ prng: createPRNG('boundary-fail') })).toThrow(
-      /boundary|run limits|order rules/i
+      /boundary|run limits|order rules|attempt budget/i
     );
   });
 });

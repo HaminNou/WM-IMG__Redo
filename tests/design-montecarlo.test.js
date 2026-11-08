@@ -7,6 +7,13 @@
  * that make the five conditions comparable (in particular I+T against I+D
  * and I-only: same slot structure, same angle design, same label balance,
  * same star-cell rules).
+ *
+ * Two independent audits run on every plan: `auditPool` below (the original
+ * pool-level audit, kept as an oracle that shares no code with the generator) and
+ * the block-exact oracle (tests/helpers/block-oracle.js) applied to the SHIPPED
+ * trial lists of Main A and Main B (after the order planner), per condition.
+ * The number of full-plan seeds is 200 by default; WMIMG_MC_SEEDS=2000 (or more)
+ * runs the large audit (scripts/design-audit.js is the same audit as a script).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createPRNG } from '../src/prng.js';
@@ -20,8 +27,10 @@ import {
 import { onPatternCells, offPatternCells } from '../src/grid.js';
 import { toneForCell } from '../src/audio/tones.js';
 import { MIN_TONE_GAP_RANKS } from '../src/scheduler/tone-spacing.js';
+import { planInvariantViolations } from '../src/scheduler/balance-invariants.js';
+import { checkBlock, checkPool } from './helpers/block-oracle.js';
 
-const N_SEEDS = 120;
+const N_SEEDS = Number(process.env.WMIMG_MC_SEEDS) || 200;
 const MEMORY_TYPES = ['d_only', 't_only', 'i_d', 'i_t'];
 const STAR_TYPES = ['i_only', 'i_d', 'i_t'];
 const DUAL_TYPES = ['i_d', 'i_t'];
@@ -204,6 +213,21 @@ function auditPlan(plan) {
   /* the shade / rotation run limits hold across the Main A -> Main B boundary too */
   if (orderViolations([...plan.mainA.trialParams, ...plan.mainB.trialParams]))
     bad.push('order violations across the Main A / Main B boundary');
+  /* block-exact design, independent oracle, on the trials as shipped */
+  for (const type of TRIAL_TYPES) {
+    const a = plan.mainA.trialParams.filter((t) => t.trial_type === type);
+    const b = plan.mainB.trialParams.filter((t) => t.trial_type === type);
+    for (const [label, list] of [
+      ['main_a', a],
+      ['main_b', b],
+    ])
+      for (const x of checkBlock(list, type, { histOK: true }).viol)
+        bad.push(`${type} ${label}: ${x}`);
+    const pool = checkPool(a, b, type);
+    for (const x of pool.viol) bad.push(`${type}: ${x}`);
+  }
+  /* the shipped validator agrees */
+  bad.push(...planInvariantViolations(plan));
   /* each trial appears exactly once over the two blocks */
   const uids = new Set(
     [...plan.mainA.trialParams, ...plan.mainB.trialParams].map((t) => t.trial_meta.trial_uid)
@@ -259,8 +283,15 @@ describe('main-plan Monte Carlo audit', () => {
       const b = (memCellUse.i_t.get(c) ?? 0) / total;
       maxGap = Math.max(maxGap, Math.abs(a - b));
     }
-    /* informational: the tone-spacing rule makes I+T cell use non-uniform */
-    expect(maxGap).toBeLessThan(0.08);
+    /* cell usage is NOT balanced per pool (independent draws); in expectation every cell is used
+     * equally (180 per cell over 60 pools, sd about 13), for I+D and I+T alike. Seeds are fixed, so
+     * these tolerances (about 4 sd) cannot flake. */
+    expect(maxGap).toBeLessThan(0.02);
+    for (const c of [...ON, ...OFF])
+      for (const type of DUAL_TYPES) {
+        expect(Math.abs(memCellUse[type].get(c) / 180 - 1)).toBeLessThan(0.3);
+        expect(Math.abs(starCellUse[type].get(c) / 180 - 1)).toBeLessThan(0.3);
+      }
   }, 300000);
 
   it('the audit itself detects corrupted pools (negative control)', () => {

@@ -19,8 +19,9 @@
  *      `Background_Shade` column) expects.
  *   6. Block generators stamp `background_shade` on every emitted trial
  *      spec so the page-flip + colour primitives have something to read.
- *   7. `main-blocks` stratified split preserves the 50/50 balance within
- *      each half of every per-type pool.
+ *   7. The main task generates every per-type pool as two 12-trial halves
+ *      (`balanced-pool.js`), each with exactly 6 white + 6 gray: there is no
+ *      shade-stratified split step any more.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 
@@ -161,20 +162,27 @@ describe('block generators stamp background_shade on every trial spec', () => {
   });
 });
 
-describe('main-blocks stratified split preserves 50/50 balance per half', () => {
+describe('main task halves are generated with 6 white + 6 gray each (no split step)', () => {
   it('every per-type half of Main A and Main B has exactly 6 of each shade', () => {
     const pair = generateMainBlockPair({ prng: createPRNG('main-block-shade-test') });
-    /* Each per-type pool is 24 trials → split 12+12 with exactly 6/6
-     * per shade in each half. The split is shade-stratified so neither
-     * half can drift. trialParamsByType.<type>.{halfA,halfB} carry the
-     * authoritative split (assembleBlock's `trialParams` is the same
-     * trial set, just iterated in cross-condition order). */
+    /* Each per-type pool is generated as two 12-trial halves with exactly
+     * 6/6 per shade in each (balanced-pool.js). trialParamsByType.<type>.{halfA,halfB}
+     * are those halves (assembleBlock's `trialParams` is the same trial set,
+     * just iterated in cross-condition order), and so are the shipped blocks. */
     for (const trialType of ['d_only', 't_only', 'i_only', 'i_d', 'i_t']) {
       const halves = pair.trialParamsByType[trialType];
       for (const half of [halves.halfA, halves.halfB]) {
         expect(half).toHaveLength(12);
         const whites = half.filter((p) => p.background_shade === 'white').length;
         expect(whites).toBe(6);
+      }
+      for (const [block, label] of [
+        [pair.mainA, 'main_a'],
+        [pair.mainB, 'main_b'],
+      ]) {
+        const shipped = block.trialParams.filter((p) => p.trial_type === trialType);
+        expect(shipped, label).toHaveLength(12);
+        expect(shipped.filter((p) => p.background_shade === 'white')).toHaveLength(6);
       }
     }
   });

@@ -2,12 +2,11 @@
  * Tests for src/scheduler/main-blocks.js — the 24-and-split orchestrator
  * with 3 items per trial.
  *
- * The counterbalances are enforced by the per-condition generators ONLY at
- * blockSize = 24. This module's whole reason for existing is to preserve that
- * guarantee across Main A + Main B by generating 24 trials per type at
- * session level and splitting 12 + 12. Hit counts shifted with set-size 3:
- *   - (probe_type × probe_position): 4 × 3 = 12 cells, 6 per cell.
- *   - (encoding_position × probe_position): 3 × 3 = 9 cells, 8 per cell.
+ * Each type's 24-trial pool is generated as TWO exact 12-trial halves (Main A and
+ * Main B; `balanced-pool.js`), so every counterbalance holds inside every block
+ * and across the pool. Hit counts at set-size 3:
+ *   - (probe_type × probe_position): 4 × 3 = 12 cells, 3 per cell per block, 6 per pool.
+ *   - (encoding_position × probe_position): 3 × 3 = 9 cells, 4 per cell per block, 8 per pool.
  *
  * What we verify here:
  *   - each per-type pool has exactly 24 trials,
@@ -28,6 +27,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { generateMainBlockPair } from '../src/scheduler/main-blocks.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
 import { setSessionPRNG } from '../src/prng.js';
+import { checkBlock, checkPool } from './helpers/block-oracle.js';
 
 const ALL_TYPES = ['d_only', 't_only', 'i_only', 'i_d', 'i_t'];
 
@@ -303,5 +303,52 @@ describe('counterbalance survives the Main A ⊎ Main B partition', () => {
     const union = pair.trialParamsByType.i_t.all;
     const counts = tallyEncodingByProbePosition(union);
     for (const [, v] of Object.entries(counts)) expect(v).toBe(8);
+  });
+});
+
+describe('generateMainBlockPair: block-exact halves', () => {
+  const content = (t) => {
+    const { trial_meta: _m, ...rest } = t;
+    return JSON.stringify(rest);
+  };
+
+  it('Main A ships exactly the trials of halfA and Main B those of halfB, per type', () => {
+    const pair = generateMainBlockPair();
+    for (const type of ALL_TYPES) {
+      for (const [block, half] of [
+        [pair.mainA, pair.trialParamsByType[type].halfA],
+        [pair.mainB, pair.trialParamsByType[type].halfB],
+      ]) {
+        const shipped = block.trialParams
+          .filter((t) => t.trial_type === type)
+          .map(content)
+          .sort();
+        expect(shipped).toEqual(half.map(content).sort());
+      }
+    }
+  });
+
+  it('pool_index (trial_index_in_block) is 0..11 for Main A and 12..23 for Main B', () => {
+    const pair = generateMainBlockPair();
+    for (const type of ALL_TYPES) {
+      const idx = (block) =>
+        block.trialParams
+          .filter((t) => t.trial_type === type)
+          .map((t) => t.trial_meta.pool_index)
+          .sort((a, b) => a - b);
+      expect(idx(pair.mainA)).toEqual([...Array(12).keys()]);
+      expect(idx(pair.mainB)).toEqual([...Array(12).keys()].map((i) => i + 12));
+    }
+  });
+
+  it('the SHIPPED (order-planned) blocks are exact per block and per pool, checked by the oracle', () => {
+    const pair = generateMainBlockPair();
+    for (const type of ALL_TYPES) {
+      const a = pair.mainA.trialParams.filter((t) => t.trial_type === type);
+      const b = pair.mainB.trialParams.filter((t) => t.trial_type === type);
+      expect(checkBlock(a, type, { histOK: true }).viol).toEqual([]);
+      expect(checkBlock(b, type, { histOK: true }).viol).toEqual([]);
+      expect(checkPool(a, b, type).viol).toEqual([]);
+    }
   });
 });

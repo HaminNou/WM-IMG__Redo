@@ -1,4 +1,9 @@
 /**
+ * NOTE: this is the single-pool generator. The main task no longer uses it (its pools are
+ * generated block-exact by `balanced-pool.js`); it still serves the practice blocks (blockSize 2)
+ * and the unit tests, and its output for a fixed seed is pinned by
+ * tests/legacy-generators-golden.test.js.
+ *
  * Per-block trial-parameter generator for D-only and T-only.
  *
  * Wraps `within-trial.js` (encoding sequence) and `probe-pool.js`

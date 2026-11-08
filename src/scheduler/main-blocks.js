@@ -3,35 +3,30 @@
  *
  * The main task is 24 trials per type × 5 types = 120 trials, split into two
  * 60-trial blocks (Main A and Main B) with a 30-second rest between them.
- * The per-condition counterbalances — (probe_type × probe_position), exactly
- * 6 of each across 12 cells, and (encoding_position × probe_position), exactly
- * 8 of each across 9 cells — hold across the 24 trials of each type. The
- * naive approach of generating 12 trials per type per main block would
- * silently lose this guarantee: at blockSize = 12, the per-condition
- * generators fall back to non-exact sampling.
  *
- * This module preserves that invariant by generating 24 trials per type
- * at session level (via the per-condition generators), shuffling each per-
- * type array, and partitioning into two 12-trial halves. The union of Main A
- * and Main B for a given type is exactly the counterbalanced 24-trial
- * pool — confirmed by the per-condition test suites, which run at blockSize
- * = 24 — and the random partition just decides which half each trial lands
- * in.
+ * Each type's 24-trial pool is generated as TWO exact 12-trial halves, one per
+ * block (`balanced-pool.js`), never as a 24-pool that is partitioned afterwards.
+ * Per block and per type (identically for all five types) the M/S slot occupancy,
+ * the on/off labels of memory items and of stars per serial position, probe type ×
+ * test position, encoding position × test position, the rotation strata and the
+ * background shade are exact; across the two blocks the 24-trial pool keeps its
+ * pre-registered balances (probe type × position 6 per cell, encoding position ×
+ * position 8 per cell, ...) and in addition probed-target on/off labels per slot
+ * and every encoded dot / tone and star cell are exact. The full list is in
+ * `balanced-pool.js`; `balance-invariants.js` verifies it, and `generateMainPlan`
+ * throws rather than return a plan that fails it.
  *
  * Each half is then handed to `assembleBlock` (with the pre-built queues, so
  * the assembler skips its own per-condition generation) to produce the
- * cross-condition trial-type schedule and inject pattern-phase nodes.
+ * cross-condition trial-type schedule and inject pattern-phase nodes. That
+ * step reorders whole trials of one type inside the block only: no label ever
+ * moves between slots or blocks after generation.
  *
  * The two halves use distinct trial-type schedules (independent calls to
  * `generateTrialTypeSchedule`) so a participant doesn't see the same type
  * order twice.
  *
- * Background-shade stratification: each per-type 24-trial pool
- * is generated with an exact 12-white / 12-gray split (see
- * `background-shade.js` and the per-condition generators). The split into
- * halfA / halfB is therefore stratified by shade — 6 white + 6 gray per
- * half per type — rather than a plain shuffle-and-slice. This guarantees
- * every block of every type carries an exact 50/50 page-background mix.
+ * Background shade is generated 6 white + 6 gray inside every half (no split step).
  */
 import { getSessionPRNG } from '../prng.js';
 import { generateMainPlan } from './main-plan.js';
@@ -54,8 +49,6 @@ const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
  * Generate the Main A + Main B block pair.
  *
  * @param {object} [opts]
- * @param {string} [opts.sequencePoolLabelPrefix]   prefix for per-condition sequence-pool labels
- *                                                  (default 'main')
  * @param {object} [opts.prng]                      session PRNG; defaults to getSessionPRNG()
  * @returns {{
  *   mainA: {schedule: string[], trialParams: object[], nodes: object[]},
@@ -63,17 +56,13 @@ const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
  *   trialParamsByType: Record<string, {all: object[], halfA: object[], halfB: object[]}>
  * }}
  */
-export function generateMainBlockPair({ sequencePoolLabelPrefix, prng } = {}) {
+export function generateMainBlockPair({ prng } = {}) {
   const rng = prng ?? getSessionPRNG();
 
-  /* Step 1 — the 24-trial pool of every condition (exact counterbalance),
-   * stratified-split by background_shade into 12 + 12, then the ordered trial
-   * lists of both blocks. All of it is pure data (`main-plan.js`), so the
+  /* Step 1 — the pool of every condition as its two exact 12-trial halves, then
+   * the ordered trial lists of both blocks. All of it is pure data (`main-plan.js`), so the
    * pilot simulator follows the same code path for the same seed. */
-  const plan = generateMainPlan({
-    sequencePoolLabelPrefix: sequencePoolLabelPrefix ?? 'main',
-    prng: rng,
-  });
+  const plan = generateMainPlan({ prng: rng });
   const { trialParamsByType } = plan;
 
   /* Step 2 — build the nodes of each block from its plan. */
