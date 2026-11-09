@@ -25,11 +25,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
 const SCRIPT = join(REPO, 'scripts/raw-to-csv.js');
 const SALT = 'raw-to-csv-cli-test-salt-0123456789';
+/* Every run gets its own subject registry in a temp folder: the tests never touch the real one. */
+let SUBJECTS = null;
 const run = (args, env = {}) =>
   spawnSync('node', [SCRIPT, ...args], {
     encoding: 'utf-8',
     cwd: REPO,
-    env: { ...process.env, CSV_EXPORT_SALT: SALT, ...env },
+    env: { ...process.env, CSV_EXPORT_SALT: SALT, WM_IMG_SUBJECT_FILE: SUBJECTS, ...env },
   });
 
 const table = (csvPath) => {
@@ -48,6 +50,7 @@ describe('raw-to-csv CLI', () => {
   let envelopes;
   beforeAll(() => {
     work = mkdtempSync(join(tmpdir(), 'raw-to-csv-cli-'));
+    SUBJECTS = join(work, 'subjects.csv');
     flat = join(work, 'flat');
     nested = join(work, 'nested');
     mkdirSync(flat, { recursive: true });
@@ -159,6 +162,39 @@ describe('raw-to-csv CLI', () => {
     const b = readFileSync(bom, 'utf-8');
     expect(b.charCodeAt(0)).toBe(0xfeff);
     expect(b.slice(1)).toBe(readFileSync(plain, 'utf-8'));
+  });
+
+  it('puts the subject number in the first column, 1 and 2 in order of first appearance, kept across runs', () => {
+    const a = join(work, 'subj_a', 'RAW.csv');
+    expect(run(['--keep-pid', '--out', a, flat]).status).toBe(0);
+    const t = table(a);
+    expect(t.cols[0]).toBe('subject');
+    const bySubject = (pid) => [
+      ...new Set(t.rows.filter((x) => x.participant_id === pid).map((x) => x.subject)),
+    ];
+    const first = (e) => Math.min(...e.rows.map((x) => x.wall_ms ?? Infinity));
+    const order = [...envelopes].sort(
+      (x, y) => first(x) - first(y) || x.prolific_pid.localeCompare(y.prolific_pid)
+    );
+    expect(bySubject(order[0].prolific_pid)).toEqual(['1']);
+    expect(bySubject(order[1].prolific_pid)).toEqual(['2']);
+    /* a second run, even in the coded mode, gives the same numbers */
+    const b = join(work, 'subj_b', 'RAW.csv');
+    expect(run(['--out', b, flat]).status).toBe(0);
+    const coded = table(b);
+    const numbers = (tt) => [...new Set(tt.rows.map((x) => `${x.subject}`))].sort();
+    expect(numbers(coded)).toEqual(['1', '2']);
+    expect(readFileSync(SUBJECTS, 'utf-8').split('\n').filter(Boolean)).toHaveLength(3);
+  });
+
+  it('a corrupted subject registry stops the run (exit 2) and writes nothing', () => {
+    const bad = join(work, 'bad_registry.csv');
+    writeFileSync(bad, 'nonsense\n1,2,3\n', 'utf-8');
+    const out = join(work, 'bad_reg_out', 'RAW.csv');
+    const r = run(['--keep-pid', '--subject-file', bad, '--out', out, flat]);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/subject registry/);
+    expect(existsSync(out)).toBe(false);
   });
 
   it('usage errors exit 2 and write nothing', () => {

@@ -19,6 +19,11 @@
  * all of them, so a column is `NA` on the rows that never carried it.
  *
  * Column layout (stable and documented in the manifest):
+ *   0. subject    the subject number (1, 2, 3, ...) of the participant: the first column of every
+ *                 line. Numbers come from a private registry file (see --subject-file): a
+ *                 Prolific id gets the next number the first time it is seen and keeps it
+ *                 forever, so adding participants later never renumbers anyone. Sessions
+ *                 without a Prolific id (previews) have no subject number (NA).
  *   1. identity   participant_id, prolific_pid, study_id, session_id, is_preview, is_pilot_run,
  *                 pilot_label, build_id, schema_version. Filled on EVERY row from the file
  *                 envelope; where a raw row carries its own value (the `session_info` row does)
@@ -65,6 +70,8 @@
  *   --analysed-runs-only        keep only the analysed run of each participant
  *   --keep-pid                  raw Prolific ids instead of codes (internal use)
  *   --share                     the file will be shared: refuses --keep-pid
+ *   --subject-file <path>       the subject-number registry (default: $WM_IMG_SUBJECT_FILE, then
+ *                               ~/.wm-img-subjects.csv). It lists raw Prolific ids: keep it private.
  *   --salt-file <path>          salt for the codes (default: $CSV_EXPORT_SALT, then
  *                               ~/.wm-img-pseudonym-salt)
  *   --private-dir <dir>         where PID_KEY.csv goes (never next to the output; default
@@ -75,8 +82,9 @@
  * Exit codes: 0 ok; 2 usage; 3 unreadable input or failed verification; 4 identifier leak.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadAndFlattenDumps } from './dump-loader.js';
 import { expandInputPaths, formatCsvValue, trialTypeFromPhase, UTF8_BOM } from './csv-export.js';
@@ -94,6 +102,9 @@ import {
 export const RAW_CSV_VERSION = '1.0.0';
 
 const NA = 'NA';
+
+/** The subject number comes first in every line. */
+export const LEAD_COLUMNS = Object.freeze(['subject']);
 
 /** Identity columns: filled on every row from the file envelope (see the header). */
 export const IDENTITY_COLUMNS = Object.freeze([
@@ -297,9 +308,95 @@ export function annotateSources(perParticipant, paths, { readFile = readFileSync
   return { rowsWithoutSource };
 }
 
+/* ---------- Subject numbers ---------- */
+
+export const DEFAULT_SUBJECT_FILE = join(homedir(), '.wm-img-subjects.csv');
+export const SUBJECT_FILE_ENV = 'WM_IMG_SUBJECT_FILE';
+const SUBJECT_HEADER = 'Subject,PROLIFIC_PID,First_Seen_UTC';
+
+/** Read the registry: Prolific id -> subject number. A missing file is an empty registry. */
+export function readSubjectRegistry(path) {
+  const map = new Map();
+  if (!existsSync(path)) return map;
+  const lines = readFileSync(path, 'utf-8')
+    .split(/\r?\n/)
+    .filter((l) => l.trim() !== '');
+  if (lines.length === 0) return map;
+  if (lines[0].trim() !== SUBJECT_HEADER) {
+    throw new Error(`subject registry ${path} does not start with "${SUBJECT_HEADER}"`);
+  }
+  const numbers = new Set();
+  for (const line of lines.slice(1)) {
+    const [n, pid] = line.split(',');
+    const subject = Number(n);
+    if (!Number.isInteger(subject) || subject < 1 || !pid || numbers.has(subject) || map.has(pid)) {
+      throw new Error(`subject registry ${path} has an invalid or duplicated line: ${line}`);
+    }
+    numbers.add(subject);
+    map.set(pid, subject);
+  }
+  return map;
+}
+
+/**
+ * Give every participant with a Prolific id a subject number and store it on its entries
+ * (`entry.subject`). Participants already in the registry keep their number; new ones get the next
+ * numbers in the order of their first recorded row (ties by id), and are appended to the
+ * registry file. Sessions without a Prolific id (previews) get none. Call it BEFORE the ids are
+ * replaced by codes: the registry is keyed by the real id and stays private.
+ *
+ * @param {object[]} perParticipant  output of loadAndFlattenDumps
+ * @param {string} registryPath
+ * @param {{write?: boolean}} [opts]  write=false: compute only, never touch the file
+ * @returns {{assigned: Map<string, number>, added: {subject: number, pid: string}[]}}
+ */
+export function assignSubjects(perParticipant, registryPath, { write = true } = {}) {
+  const registry = readSubjectRegistry(registryPath);
+  const firstSeen = new Map();
+  for (const e of perParticipant) {
+    const pid = e.session?.params?.prolific_pid;
+    if (!pid) continue;
+    const t = Math.min(
+      ...e.rows.map((r) => r?.wall_ms).filter(Number.isFinite),
+      Number.POSITIVE_INFINITY
+    );
+    firstSeen.set(pid, Math.min(firstSeen.get(pid) ?? Number.POSITIVE_INFINITY, t));
+  }
+  const fresh = [...firstSeen.keys()]
+    .filter((pid) => !registry.has(pid))
+    .sort((a, b) => firstSeen.get(a) - firstSeen.get(b) || a.localeCompare(b));
+  let next = Math.max(0, ...registry.values()) + 1;
+  const added = [];
+  for (const pid of fresh) {
+    registry.set(pid, next);
+    added.push({ subject: next, pid, first_seen: firstSeen.get(pid) });
+    next += 1;
+  }
+  if (write && added.length > 0) {
+    const lines = [...registry.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([pid, n]) => {
+        const seen = added.find((x) => x.pid === pid)?.first_seen;
+        const stamp = Number.isFinite(seen) ? new Date(seen).toISOString() : '';
+        return `${n},${pid},${stamp}`;
+      });
+    mkdirSync(dirname(registryPath), { recursive: true });
+    writeFileSync(registryPath, `${[SUBJECT_HEADER, ...lines].join('\n')}\n`, {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
+    chmodSync(registryPath, 0o600);
+  }
+  for (const e of perParticipant) {
+    const pid = e.session?.params?.prolific_pid;
+    e.subject = pid ? registry.get(pid) : null;
+  }
+  return { assigned: registry, added };
+}
+
 /* ---------- Table ---------- */
 
-const RESERVED = new Set([...DERIVED_COLUMNS]);
+const RESERVED = new Set([...LEAD_COLUMNS, ...DERIVED_COLUMNS]);
 const isMissing = (v) =>
   v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v));
 const rawRunKey = (id) => id ?? 'none';
@@ -377,6 +474,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
     };
     perRun.push({
       participant_id: pid,
+      subject: entry.subject ?? null,
       run_id: entry.run_id ?? null,
       run_status: status,
       is_analysed_run: isAnalysed,
@@ -403,6 +501,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       const stage = stageOf(row);
       const src = row[SOURCE_KEY];
       if (Number.isFinite(row?.seq) && !src) rowsWithoutSource += 1;
+      flat.subject = entry.subject ?? null;
       flat.row_key = `${pid}|${rawRunKey(row.run_id ?? entry.run_id)}|${row.seq ?? 'noseq'}`;
       flat.run_status = status;
       flat.is_analysed_run = isAnalysed;
@@ -420,11 +519,11 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       out.push(flat);
     }
   }
-  const fixed = new Set([...IDENTITY_COLUMNS, ...DERIVED_COLUMNS]);
+  const fixed = new Set([...LEAD_COLUMNS, ...IDENTITY_COLUMNS, ...DERIVED_COLUMNS]);
   const core = CORE_RAW_COLUMNS.filter((c) => rawNames.has(c) && !fixed.has(c));
   const coreSet = new Set(core);
   const rest = [...rawNames].filter((c) => !fixed.has(c) && !coreSet.has(c)).sort();
-  const columns = [...IDENTITY_COLUMNS, ...DERIVED_COLUMNS, ...core, ...rest];
+  const columns = [...LEAD_COLUMNS, ...IDENTITY_COLUMNS, ...DERIVED_COLUMNS, ...core, ...rest];
   return {
     rows: out,
     columns,
@@ -583,7 +682,7 @@ export function verifyCsv(text, columns, rows, { neutralise = true } = {}) {
 /* ---------- Column dictionary and manifest ---------- */
 
 function columnGroup(name) {
-  if (IDENTITY_COLUMNS.includes(name)) return 'identity';
+  if (LEAD_COLUMNS.includes(name) || IDENTITY_COLUMNS.includes(name)) return 'identity';
   if (DERIVED_COLUMNS.includes(name)) return 'derived';
   return 'raw';
 }
@@ -694,6 +793,7 @@ export function parseRawArgs(argv) {
     keepPid: false,
     share: false,
     saltFile: null,
+    subjectFile: null,
     privateDir: null,
     excelBom: false,
     neutralise: true,
@@ -705,6 +805,7 @@ export function parseRawArgs(argv) {
     else if (a === '--keep-pid') o.keepPid = true;
     else if (a === '--share') o.share = true;
     else if (a === '--salt-file') o.saltFile = args[++i] ?? null;
+    else if (a === '--subject-file') o.subjectFile = args[++i] ?? null;
     else if (a === '--private-dir') o.privateDir = args[++i] ?? null;
     else if (a === '--excel-bom') o.excelBom = true;
     else if (a === '--no-neutralise-formulas') o.neutralise = false;
@@ -745,6 +846,20 @@ async function main(argv) {
   }
   if (loaded.perParticipant.length === 0) return fail(2, 'no participants found in the inputs');
   annotateSources(loaded.perParticipant, paths);
+  const subjectFile = resolve(
+    opts.subjectFile ?? process.env[SUBJECT_FILE_ENV] ?? DEFAULT_SUBJECT_FILE
+  );
+  let subjects;
+  try {
+    subjects = assignSubjects(loaded.perParticipant, subjectFile);
+  } catch (err) {
+    return fail(2, err.message);
+  }
+  if (subjects.added.length > 0) {
+    console.error(
+      `raw-to-csv: new subject number(s) ${subjects.added.map((a) => a.subject).join(', ')} added to ${subjectFile}`
+    );
+  }
 
   const outPath = resolve(opts.out);
   const outDir = dirname(outPath);

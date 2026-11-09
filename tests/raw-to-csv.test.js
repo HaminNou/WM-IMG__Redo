@@ -14,6 +14,9 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import {
   CORE_RAW_COLUMNS,
+  LEAD_COLUMNS,
+  assignSubjects,
+  readSubjectRegistry,
   DERIVED_COLUMNS,
   IDENTITY_COLUMNS,
   annotateSources,
@@ -370,6 +373,7 @@ describe('the table built from a Drive-style folder', () => {
     paths = expandInputPaths([dir]);
     loaded = loadAndFlattenDumps(paths);
     annotateSources(loaded.perParticipant, paths);
+    assignSubjects(loaded.perParticipant, join(dir, 'subjects.csv'));
     table = buildRawTable(loaded.perParticipant);
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -405,11 +409,12 @@ describe('the table built from a Drive-style folder', () => {
 
   it('lays the columns out as documented: identity, derived, core raw, then the rest alphabetically', () => {
     const cols = table.columns;
-    expect(cols.slice(0, IDENTITY_COLUMNS.length)).toEqual([...IDENTITY_COLUMNS]);
-    expect(
-      cols.slice(IDENTITY_COLUMNS.length, IDENTITY_COLUMNS.length + DERIVED_COLUMNS.length)
-    ).toEqual([...DERIVED_COLUMNS]);
-    const afterDerived = cols.slice(IDENTITY_COLUMNS.length + DERIVED_COLUMNS.length);
+    const lead = LEAD_COLUMNS.length;
+    expect(cols.slice(0, lead)).toEqual(['subject']);
+    expect(cols.slice(lead, lead + IDENTITY_COLUMNS.length)).toEqual([...IDENTITY_COLUMNS]);
+    const dStart = lead + IDENTITY_COLUMNS.length;
+    expect(cols.slice(dStart, dStart + DERIVED_COLUMNS.length)).toEqual([...DERIVED_COLUMNS]);
+    const afterDerived = cols.slice(dStart + DERIVED_COLUMNS.length);
     const core = CORE_RAW_COLUMNS.filter((c) => afterDerived.includes(c));
     expect(afterDerived.slice(0, core.length)).toEqual(core);
     const rest = afterDerived.slice(core.length);
@@ -438,6 +443,17 @@ describe('the table built from a Drive-style folder', () => {
     expect(r.flag).toBeNull();
     expect(byKey(`${A.pid}|r1|2`).rt).toBeUndefined();
     expect(byKey(`${C.pid}|rc|2`).exit_reason).toBe('timing_check_failed');
+  });
+
+  it('puts the subject number first on every row: participants numbered in order of first appearance', () => {
+    expect(table.columns[0]).toBe('subject');
+    const subjectOf = (pid) => [
+      ...new Set(table.rows.filter((r) => r.participant_id === pid).map((r) => r.subject)),
+    ];
+    /* first rows: A at t=1000s (seq 1), B at 1000s (seq 1), C at 1000s: ties are broken by id */
+    expect(subjectOf(A.pid)).toEqual([1]);
+    expect(subjectOf(B.pid)).toEqual([2]);
+    expect(subjectOf(C.pid)).toEqual([3]);
   });
 
   it('fills the identity columns on every row from the file envelope', () => {
@@ -553,5 +569,111 @@ describe('derived column names never collide with the study schema', () => {
     expect(props.size).toBeGreaterThan(100);
     for (const c of DERIVED_COLUMNS)
       expect(props.has(c), `${c} is also a raw property`).toBe(false);
+  });
+});
+
+describe('subject registry', () => {
+  let dir;
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'raw-to-csv-subj-'));
+  });
+  afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+  const entry = (pid, t0, extra = {}) => ({
+    source_pid: pid,
+    participant_id: pid,
+    run_id: 'r',
+    session: pid ? { params: { prolific_pid: pid } } : { params: {} },
+    rows: [
+      { seq: 1, phase: 'session_start', wall_ms: t0 },
+      { seq: 2, phase: 'consent', wall_ms: t0 + 5 },
+    ],
+    ...extra,
+  });
+
+  it('numbers new participants in the order of their first recorded row, and stores the numbers', () => {
+    const file = join(dir, 'a.csv');
+    const list = [
+      entry('PID_LATE_0000001', 3000),
+      entry('PID_EARLY_000001', 1000),
+      entry('PID_MID_00000001', 2000),
+    ];
+    const { added } = assignSubjects(list, file);
+    expect(added.map((a) => [a.subject, a.pid])).toEqual([
+      [1, 'PID_EARLY_000001'],
+      [2, 'PID_MID_00000001'],
+      [3, 'PID_LATE_0000001'],
+    ]);
+    expect(list.map((e) => e.subject)).toEqual([3, 1, 2]);
+    expect([...readSubjectRegistry(file)]).toEqual([
+      ['PID_EARLY_000001', 1],
+      ['PID_MID_00000001', 2],
+      ['PID_LATE_0000001', 3],
+    ]);
+    expect(readFileSync(file, 'utf-8').split('\n')[0]).toBe('Subject,PROLIFIC_PID,First_Seen_UTC');
+  });
+
+  it('keeps every existing number when participants are added later, even one who started earlier', () => {
+    const file = join(dir, 'b.csv');
+    assignSubjects([entry('PID_ONE_00000001', 5000)], file);
+    const later = [
+      entry('PID_ONE_00000001', 5000),
+      entry('PID_WHO_STARTED_EARLIER', 100),
+      entry('PID_NEWEST_000001', 9000),
+    ];
+    const { added } = assignSubjects(later, file);
+    expect(later.map((e) => e.subject)).toEqual([1, 2, 3]); /* the earlier starter gets 2, not 1 */
+    expect(added.map((a) => a.subject)).toEqual([2, 3]);
+  });
+
+  it('is idempotent: a second run changes neither the numbers nor the file', () => {
+    const file = join(dir, 'c.csv');
+    const list = () => [entry('PID_AAAA0000001', 1), entry('PID_BBBB0000001', 2)];
+    assignSubjects(list(), file);
+    const before = readFileSync(file, 'utf-8');
+    const again = list();
+    const { added } = assignSubjects(again, file);
+    expect(added).toEqual([]);
+    expect(again.map((e) => e.subject)).toEqual([1, 2]);
+    expect(readFileSync(file, 'utf-8')).toBe(before);
+  });
+
+  it('gives all runs of one participant the same number, and none to a session without a Prolific id', () => {
+    const file = join(dir, 'd.csv');
+    const list = [
+      entry('PID_SAME_0000001', 10, { run_id: 'r1' }),
+      entry('PID_SAME_0000001', 20, { run_id: 'r2' }),
+      entry(null, 5),
+    ];
+    assignSubjects(list, file);
+    expect(list.map((e) => e.subject)).toEqual([1, 1, null]);
+    expect(readSubjectRegistry(file).size).toBe(1);
+  });
+
+  it('write=false computes the numbers without creating the file', () => {
+    const file = join(dir, 'never.csv');
+    const list = [entry('PID_DRYRUN_000001', 1)];
+    assignSubjects(list, file, { write: false });
+    expect(list[0].subject).toBe(1);
+    expect(() => readFileSync(file)).toThrow();
+  });
+
+  it('refuses a registry with a wrong header, a duplicated number or a duplicated id', () => {
+    const f1 = join(dir, 'bad1.csv');
+    writeFileSync(f1, 'Number,ID\n1,X\n', 'utf-8');
+    expect(() => readSubjectRegistry(f1)).toThrow(/does not start with/);
+    const f2 = join(dir, 'bad2.csv');
+    writeFileSync(f2, 'Subject,PROLIFIC_PID,First_Seen_UTC\n1,A,\n1,B,\n', 'utf-8');
+    expect(() => readSubjectRegistry(f2)).toThrow(/invalid or duplicated/);
+    const f3 = join(dir, 'bad3.csv');
+    writeFileSync(f3, 'Subject,PROLIFIC_PID,First_Seen_UTC\n1,A,\n2,A,\n', 'utf-8');
+    expect(() => readSubjectRegistry(f3)).toThrow(/invalid or duplicated/);
+    const f4 = join(dir, 'bad4.csv');
+    writeFileSync(f4, 'Subject,PROLIFIC_PID,First_Seen_UTC\n0,A,\n', 'utf-8');
+    expect(() => readSubjectRegistry(f4)).toThrow(/invalid or duplicated/);
+  });
+
+  it('a missing registry is empty', () => {
+    expect(readSubjectRegistry(join(dir, 'does-not-exist.csv')).size).toBe(0);
   });
 });
