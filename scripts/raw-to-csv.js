@@ -412,14 +412,12 @@ export function seqGaps(rows) {
 }
 
 /**
- * Turn the loaded participants into one flat table.
+ * The run each participant is analysed on, by the study's own rule (participant-rules.js: the
+ * completed run with the most rows; none if no run completed).
  *
- * @param {object[]} perParticipant  output of loadAndFlattenDumps (optionally pseudonymised and
- *        annotated by `annotateSources`); one entry per participant and run
- * @param {{analysedRunsOnly?: boolean}} [opts]
- * @returns {{rows: object[], columns: string[], summary: object}}
+ * @returns {Map<string, string|null>} participant (source id) -> run id
  */
-export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {}) {
+export function analysedRunByParticipant(perParticipant) {
   const bySource = new Map();
   for (const e of perParticipant) {
     const k = e.source_pid ?? e.participant_id;
@@ -428,14 +426,19 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
   }
   const analysedOf = new Map();
   for (const [k, entries] of bySource) {
-    const s = summariseParticipantRuns(
+    const summary = summariseParticipantRuns(
       entries.map((e) => ({ run_id: e.run_id, rows: e.rows, session: e.session }))
     );
-    analysedOf.set(k, s.analysed_run_id);
+    analysedOf.set(k, summary.analysed_run_id);
   }
+  return analysedOf;
+}
+
+/** Participant and run entries in output order: participant id, then time of first row, then run id. */
+export function orderEntries(perParticipant) {
   const firstWall = (e) =>
     Math.min(...e.rows.map((r) => r?.wall_ms).filter(Number.isFinite), Number.POSITIVE_INFINITY);
-  const entries = [...perParticipant].sort(
+  return [...perParticipant].sort(
     (a, b) =>
       String(a.source_pid ?? a.participant_id).localeCompare(
         String(b.source_pid ?? b.participant_id)
@@ -443,6 +446,19 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       firstWall(a) - firstWall(b) ||
       String(a.run_id).localeCompare(String(b.run_id))
   );
+}
+
+/**
+ * Turn the loaded participants into one flat table.
+ *
+ * @param {object[]} perParticipant  output of loadAndFlattenDumps (optionally pseudonymised and
+ *        annotated by `annotateSources`); one entry per participant and run
+ * @param {{analysedRunsOnly?: boolean}} [opts]
+ * @returns {{rows: object[], columns: string[], summary: object}}
+ */
+export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {}) {
+  const analysedOf = analysedRunByParticipant(perParticipant);
+  const entries = orderEntries(perParticipant);
 
   const out = [];
   const rawNames = new Set();
@@ -818,6 +834,98 @@ export function parseRawArgs(argv) {
   return o;
 }
 
+/** A failure with the exit code the command line should end with. */
+export class CliError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/**
+ * The steps the two CSV tools share: find the files, load and de-duplicate them, give every
+ * participant a subject number, and (unless `keepPid`) replace Prolific ids by codes. Throws a
+ * `CliError` (exit code 2 for usage problems, 3 for unreadable input) and writes nothing.
+ *
+ * @param {ReturnType<typeof parseRawArgs>} opts
+ * @param {string} tool  name used in messages
+ */
+export function prepareParticipants(opts, tool = 'raw-to-csv') {
+  if (!opts.out) {
+    throw new CliError(
+      2,
+      `missing --out <file.csv>\nusage: node scripts/${tool}.js --out <file.csv> <file-or-folder>...`
+    );
+  }
+  if (opts.inputs.length === 0) throw new CliError(2, 'no input paths supplied');
+  const paths = expandInputPaths(opts.inputs);
+  if (paths.length === 0) throw new CliError(2, 'no .json files found under the supplied paths');
+  const loaded = loadAndFlattenDumps(paths);
+  if (loaded.errors.length > 0) {
+    for (const e of loaded.errors) console.error(`${tool}: cannot read ${e.path}: ${e.error}`);
+    throw new CliError(
+      3,
+      'some input files could not be read; nothing was written (fix or remove them)'
+    );
+  }
+  if (loaded.perParticipant.length === 0)
+    throw new CliError(2, 'no participants found in the inputs');
+  annotateSources(loaded.perParticipant, paths);
+  const subjectFile = resolve(
+    opts.subjectFile ?? process.env[SUBJECT_FILE_ENV] ?? DEFAULT_SUBJECT_FILE
+  );
+  let subjects;
+  try {
+    subjects = assignSubjects(loaded.perParticipant, subjectFile);
+  } catch (err) {
+    throw new CliError(2, err.message);
+  }
+  if (subjects.added.length > 0) {
+    console.error(
+      `${tool}: new subject number(s) ${subjects.added.map((a) => a.subject).join(', ')} added to ${subjectFile}`
+    );
+  }
+  const outPath = resolve(opts.out);
+  const outDir = dirname(outPath);
+  const pseudonymised = opts.keepPid !== true;
+  let perParticipant = loaded.perParticipant;
+  let keyRows = [];
+  let identifiers = [];
+  if (pseudonymised) {
+    const privateDir = resolve(opts.privateDir ?? defaultPrivateDir(outDir));
+    if (isInside(privateDir, outDir)) {
+      throw new CliError(
+        2,
+        `--private-dir ${privateDir} is inside the output folder; the key file must stay out of anything you share`
+      );
+    }
+    try {
+      const { salt } = resolveSalt({ saltFile: opts.saltFile });
+      const result = pseudonymisePerParticipant(perParticipant, makeCoder(salt));
+      perParticipant = result.perParticipant;
+      keyRows = result.keyRows;
+      identifiers = result.identifiers;
+    } catch (err) {
+      throw new CliError(2, err.message);
+    }
+  } else {
+    console.error(
+      `${tool}: WARNING --keep-pid: the output carries raw Prolific ids. Internal use only; never share this file.`
+    );
+  }
+  return {
+    paths,
+    loaded,
+    perParticipant,
+    keyRows,
+    identifiers,
+    outPath,
+    outDir,
+    pseudonymised,
+    subjectFile,
+  };
+}
+
 const fail = (code, msg) => {
   console.error(`raw-to-csv: ${msg}`);
   process.exit(code);
@@ -830,65 +938,15 @@ async function main(argv) {
   } catch (err) {
     return fail(2, err.message);
   }
-  if (!opts.out) {
-    return fail(
-      2,
-      'missing --out <file.csv>\nusage: node scripts/raw-to-csv.js --out <file.csv> <file-or-folder>...'
-    );
-  }
-  if (opts.inputs.length === 0) return fail(2, 'no input paths supplied');
-  const paths = expandInputPaths(opts.inputs);
-  if (paths.length === 0) return fail(2, 'no .json files found under the supplied paths');
-  const loaded = loadAndFlattenDumps(paths);
-  if (loaded.errors.length > 0) {
-    for (const e of loaded.errors) console.error(`raw-to-csv: cannot read ${e.path}: ${e.error}`);
-    return fail(3, 'some input files could not be read; nothing was written (fix or remove them)');
-  }
-  if (loaded.perParticipant.length === 0) return fail(2, 'no participants found in the inputs');
-  annotateSources(loaded.perParticipant, paths);
-  const subjectFile = resolve(
-    opts.subjectFile ?? process.env[SUBJECT_FILE_ENV] ?? DEFAULT_SUBJECT_FILE
-  );
-  let subjects;
+  let prepared;
   try {
-    subjects = assignSubjects(loaded.perParticipant, subjectFile);
+    prepared = prepareParticipants(opts, 'raw-to-csv');
   } catch (err) {
-    return fail(2, err.message);
+    if (err instanceof CliError) return fail(err.code, err.message);
+    throw err;
   }
-  if (subjects.added.length > 0) {
-    console.error(
-      `raw-to-csv: new subject number(s) ${subjects.added.map((a) => a.subject).join(', ')} added to ${subjectFile}`
-    );
-  }
-
-  const outPath = resolve(opts.out);
-  const outDir = dirname(outPath);
-  const pseudonymised = opts.keepPid !== true;
-  let perParticipant = loaded.perParticipant;
-  let keyRows = [];
-  let identifiers = [];
-  if (pseudonymised) {
-    const privateDir = resolve(opts.privateDir ?? defaultPrivateDir(outDir));
-    if (isInside(privateDir, outDir)) {
-      return fail(
-        2,
-        `--private-dir ${privateDir} is inside the output folder; the key file must stay out of anything you share`
-      );
-    }
-    try {
-      const { salt } = resolveSalt({ saltFile: opts.saltFile });
-      const result = pseudonymisePerParticipant(perParticipant, makeCoder(salt));
-      perParticipant = result.perParticipant;
-      keyRows = result.keyRows;
-      identifiers = result.identifiers;
-    } catch (err) {
-      return fail(2, err.message);
-    }
-  } else {
-    console.error(
-      'raw-to-csv: WARNING --keep-pid: the output carries raw Prolific ids. Internal use only; never share this file.'
-    );
-  }
+  const { paths, loaded, perParticipant, keyRows, identifiers, outPath, outDir, pseudonymised } =
+    prepared;
 
   let composed;
   try {

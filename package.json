@@ -19,6 +19,7 @@
     "pilot-summary": "node scripts/pilot-summary.js",
     "csv-export": "node scripts/csv-export.js",
     "raw-to-csv": "node scripts/raw-to-csv.js",
+    "trials-to-csv": "node scripts/trials-to-csv.js",
     "simulate-pilot": "node scripts/simulate-pilot.js",
     "harvest-voiceover": "node scripts/harvest-voiceover.js",
     "render-voiceover-edge": "node scripts/render-voiceover-edge.js",
