@@ -1,4 +1,4 @@
-import{i as b,g as w,w as m,x as y,k as $,y as v,z as _,c as h,u as x}from"./uploader-DrP2MhTk.js";const P=document.getElementById("mount");function l(s){P.innerHTML=`<h2>Data Recovery</h2>${s}`}function r(s){return String(s).replace(/[&<>"']/g,e=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[e])}async function I(){let s;try{s=(await b()).kind}catch{l(`
+import{i as b,g as m,x as w,y,l as $,z as v,A as _,c as h,u as x}from"./uploader-YtVlbEtN.js";const P=document.getElementById("mount");function l(s){P.innerHTML=`<h2>Data Recovery</h2>${s}`}function r(s){return String(s).replace(/[&<>"']/g,e=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[e])}async function I(){let s;try{s=(await b()).kind}catch{l(`
       <p class="error">Could not open browser storage. This can happen if you
       cleared your browser data or are using a different browser than the one
       you used for the experiment.</p>
@@ -6,7 +6,7 @@ import{i as b,g as w,w as m,x as y,k as $,y as v,z as _,c as h,u as x}from"./upl
       <p class="error">No persistent storage found. IndexedDB is unavailable in
       this browser. Please use the same browser you used for the experiment
       (Chrome, Firefox, or Edge on a desktop computer).</p>
-    `);return}const e=await w();if(!e||e.length===0){l(`
+    `);return}const e=await m();if(!e||e.length===0){l(`
       <p class="warn">No session data found in this browser. This can happen if:</p>
       <ul>
         <li>You cleared your browser data since the experiment</li>
@@ -15,7 +15,7 @@ import{i as b,g as w,w as m,x as y,k as $,y as v,z as _,c as h,u as x}from"./upl
       </ul>
       <p>If you have the downloaded JSON file, please send it to the
       researcher through Prolific messaging.</p>
-    `);return}const i=await m(),n=await y(),a=await $(),t=await v(),u=_(t).filter(o=>o.rows.length>0);if(t.length===0){l(`
+    `);return}const i=await w(),n=await y(),a=await $(),t=await v(),u=_(t).filter(o=>o.rows.length>0);if(t.length===0){l(`
       <p class="success">All data from this session has already been uploaded
       successfully. No recovery is needed.</p>
       <table class="meta-table">
