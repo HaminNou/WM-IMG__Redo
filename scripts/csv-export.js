@@ -366,7 +366,7 @@ export function parseExportArgs(argv) {
 }
 
 /**
- * Walk supplied paths, expanding directories into the .json files they contain.
+ * Walk supplied paths, expanding directories (and their subfolders) into the .json files they contain.
  * Returns absolute paths sorted lexically.
  */
 export function expandInputPaths(inputPaths, opts = {}) {
@@ -376,14 +376,32 @@ export function expandInputPaths(inputPaths, opts = {}) {
     const abs = resolve(p);
     const st = fs.statSync(abs);
     if (st.isDirectory()) {
-      for (const entry of fs.readdirSync(abs)) {
-        if (entry.endsWith('.json')) out.push(join(abs, entry));
-      }
+      walkDirectory(fs, abs, out);
     } else {
       out.push(abs);
     }
   }
   return out.sort();
+}
+
+/* The .json files of a directory and of its subfolders (the Drive folder keeps one subfolder per
+ * participant). Hidden entries are skipped. */
+function walkDirectory(fs, dir, out) {
+  for (const entry of fs.readdirSync(dir)) {
+    if (entry.startsWith('.')) continue;
+    const child = join(dir, entry);
+    if (entry.endsWith('.json')) {
+      out.push(child);
+      continue;
+    }
+    let isDir = false;
+    try {
+      isDir = fs.statSync(child).isDirectory();
+    } catch {
+      /* an entry that cannot be read is not a data file */
+    }
+    if (isDir) walkDirectory(fs, child, out);
+  }
 }
 
 /**

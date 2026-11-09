@@ -113,6 +113,30 @@ describe('expandPaths', () => {
   });
 });
 
+describe('expandPaths – subfolders', () => {
+  it('finds .json files in nested participant folders, skips other files and hidden entries', () => {
+    const tree = {
+      dir: ['a.json', 'sessA', 'sessB', 'README.md', '.hidden'],
+      'dir/sessA': ['b.json', 'c.json', 'notes.txt'],
+      'dir/sessB': ['d.json', 'deeper'],
+      'dir/sessB/deeper': ['e.json'],
+    };
+    const rel = (p) => p.slice(p.indexOf('dir'));
+    const fakeFs = {
+      statSync: (p) => ({ isDirectory: () => rel(p) in tree }),
+      readdirSync: (p) => tree[rel(p)] ?? [],
+    };
+    const out = expandPaths(['dir'], { fs: fakeFs }).map(rel);
+    expect(out).toEqual([
+      'dir/a.json',
+      'dir/sessA/b.json',
+      'dir/sessA/c.json',
+      'dir/sessB/d.json',
+      'dir/sessB/deeper/e.json',
+    ]);
+  });
+});
+
 describe('summariseAttentionChecks', () => {
   it('returns zeros for an empty rows array', () => {
     expect(summariseAttentionChecks([])).toMatchObject({
