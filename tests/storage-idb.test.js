@@ -39,6 +39,8 @@ import {
   getSessionId,
   setSessionStartedAt,
   getSessionStartedAt,
+  discardAbandonedEarlierRuns,
+  getRunId,
 } from '../src/storage.js';
 
 beforeEach(async () => {
@@ -119,5 +121,38 @@ describe('IndexedDB backend – meta store (cursor + completion URL + session)',
     await setSessionStartedAt('2000-01-01T17:30:00.000Z');
     expect(await getSessionId()).toBe('session-xyz');
     expect(await getSessionStartedAt()).toBe('2000-01-01T17:30:00.000Z');
+  });
+});
+
+describe('IndexedDB backend – discardAbandonedEarlierRuns', () => {
+  it('deletes the rows and cursors of unfinished earlier runs and keeps the current and finished ones', async () => {
+    await appendTrialRow({ phase: 'consent', run_id: 'abandon1' });
+    await appendTrialRow({ phase: 'd_only_trial_start', run_id: 'abandon1' });
+    await appendTrialRow({ phase: 'consent', run_id: 'finished' });
+    await appendTrialRow({ phase: 'completion_redirect', run_id: 'finished' });
+    await appendTrialRow({ phase: 'consent' });
+    await setUploadCursor(2, 'abandon1');
+    await setUploadCursor(4, 'finished');
+    const out = await discardAbandonedEarlierRuns();
+    expect(out.discarded_rows).toBe(2);
+    expect(out.discarded_run_ids).toEqual(['abandon1']);
+    expect(out.kept_run_ids).toEqual(['finished']);
+    const rows = await getAllTrialRows();
+    expect(rows.map((r) => `${r.run_id}:${r.phase}`).sort()).toEqual(
+      [`finished:consent`, `finished:completion_redirect`, `${getRunId()}:consent`].sort()
+    );
+    expect(await getUploadCursor('abandon1')).toBe(0);
+    expect(await getUploadCursor('finished')).toBe(4);
+  });
+
+  it('keeps going after a deletion: new rows get fresh, higher sequence numbers', async () => {
+    await appendTrialRow({ phase: 'a', run_id: 'abandon2' });
+    await appendTrialRow({ phase: 'b', run_id: 'abandon2' });
+    const before = Math.max(...(await getAllTrialRows()).map((r) => r.seq));
+    await discardAbandonedEarlierRuns();
+    await appendTrialRow({ phase: 'c' });
+    const rows = await getAllTrialRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].seq).toBeGreaterThan(before);
   });
 });

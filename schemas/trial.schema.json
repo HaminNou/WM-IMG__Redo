@@ -724,6 +724,28 @@
         "type": "string"
       }
     },
+    "prior_rows_discarded": {
+      "type": "integer",
+      "description": "`session_start`: how many of those rows were removed from this browser because they belonged to an abandoned earlier attempt (a restart begins the study again, so such rows are of no use)."
+    },
+    "prior_run_ids_discarded": {
+      "type": "array",
+      "description": "`session_start`: run ids of the abandoned earlier attempts whose rows were removed.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prior_run_ids_kept": {
+      "type": "array",
+      "description": "`session_start`: run ids of earlier runs that were kept because they had finished (reached the end of the task, the end-of-session upload or the redirect, or were ended by a screen-out check); their rows stay in the browser for the recovery page.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prior_discard_error": {
+      "type": ["string", "null"],
+      "description": "`session_start`: error message if clearing the abandoned earlier attempt failed (the session starts anyway), else null."
+    },
     "is_reload": {
       "type": "boolean",
       "description": "`session_start`: true if the page load was a reload."

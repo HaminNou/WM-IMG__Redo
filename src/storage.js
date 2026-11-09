@@ -261,6 +261,46 @@ export async function setUploadCursor(seq, runId = RUN_ID) {
   return require_active().setMeta(META_KEYS.uploadCursor, { ...cursors, [runId]: seq });
 }
 
+/* An earlier run in this browser counts as FINISHED if it reached the end of the task, ran the
+ * end-of-session upload or the redirect, or was ended by a screen-out check (the exit row has
+ * `exit_reason`). Its rows may be a complete data set whose upload failed, so they are kept for
+ * the recovery page. Anything else is an abandoned attempt. */
+const FINISHED_PHASES = new Set(['end_of_task_intro', 'upload_session_end', 'completion_redirect']);
+
+/**
+ * A restart cannot resume (the study begins again from the first screen), so the rows of an
+ * abandoned earlier attempt are of no use: remove them from this browser's storage, with their
+ * upload cursors, so the new run starts clean. Rows of the current run and of finished earlier
+ * runs are never touched.
+ *
+ * @returns {Promise<{discarded_rows: number, discarded_run_ids: string[], kept_run_ids: string[]}>}
+ */
+export async function discardAbandonedEarlierRuns() {
+  const rows = await getAllTrialRows();
+  const finished = new Map(); /* run id -> has a finishing row */
+  for (const r of rows) {
+    const id = r.run_id ?? 'none';
+    const done = FINISHED_PHASES.has(r.phase) || r.exit_reason !== undefined;
+    finished.set(id, (finished.get(id) ?? false) || done);
+  }
+  const discarded = [];
+  const kept = [];
+  for (const [id, done] of finished) {
+    if (id === RUN_ID) continue;
+    (done ? kept : discarded).push(id);
+  }
+  let removed = 0;
+  if (discarded.length > 0) {
+    removed = await require_active().deleteRowsOfRuns(discarded);
+    const cursors = (await require_active().getMeta(META_KEYS.uploadCursor)) ?? {};
+    const rest = Object.fromEntries(
+      Object.entries(cursors).filter(([id]) => !discarded.includes(id))
+    );
+    await require_active().setMeta(META_KEYS.uploadCursor, rest);
+  }
+  return { discarded_rows: removed, discarded_run_ids: discarded, kept_run_ids: kept };
+}
+
 /** Rows of every run that are not yet confirmed uploaded (`seq` past that run's cursor). */
 export async function getPendingRows() {
   const [rows, cursors] = await Promise.all([require_active().getAllTrialRows(), readCursors()]);
@@ -318,6 +358,17 @@ function MemoryBackend() {
     async getTrialRowsAfter(after) {
       return trials.filter((t) => t.seq > after).map(({ seq, row }) => ({ seq, ...row }));
     },
+    async deleteRowsOfRuns(runIds) {
+      const gone = new Set(runIds);
+      let n = 0;
+      for (let i = trials.length - 1; i >= 0; i--) {
+        if (gone.has(trials[i].row.run_id ?? 'none')) {
+          trials.splice(i, 1);
+          n += 1;
+        }
+      }
+      return n;
+    },
     async getMeta(key) {
       return meta.get(key);
     },
@@ -345,6 +396,26 @@ async function IndexedDBBackend() {
     async getTrialRowsAfter(after) {
       const all = await this.getAllTrialRows();
       return all.filter((r) => r.seq > after);
+    },
+    async deleteRowsOfRuns(runIds) {
+      const gone = new Set(runIds);
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_TRIALS, 'readwrite');
+        const request = tx.objectStore(STORE_TRIALS).openCursor();
+        let n = 0;
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (!cursor) return;
+          if (gone.has(cursor.value?.row?.run_id ?? 'none')) {
+            cursor.delete();
+            n += 1;
+          }
+          cursor.continue();
+        };
+        tx.oncomplete = () => resolve(n);
+        tx.onabort = tx.onerror = () =>
+          reject(new Error(`storage: IDB delete failed: ${tx.error?.message}`));
+      });
     },
     async getMeta(key) {
       const result = await idbRun(db, STORE_META, 'readonly', (store) => store.get(key));
