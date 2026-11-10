@@ -826,6 +826,7 @@ export async function uploadTail({
 
 /** Test helper: forget which rows were sent in checkpoints. */
 export function _resetCheckpointForTests() {
+  uploadConsent = false;
   checkpointCursor = 0;
   finalUploadComplete = false;
   deliveredSeq = 0;
@@ -835,6 +836,15 @@ export function _resetCheckpointForTests() {
 }
 
 /* ---------- Last-chance upload when the page is hidden or closed ---------- */
+
+/* Nothing leaves the browser before the participant has consented, or after a decline or a
+ * screen-out. The consent step sets this; `flushOnHide` does nothing while it is false. */
+let uploadConsent = false;
+
+/** @param {boolean} given  true once consent is given; false after a decline or a screen-out */
+export function setUploadConsent(given) {
+  uploadConsent = given === true;
+}
 
 /* A keepalive request may carry about 64 KiB (65,536 bytes) in all, and the limit
  * is on the final request body in UTF-8 bytes. The rows are stringified twice (once
@@ -881,7 +891,7 @@ let lastFlushAt = 0;
  * @param {boolean} [opts.bypassThrottle]     skip the 15 s throttle (pagehide)
  * @param {number} [opts.nowMs]               clock for the throttle (tests)
  * @param {number} [opts.maxBytes]            limit for the request BODY in UTF-8 bytes (default 48,000)
- * @returns {{status: 'sent'|'nothing'|'throttled'|'no_endpoint'|'error', rows?: number, filename?: string}}
+ * @returns {{status: 'sent'|'nothing'|'throttled'|'no_endpoint'|'no_consent'|'error', rows?: number, filename?: string}}
  */
 export function flushOnHide({
   session,
@@ -891,6 +901,7 @@ export function flushOnHide({
   maxBytes = FLUSH_MAX_BYTES,
 } = {}) {
   try {
+    if (!uploadConsent) return { status: 'no_consent' };
     const url = config.uploader.endpoint;
     const provider = config.uploader.provider ?? 'raw';
     const uploadKey = config.uploader.gdrive_upload_key ?? null;

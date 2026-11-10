@@ -15,6 +15,11 @@
  */
 
 import { rowClock } from '../clock.js';
+import { withTimeout } from '../async-util.js';
+
+/* A resume() that never settles (some Safari builds, a blocked autoplay policy) must not
+ * hold the caller: consent and every tone wait on it. */
+export const RESUME_TIMEOUT_MS = 2000;
 
 let audioCtx = null;
 let unlocked = false;
@@ -82,7 +87,11 @@ export function getAudioContext() {
 export async function unlockAudio() {
   const ctx = getAudioContext();
   if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
-    await ctx.resume();
+    try {
+      await withTimeout(Promise.resolve(ctx.resume()), RESUME_TIMEOUT_MS, 'audio resume');
+    } catch {
+      /* Still suspended: the sound-check screen offers a retry and a way out. */
+    }
   }
   if (!unlocked) {
     /* Some Safari builds need a silent buffer pulse before they accept later
@@ -109,7 +118,11 @@ export async function unlockAudio() {
 export async function ensureRunning() {
   if (!audioCtx) return;
   if (audioCtx.state === 'suspended' || audioCtx.state === 'interrupted') {
-    await audioCtx.resume();
+    try {
+      await withTimeout(Promise.resolve(audioCtx.resume()), RESUME_TIMEOUT_MS, 'audio resume');
+    } catch {
+      /* A pending resume must not freeze the trial that called this. */
+    }
   }
 }
 

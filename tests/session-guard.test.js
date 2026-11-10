@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createLockManager } from './helpers/fake-locks.js';
 import {
   _resetSessionGuardForTests,
   markUploadDone,
@@ -22,6 +23,8 @@ const session = { params: { session_id: 's1' }, started_at_iso: '2000-01-01T00:0
 afterEach(() => vi.restoreAllMocks());
 
 beforeEach(async () => {
+  /* a working Locks API: this tab is the only live one */
+  Object.defineProperty(navigator, 'locks', { value: createLockManager(), configurable: true });
   _resetStorageForTests();
   _resetSessionGuardForTests();
   await initStorage({ backend: 'memory' });

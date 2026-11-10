@@ -8,7 +8,12 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { _resetCheckpointForTests, flushOnHide, installPageHideFlush } from '../src/uploader.js';
+import {
+  _resetCheckpointForTests,
+  setUploadConsent,
+  flushOnHide,
+  installPageHideFlush,
+} from '../src/uploader.js';
 import {
   _resetStorageForTests,
   appendTrialRow,
@@ -33,6 +38,7 @@ const session = {
 beforeEach(async () => {
   _resetStorageForTests();
   _resetCheckpointForTests();
+  setUploadConsent(true); /* the page-hide flush is off until consent is given */
   await initStorage({ backend: 'memory' });
 });
 

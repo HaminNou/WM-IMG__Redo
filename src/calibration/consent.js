@@ -11,6 +11,7 @@
 import htmlButtonResponse from '@jspsych/plugin-html-button-response';
 import { unlockAudio } from '../audio/context.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
+import { setUploadConsent } from '../uploader.js';
 import { consentBodyHtml } from './consent-text.js';
 
 const CONSENT_VERSION = 'online-2101803-v1';
@@ -36,15 +37,18 @@ export function consentTrial() {
         consentBtn.disabled = !checkbox.checked;
       });
     },
-    on_finish: async (data) => {
+    on_finish: (data) => {
       data.consented = data.response === 0;
       data.consent_acknowledged = acknowledged;
       data.consent_version = CONSENT_VERSION;
       if (data.consented) {
-        /* Click was the gesture; the await happens off the trial timeline so
-         * jsPsych moves on without waiting for it. By the next trial the
-         * context is ready. */
-        await unlockAudio();
+        /* Click was the gesture. The unlock is started here but NOT awaited: a resume() that
+         * never settles must not freeze the consent screen. The sound-check screen has its
+         * own watchdog and retry. */
+        Promise.resolve(unlockAudio()).catch(() => {});
+        setUploadConsent(true);
+      } else {
+        setUploadConsent(false);
       }
     },
     data: { phase: 'consent' },

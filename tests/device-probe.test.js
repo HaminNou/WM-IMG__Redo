@@ -94,6 +94,16 @@ describe('scoreTiming', () => {
     expect(scoreTiming({ ...good, page_hidden_during_probe: false }).timing_ok).toBe(true);
   });
 
+  it('does not fail a 1 ms timer because of float error, but still fails a coarser clock', () => {
+    const th = TIMING_THRESHOLDS;
+    expect(th.max_clock_resolution_ms).toBe(1.0);
+    const ok = scoreTiming({ ...good, clock_resolution_ms: 1.0000000001 });
+    expect(ok.timing_fail_reasons).not.toContain('coarse_clock');
+    expect(scoreTiming({ ...good, clock_resolution_ms: 1.001 }).timing_fail_reasons).toContain(
+      'coarse_clock'
+    );
+  });
+
   it('keeps the boundary: exactly at each limit passes, just over fails', () => {
     const th = TIMING_THRESHOLDS;
     expect(

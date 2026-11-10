@@ -48,6 +48,7 @@ let escapeHandler = null;
 let escapeTimer = null;
 let escapeAvailable = false;
 let lastReason = '';
+let renderedKey = null; /* what the overlay currently shows */
 
 function log(kind, extra = {}) {
   const ev = {
@@ -102,6 +103,11 @@ function showOverlay(reason) {
       if (overlay) showOverlay(lastReason);
     }, ESCAPE_AFTER_MS);
   }
+  /* Re-rendering replaces the buttons, so a click that lands between mousedown and mouseup is
+   * lost: draw again only when what is shown would change. */
+  const key = `${reason}|${escapeAvailable}`;
+  if (renderedKey === key) return;
+  renderedKey = key;
   const zoom = reason.includes('zoom');
   const fs = reason.includes('fullscreen');
   overlay.innerHTML = `
@@ -153,6 +159,7 @@ function hideOverlay() {
   clearTimeout(escapeTimer);
   escapeTimer = null;
   escapeAvailable = false;
+  renderedKey = null;
   if (!overlay) return;
   overlay.remove();
   overlay = null;

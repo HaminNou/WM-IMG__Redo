@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os';
 
 import {
   _resetCheckpointForTests,
+  setUploadConsent,
   buildBucketEnvelope,
   flushOnHide,
   partitionRowsIntoBuckets,
@@ -46,6 +47,7 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'partial-dedupe-'));
   _resetStorageForTests();
   _resetCheckpointForTests();
+  setUploadConsent(true); /* the page-hide flush is off until consent is given */
   await initStorage({ backend: 'memory' });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));

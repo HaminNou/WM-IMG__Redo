@@ -45,6 +45,12 @@ export const FATAL_TEXT = Object.freeze({
       'If this message appears again, try a different desktop browser (Chrome, Edge, Firefox or Safari) and tell the researcher about it through Prolific messaging.',
     ]),
   }),
+  duplicate_tab: Object.freeze({
+    title: 'The study is already open',
+    paragraphs: Object.freeze([
+      'The study is already open in another tab or window. Please close this tab and continue in the original one.',
+    ]),
+  }),
   running: Object.freeze({
     title: 'The study stopped unexpectedly',
     paragraphs: Object.freeze([

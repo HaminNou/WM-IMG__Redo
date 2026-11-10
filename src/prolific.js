@@ -143,12 +143,18 @@ export function initSession(rawParams = readProlificParams(), pilotMode = readPi
     pilot_source: pilotMode.source,
   };
 
-  void initStorage().then(async () => {
-    await setCompletionUrl(buildCompletionUrl());
-    await setSessionId(params.session_id ?? null);
-    await setSessionStartedAt(startedAtIso);
-    await setSessionObject(session);
-  });
+  void initStorage()
+    .then(async () => {
+      await setCompletionUrl(buildCompletionUrl());
+      await setSessionId(params.session_id ?? null);
+      await setSessionStartedAt(startedAtIso);
+      await setSessionObject(session);
+    })
+    .catch((err) => {
+      /* A storage failure is shown by the runner's own handler (fatal storage screen); this
+       * must not show a second screen or raise an unhandled rejection. */
+      console.error('[prolific] session metadata was not saved', err);
+    });
 
   return session;
 }

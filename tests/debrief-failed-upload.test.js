@@ -347,3 +347,39 @@ describe('what the upload screen records for the next screen', () => {
     expect(document.getElementById('upload-progress-mount').textContent).toContain('next screen');
   });
 });
+
+describe('the "click here" completion link', () => {
+  const setup = async () => {
+    withUploadRow({ phase: 'upload_session_end', status: 'uploaded' });
+    const node = completionRedirectNode({ redirectDelayMs: 3000, session });
+    await node.on_load();
+    return document.getElementById('completion-link');
+  };
+
+  it('runs the same path as the automatic redirect: row, tail, release the prompt, navigate', async () => {
+    const link = await setup();
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.appendTrialRow).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'completion_redirect', completion_redirect_url: URL_REAL })
+    );
+    expect(mocks.uploadTail).toHaveBeenCalledTimes(1);
+    expect(mocks.markUploadDone).toHaveBeenCalledTimes(1);
+    expect(assign).toHaveBeenCalledWith(URL_REAL);
+  });
+
+  it('happens exactly once even if the countdown fires too, or the link is clicked twice', async () => {
+    const link = await setup();
+    link.click();
+    link.click();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(mocks.uploadTail).toHaveBeenCalledTimes(1);
+    expect(mocks.markUploadDone).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.appendTrialRow.mock.calls.filter(([r]) => r.phase === 'completion_redirect')
+    ).toHaveLength(1);
+  });
+});

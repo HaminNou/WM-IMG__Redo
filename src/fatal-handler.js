@@ -11,6 +11,8 @@ import { appendTrialRow, getAllTrialRows } from './storage.js';
 import { uploadPendingData, downloadAsJson } from './uploader.js';
 import { markUploadDone } from './session-guard.js';
 import { rowClock } from './clock.js';
+import { stopDisplayGuard } from './calibration/display-guard.js';
+import { STUDY_OPEN_ELSEWHERE } from './study-lock.js';
 
 const SAVED = ['uploaded', 'nothing_to_upload'];
 
@@ -59,6 +61,16 @@ export async function saveSessionData({ session, deps = {} } = {}) {
  * @returns {HTMLElement} the mounted screen
  */
 export function handleFatal({ stage, error, session, deps = {} }) {
+  /* The study is open in another tab: nothing is wrong with the data, nothing is written,
+   * and the screen only says to close this tab. */
+  if (error?.code === STUDY_OPEN_ELSEWHERE) {
+    try {
+      (deps.stopDisplayGuard ?? stopDisplayGuard)();
+    } catch {
+      /* ignore */
+    }
+    return (deps.renderFatalScreen ?? renderFatalScreen)({ stage: 'duplicate_tab' });
+  }
   const log = deps.appendTrialRow ?? appendTrialRow;
   const render = deps.renderFatalScreen ?? renderFatalScreen;
   const release = deps.markUploadDone ?? markUploadDone;
@@ -66,6 +78,13 @@ export function handleFatal({ stage, error, session, deps = {} }) {
     console.error(`[runner] fatal failure during ${stage}`, error);
   } catch {
     /* the console may be unavailable */
+  }
+  /* The fullscreen / zoom overlay sits above everything (z-index max): without this it would
+   * cover the "save my data" screen. */
+  try {
+    (deps.stopDisplayGuard ?? stopDisplayGuard)();
+  } catch {
+    /* ignore */
   }
   /* Once the task has stopped, leaving the page is what the participant has
    * to do next (recovery page, new tab, or a closed browser): the "leave site?"

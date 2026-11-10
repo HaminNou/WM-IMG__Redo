@@ -388,7 +388,13 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
     }
     await recordUploadAttempt(status, 'continue_button');
   };
+  /* The automatic redirect, the "click here" link and the failed-upload button all end here;
+   * whichever comes first runs the whole path (row, last upload, release the leave-page
+   * prompt, navigate) and the others do nothing. */
+  let redirecting = false;
   const redirect = async (url, { afterFailedUpload = false } = {}) => {
+    if (redirecting) return;
+    redirecting = true;
     /* The page is about to be left, so the trial will not finish: write its
      * row here, unless the participant already ended the trial. */
     if (!trialFinished) {
@@ -409,6 +415,13 @@ export function completionRedirectNode({ redirectDelayMs, session } = {}) {
     blockSpaceOutsideControls();
     let remainingS = Math.ceil(delayMs / 1000);
     mount.innerHTML = renderRedirectCountdown(url, remainingS);
+    /* A plain link would skip the completion row and the last upload and leave the
+     * "leave site?" prompt armed. */
+    document.getElementById('completion-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      clearInterval(countdownTimer);
+      void redirect(url);
+    });
     countdownTimer = setInterval(() => {
       remainingS -= 1;
       if (remainingS <= 0) {
@@ -595,7 +608,7 @@ function renderRedirectCountdown(url, remainingS) {
     <h2 style="margin: 0;">Thank you!</h2>
     <p style="margin: 0;">Redirecting to Prolific in <span id="completion-countdown" style="font-weight: bold;">${remainingS}</span> <span id="completion-countdown-unit">${secondsWord(remainingS)}</span>…</p>
     <p style="margin-top: 0.5rem; opacity: 0.85;">
-      If the redirect doesn't happen, <a href="${escapeHtml(url)}" style="color: ${COMPLETION_LINK_COLOUR}; text-decoration: underline;">click here</a>.
+      If the redirect doesn't happen, <a id="completion-link" href="${escapeHtml(url)}" style="color: ${COMPLETION_LINK_COLOUR}; text-decoration: underline;">click here</a>.
     </p>
   `;
 }

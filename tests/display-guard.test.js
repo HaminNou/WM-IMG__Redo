@@ -11,6 +11,7 @@ import {
   stopDisplayGuard,
   stopDisplayGuardNode,
 } from '../src/calibration/display-guard.js';
+import { handleFatal } from '../src/fatal-handler.js';
 import { _resetStorageForTests, getAllTrialRows, initStorage } from '../src/storage.js';
 
 const PX_PER_MM = 4.5;
@@ -220,5 +221,35 @@ describe('display guard escape route and release', () => {
     expect(node.data.phase).toBe('display_guard_stop');
     expect(node.func()).toEqual({ guard_stopped: true });
     expect(document.getElementById('display-guard-overlay')).toBeNull();
+  });
+});
+
+describe('display guard overlay and fatal screen', () => {
+  it('does not re-render the overlay while nothing shown would change (clicks are not lost)', () => {
+    startDisplayGuard({ pxPerMm: PX_PER_MM });
+    setDpr(1.5);
+    vi.advanceTimersByTime(1100);
+    const inner = document.querySelector('#display-guard-overlay > div');
+    expect(inner).not.toBeNull();
+    vi.advanceTimersByTime(10_000); /* several evaluation ticks, still before the escape delay */
+    expect(document.querySelector('#display-guard-overlay > div')).toBe(inner);
+    /* when the escape button becomes available the content does change */
+    vi.advanceTimersByTime(ESCAPE_AFTER_MS);
+    expect(document.getElementById('dg-escape')).not.toBeNull();
+  });
+
+  it('handleFatal switches the guard off so the overlay cannot cover the fatal screen', () => {
+    startDisplayGuard({ pxPerMm: PX_PER_MM });
+    setDpr(1.5);
+    vi.advanceTimersByTime(1100);
+    expect(document.getElementById('display-guard-overlay')).not.toBeNull();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    handleFatal({
+      stage: 'running',
+      error: new Error('boom'),
+      deps: { appendTrialRow: () => Promise.resolve(1), markUploadDone: () => {} },
+    });
+    expect(document.getElementById('display-guard-overlay')).toBeNull();
+    expect(document.getElementById('fatal-screen')).not.toBeNull();
   });
 });

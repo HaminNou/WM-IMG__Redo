@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   url: 'https://app.prolific.com/submissions/complete?cc=REALCODE',
   uploadPendingData: vi.fn(() => Promise.resolve({ status: 'uploaded' })),
   stopDisplayGuard: vi.fn(),
+  setUploadConsent: vi.fn(),
 }));
 
 vi.mock('../src/calibration/display-guard.js', async (importOriginal) => ({
@@ -18,6 +19,7 @@ vi.mock('../src/uploader.js', () => ({
   buildScreenOutUrl: () => mocks.url,
   isPlaceholderScreenOutUrl: (u) => typeof u === 'string' && u.includes('PLACEHOLDER'),
   uploadPendingData: mocks.uploadPendingData,
+  setUploadConsent: mocks.setUploadConsent,
 }));
 
 vi.mock('../src/storage.js', () => ({
@@ -144,6 +146,12 @@ describe('finishScreenOut', () => {
     setRows([]);
     await finishScreenOut({ reasonHtml: 'r', flush: false, url: REAL, navigate: vi.fn() });
     expect(mocks.stopDisplayGuard).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the page-hide flush (no consent-gated upload after a screen-out)', async () => {
+    setRows([]);
+    await finishScreenOut({ reasonHtml: 'r', flush: false, url: REAL, navigate: vi.fn() });
+    expect(mocks.setUploadConsent).toHaveBeenCalledWith(false);
   });
 
   it('keeps the explanation on screen during the flush, with a link to the screen-out URL', async () => {

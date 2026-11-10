@@ -273,21 +273,31 @@ const FINISHED_PHASES = new Set(['end_of_task_intro', 'upload_session_end', 'com
  * upload cursors, so the new run starts clean. Rows of the current run and of finished earlier
  * runs are never touched.
  *
+ * @param {object} [opts]
+ * @param {number} [opts.minIdleMs]   only runs whose newest row is at least this old are removed
  * @returns {Promise<{discarded_rows: number, discarded_run_ids: string[], kept_run_ids: string[]}>}
  */
-export async function discardAbandonedEarlierRuns() {
+export async function discardAbandonedEarlierRuns({ minIdleMs = 0, nowMs = Date.now() } = {}) {
   const rows = await getAllTrialRows();
   const finished = new Map(); /* run id -> has a finishing row */
+  const newest = new Map(); /* run id -> wall time of its newest row */
   for (const r of rows) {
     const id = r.run_id ?? 'none';
     const done = FINISHED_PHASES.has(r.phase) || r.exit_reason !== undefined;
     finished.set(id, (finished.get(id) ?? false) || done);
+    newest.set(id, Math.max(newest.get(id) ?? 0, Number(r.wall_ms) || 0));
   }
   const discarded = [];
   const kept = [];
   for (const [id, done] of finished) {
     if (id === RUN_ID) continue;
-    (done ? kept : discarded).push(id);
+    if (done) kept.push(id);
+    /* `minIdleMs` > 0 is used when the page cannot tell whether another tab is live: a run
+     * written to recently might belong to it, so it is left alone. */ else if (
+      nowMs - (newest.get(id) ?? 0) >=
+      minIdleMs
+    )
+      discarded.push(id);
   }
   let removed = 0;
   if (discarded.length > 0) {

@@ -240,7 +240,7 @@ describe('failure screens', () => {
 
   it('says a different, accurate thing for each stage', () => {
     const titles = new Set(Object.values(FATAL_TEXT).map((t) => t.title));
-    expect(titles.size).toBe(3);
+    expect(titles.size).toBe(4); /* storage, startup, running, duplicate_tab */
     /* Only a real storage failure may talk about storing data in the browser. */
     expect(FATAL_TEXT.storage.paragraphs.join(' ')).toMatch(/store data/i);
     expect(FATAL_TEXT.startup.paragraphs.join(' ')).not.toMatch(/storage|store data/i);

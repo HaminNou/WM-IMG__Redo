@@ -16,6 +16,7 @@
  *   - the back button is trapped and each press is logged.
  */
 import { getAllTrialRows, appendTrialRow, discardAbandonedEarlierRuns } from './storage.js';
+import { acquireStudyLock, SAFE_IDLE_MS, StudyOpenElsewhereError } from './study-lock.js';
 import { clockAnchor, rowClock } from './clock.js';
 
 let uploadDone = false;
@@ -34,14 +35,24 @@ export function _resetSessionGuardForTests() {
   removeListeners = null;
 }
 
-export async function startSessionGuard(session) {
+export async function startSessionGuard(session, { locks, retryDelaysMs } = {}) {
+  /* Another live tab of the study owns this browser's data: start nothing, delete nothing. */
+  const lock = await acquireStudyLock({
+    ...(locks === undefined ? {} : { locks }),
+    ...(retryDelaysMs === undefined ? {} : { retryDelaysMs }),
+  });
+  if (lock === 'busy') throw new StudyOpenElsewhereError();
   const rows = await getAllTrialRows();
   const prior = new Set(rows.map((r) => r.run_id ?? 'none'));
   /* A restart begins the study again, so an abandoned earlier attempt is cleared from this
    * browser; what was found is recorded below. A failure here must never stop the session. */
   let cleared = { discarded_rows: 0, discarded_run_ids: [], kept_run_ids: [], error: null };
   try {
-    cleared = { ...(await discardAbandonedEarlierRuns()), error: null };
+    /* Without the Locks API liveness is unknown: only runs idle for a long time go. */
+    cleared = {
+      ...(await discardAbandonedEarlierRuns({ minIdleMs: lock === 'held' ? 0 : SAFE_IDLE_MS })),
+      error: null,
+    };
   } catch (err) {
     cleared.error = String(err?.message ?? err);
   }

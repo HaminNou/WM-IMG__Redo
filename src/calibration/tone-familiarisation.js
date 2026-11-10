@@ -41,6 +41,7 @@ import { getToneBank, playToneByIndex } from '../audio/tones.js';
 import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { setUserPlaybackGain, stopAllScheduledAudio, DEFAULT_PEAK } from '../audio/dsp.js';
 import { config } from '../config.js';
+import { withTimeout } from '../async-util.js';
 import { registerHiddenNavStep, trackHiddenNavNode } from '../hidden-nav.js';
 import { screenOutExit } from '../screen-out.js';
 import { getVoiceover } from '../visuals/voiceover.js';
@@ -79,9 +80,30 @@ const SLIDER_DEFAULT_PCT = 50;
 
 const ACCENT_COLOUR = '#60a5fa'; /* tailwind blue-400 – matches existing chrome */
 
-function waitUntilAudioTime(ctx, targetTimeSec) {
+/* If the audio clock has not moved this long after the page loaded, the context is stuck
+ * (resume() pending, autoplay blocked): the page then offers a retry and a way out. */
+export const AUDIO_STALL_MS = 3000;
+/* Longest a resume() may hold anything up. */
+const RESUME_TIMEOUT_MS = 2000;
+
+/** resume() with a time limit; never rejects. */
+async function tryResume(ctx) {
+  try {
+    if (typeof ctx.resume === 'function') {
+      await withTimeout(Promise.resolve(ctx.resume()), RESUME_TIMEOUT_MS, 'audio resume');
+    }
+  } catch {
+    /* still stuck: the watchdog offers the way out */
+  }
+}
+
+function waitUntilAudioTime(ctx, targetTimeSec, isStopped = () => false) {
   return new Promise((resolve) => {
     const poll = () => {
+      if (isStopped()) {
+        resolve();
+        return;
+      }
       const remainingMs = (targetTimeSec - ctx.currentTime) * 1000;
       if (remainingMs <= 0) {
         resolve();
@@ -125,6 +147,7 @@ export function toneAudibilityAndComfortTrial() {
   let maxPct = SLIDER_DEFAULT_PCT;
   let tLoad = 0;
   let tFirstInput = null;
+  let stallTimer = null;
 
   const node = {
     type: htmlButtonResponse,
@@ -233,6 +256,7 @@ export function toneAudibilityAndComfortTrial() {
       maxPct = SLIDER_DEFAULT_PCT;
       tFirstInput = null;
       tLoad = performance.now();
+      clearTimeout(stallTimer);
 
       /* === Voiceover gating ===
        *
@@ -298,6 +322,7 @@ export function toneAudibilityAndComfortTrial() {
           () => {
             if (!timedOut) userPressedYes = true;
             stopped = true;
+            clearTimeout(stallTimer);
           },
           { capture: true }
         );
@@ -330,6 +355,51 @@ export function toneAudibilityAndComfortTrial() {
         boxEls.push(document.getElementById(`tac-box-${i}`));
       }
 
+      /* Audio watchdog. A context whose clock never starts would hold the sweep (and the
+       * continue button, which opens after sweep 0) forever. After AUDIO_STALL_MS without the
+       * clock moving, the continue button opens anyway and two more controls appear: one that
+       * retries resume() from the participant's own click, one that reports that nothing can
+       * be heard (-> tones_audible false -> the existing tones_not_audible screen-out). */
+      const t0 = ctx.currentTime;
+      stallTimer = setTimeout(() => {
+        if (stopped || ctx.currentTime > t0) return;
+        const btn = document.getElementById('tac-yes-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.setAttribute('aria-disabled', 'false');
+          btn.style.opacity = '';
+          btn.addEventListener('click', () => void tryResume(ctx), { capture: true });
+        }
+        const note = document.getElementById('tac-wait-note');
+        if (!note || document.getElementById('tac-not-audible-btn')) return;
+        note.textContent =
+          'The sound has not started. Try "Try the sound again". If you still cannot hear the tones, press "I cannot hear the tones".';
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.id = 'tac-retry-btn';
+        retry.className = 'jspsych-btn';
+        retry.textContent = 'Try the sound again';
+        retry.addEventListener('click', () => void tryResume(ctx));
+        const none = document.createElement('button');
+        none.type = 'button';
+        none.id = 'tac-not-audible-btn';
+        none.className = 'jspsych-btn';
+        none.textContent = 'I cannot hear the tones';
+        none.addEventListener('click', () => {
+          timedOut = true;
+          stopped = true;
+          clearTimeout(stallTimer);
+          if (btn) {
+            btn.disabled = false;
+            btn.click();
+          }
+        });
+        note.after(retry, none);
+      }, AUDIO_STALL_MS);
+
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') await tryResume(ctx);
+      if (stopped) return;
+
       let cursorSec = ctx.currentTime + AUDIO_LEAD_IN_MS / 1000;
 
       try {
@@ -340,11 +410,11 @@ export function toneAudibilityAndComfortTrial() {
             if (stopped) break;
             const onsetSec = cursorSec;
             playToneByIndex(i, { when: onsetSec });
-            await waitUntilAudioTime(ctx, onsetSec);
+            await waitUntilAudioTime(ctx, onsetSec, () => stopped);
             if (stopped) break;
             const box = boxEls[i];
             if (box) box.classList.add('playing');
-            await waitUntilAudioTime(ctx, onsetSec + durationSec);
+            await waitUntilAudioTime(ctx, onsetSec + durationSec, () => stopped);
             if (box) box.classList.remove('playing');
             cursorSec = onsetSec + stepSec;
           }
@@ -363,7 +433,7 @@ export function toneAudibilityAndComfortTrial() {
           }
           /* Inter-sweep gap. */
           if (!stopped) {
-            await waitUntilAudioTime(ctx, cursorSec + interSweepSec);
+            await waitUntilAudioTime(ctx, cursorSec + interSweepSec, () => stopped);
             cursorSec += interSweepSec;
           }
         }
@@ -383,6 +453,7 @@ export function toneAudibilityAndComfortTrial() {
       }
     },
     on_finish: (data) => {
+      clearTimeout(stallTimer);
       /* Drop any tones still ringing from a fast Yes-click mid-tone
        * — `stopAllScheduledAudio` fades them over ~30 ms so the next
        * trial does not start under residual playback. */

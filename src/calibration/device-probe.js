@@ -165,6 +165,7 @@ async function timeoutOvershoot(n = 20, delayMs = 50) {
 /** True only for a real, finite measurement at or under its limit. A missing
  * measure (null, undefined, NaN, Infinity) is NOT a pass: in JS `null <= 20.5`
  * is true, so a bare `<=` would let an unmeasured probe through. */
+const CLOCK_EPSILON_MS = 1e-6;
 const within = (value, max) => Number.isFinite(value) && value <= max;
 
 /** Pure scoring function, exported so it can be unit-tested. A probe that did
@@ -175,7 +176,9 @@ export function scoreTiming(m, th = TIMING_THRESHOLDS) {
   if (!within(m.frame_median_ms, th.max_median_frame_ms)) reasons.push('low_refresh_rate');
   if (!within(m.frame_p95_ms, th.max_p95_frame_ms)) reasons.push('frame_jitter');
   if (!within(m.frame_dropped_frac, th.max_dropped_frac)) reasons.push('dropped_frames');
-  if (!within(m.clock_resolution_ms, th.max_clock_resolution_ms)) reasons.push('coarse_clock');
+  /* Firefox's timer is 1 ms; float error must not fail it against a 1.0 ms limit. */
+  if (!within(m.clock_resolution_ms, th.max_clock_resolution_ms + CLOCK_EPSILON_MS))
+    reasons.push('coarse_clock');
   if (!within(m.timeout_overshoot_p95_ms, th.max_timeout_overshoot_p95_ms))
     reasons.push('timer_lag');
   const measured = [

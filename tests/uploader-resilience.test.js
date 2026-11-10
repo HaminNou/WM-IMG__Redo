@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   _resetCheckpointForTests,
+  setUploadConsent,
   uploadFilenameForBucket,
   flushOnHide,
   installPageHideFlush,
@@ -50,6 +51,7 @@ const session = {
 beforeEach(async () => {
   _resetStorageForTests();
   _resetCheckpointForTests();
+  setUploadConsent(true); /* the page-hide flush is off until consent is given */
   await initStorage({ backend: 'memory' });
 });
 

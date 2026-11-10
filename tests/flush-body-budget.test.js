@@ -12,7 +12,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { _resetCheckpointForTests, flushOnHide } from '../src/uploader.js';
+import { _resetCheckpointForTests, setUploadConsent, flushOnHide } from '../src/uploader.js';
 import {
   _resetStorageForTests,
   appendTrialRow,
@@ -39,6 +39,7 @@ const utf8 = (s) => new TextEncoder().encode(s).length;
 beforeEach(async () => {
   _resetStorageForTests();
   _resetCheckpointForTests();
+  setUploadConsent(true); /* the page-hide flush is off until consent is given */
   await initStorage({ backend: 'memory' });
 });
 

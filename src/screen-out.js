@@ -13,12 +13,18 @@
  *
  * The exit row carries `exit_reason`. For exits after consent, any rows not
  * yet uploaded are flushed (best effort, bounded wait) before the redirect.
- * Exits before consent never upload anything. The explanation stays on screen
+ * Exits before consent never upload anything (the page-hide flush also stays off until consent
+ * is given, see `setUploadConsent` in uploader.js). The explanation stays on screen
  * during the flush, with a status line and a visible link to the screen-out
  * URL in case the automatic redirect does not happen.
  */
 import htmlButtonResponse from '@jspsych/plugin-html-button-response';
-import { buildScreenOutUrl, isPlaceholderScreenOutUrl, uploadPendingData } from './uploader.js';
+import {
+  buildScreenOutUrl,
+  isPlaceholderScreenOutUrl,
+  setUploadConsent,
+  uploadPendingData,
+} from './uploader.js';
 import { getSessionObject } from './storage.js';
 import { markUploadDone } from './session-guard.js';
 import { stopDisplayGuard } from './calibration/display-guard.js';
@@ -63,6 +69,8 @@ function pageHtml({ reasonHtml, url, live }) {
  */
 export async function finishScreenOut({ reasonHtml, flush, url, navigate = navigateTo }) {
   stopDisplayGuard();
+  /* The page-hide safety net stops here; the explicit flush below is the last upload. */
+  setUploadConsent(false);
   const live = Boolean(url) && !isPlaceholderScreenOutUrl(url);
   if (typeof window !== 'undefined' && window.jsPsych?.abortExperiment) {
     window.jsPsych.abortExperiment(pageHtml({ reasonHtml, url, live }));
