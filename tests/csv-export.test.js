@@ -524,6 +524,77 @@ describe('groupTrialRows', () => {
   });
 });
 
+describe('wide files: practice attempt, guard flag and Correct01', () => {
+  it('keeps two practice attempts of one trial apart and flags practice / guard', () => {
+    const gate = (block) => ({
+      phase: 'd_only_trial_start',
+      block_label: block,
+      trial_index_in_block: 0,
+    });
+    const rows = [
+      gate('practice'),
+      dOnlyEncodingRow({ trial: 0, block: 'practice' }),
+      {
+        ...dOnlyProbeRow({
+          pos: 1,
+          type: 'T_on',
+          cell: 6,
+          isTarget: true,
+          correct: true,
+          rt: 800,
+          block: 'practice',
+        }),
+        guard_flags: 'zoom',
+      },
+      gate('practice'),
+      dOnlyEncodingRow({ trial: 0, block: 'practice' }),
+      dOnlyProbeRow({
+        pos: 1,
+        type: 'T_on',
+        cell: 6,
+        isTarget: true,
+        correct: true,
+        rt: 800,
+        block: 'practice',
+      }),
+      gate('main_a'),
+      dOnlyEncodingRow({ trial: 0, block: 'main_a' }),
+    ];
+    const groups = [...groupTrialRows(new Map([['P1', rows]])).values()];
+    const out = groups.map((g) => buildWideRowDOnly(g, 1, sessionMeta()));
+    expect(out.map((r) => [r.Is_Practice, r.Attempt, r.Trial_Guard_Excluded])).toEqual([
+      [1, 1, 1],
+      [1, 2, 0],
+      [0, 1, 0],
+    ]);
+    for (const c of ['Is_Practice', 'Attempt', 'Trial_Guard_Excluded'])
+      expect(COLUMNS_D_ONLY).toContain(c);
+  });
+
+  it('Correct01 counts a missing response as wrong while ResVA stays -1', () => {
+    const group = {
+      participant_id: 'P1',
+      trial_type: 'd_only',
+      block_label: 'main_a',
+      trial_index_in_block: 0,
+      encoding: dOnlyEncodingRow(),
+      probes: [
+        dOnlyProbeRow({ pos: 1, type: 'T_on', cell: 6, isTarget: true, correct: true, rt: 800 }),
+        dOnlyProbeRow({ pos: 2, type: 'T_off', cell: 7, isTarget: true, correct: false, rt: 700 }),
+        dOnlyProbeRow({ pos: 3, type: 'F_off', cell: 0, isTarget: false, correct: true, rt: null }),
+      ],
+      stars: [],
+    };
+    const row = buildWideRowDOnly(group, 1, sessionMeta());
+    expect([1, 2, 3].map((i) => row[`Qmark_${i}_Correct01`])).toEqual([1, 0, 0]);
+    expect(row.Qmark_3_ResVA).toBe(-1);
+    expect(COLUMNS_D_ONLY).toContain('Qmark_1_Correct01');
+    expect(COLUMNS_D_ONLY.indexOf('Qmark_1_Correct01')).toBe(
+      COLUMNS_D_ONLY.indexOf('Qmark_1_ResVA') + 1
+    );
+  });
+});
+
 describe('buildWideRowDOnly', () => {
   it('produces 3 Dot_* and 3 Qmark_* slot blocks plus session metadata', () => {
     const group = {
@@ -1344,6 +1415,9 @@ describe('column lists', () => {
         "Block",
         "Trial_Type",
         "Trial",
+        "Is_Practice",
+        "Attempt",
+        "Trial_Guard_Excluded",
         "Background_Shade",
         "Rotation_Deg",
         "Pattern_Reminder",
@@ -1364,6 +1438,7 @@ describe('column lists', () => {
         "Qmark_1_Type",
         "Qmark_1_Res",
         "Qmark_1_ResVA",
+        "Qmark_1_Correct01",
         "Qmark_1_Key",
         "Qmark_1_RecTI",
         "Qmark_1_RecTI_1",
@@ -1374,6 +1449,7 @@ describe('column lists', () => {
         "Qmark_2_Type",
         "Qmark_2_Res",
         "Qmark_2_ResVA",
+        "Qmark_2_Correct01",
         "Qmark_2_Key",
         "Qmark_2_RecTI",
         "Qmark_2_RecTI_1",
@@ -1384,6 +1460,7 @@ describe('column lists', () => {
         "Qmark_3_Type",
         "Qmark_3_Res",
         "Qmark_3_ResVA",
+        "Qmark_3_Correct01",
         "Qmark_3_Key",
         "Qmark_3_RecTI",
         "Qmark_3_RecTI_1",

@@ -213,6 +213,9 @@ describe('formatPracticeFeedbackHtml', () => {
     expect(html).toContain('Practice complete');
     expect(html).toContain('8 / 10');
     expect(html).toContain('80%');
+    /* The next screen is the attention-check summary, not the main task. */
+    expect(html).toContain('Press <kbd>Space</kbd> to continue.');
+    expect(html).not.toContain('main task');
   });
 
   it('renders a red "try again" header when below criterion with retry available', () => {

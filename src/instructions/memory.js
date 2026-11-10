@@ -152,7 +152,7 @@ export function tOnlyInstructionNode() {
         set earlier.</p>
       `,
       narration: `You have 3 seconds for each test. If you answer in time, the central question mark turns green for correct or red for incorrect. Please make sure your audio volume is still at the level you set earlier.`,
-      exemplar: ['tone'],
+      exemplar: ['qmark'],
     }),
   ];
   const node = {

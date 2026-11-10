@@ -44,6 +44,15 @@ describe('STRATEGY_ITEMS', () => {
     }
   });
 
+  it('names the dual tasks as participants see them (Stars + Dots / Stars + Tones), items q13-q18 only', () => {
+    const byId = Object.fromEntries(STRATEGY_ITEMS.map((i) => [i.id, i.text]));
+    for (const n of [13, 14, 15])
+      expect(byId[`strategy_q${n}`]).toMatch(/^During the Stars \+ Dots trials,/);
+    for (const n of [16, 17, 18])
+      expect(byId[`strategy_q${n}`]).toMatch(/^During the Stars \+ Tones trials,/);
+    for (const it of STRATEGY_ITEMS) expect(it.text).not.toMatch(/image\+/);
+  });
+
   it('declares a known section on every item', () => {
     const sectionIds = new Set(STRATEGY_SECTIONS.map((s) => s.id));
     for (const it of STRATEGY_ITEMS) {

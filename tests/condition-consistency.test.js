@@ -170,11 +170,21 @@ describe('post-encoding frames follow one rotation rule', () => {
     }
   });
 
-  it('upright for the gate, arrow cue, imagination and ITI everywhere', () => {
+  it('upright for the gate, arrow cue and imagination everywhere', () => {
     for (const cond of Object.keys(BUILDERS)) {
       for (const { nodes } of trials[cond]) {
-        for (const n of nodes.filter((x) => /_(arrow_cue|imagination|iti)$/.test(x.data.phase))) {
+        for (const n of nodes.filter((x) => /_(arrow_cue|imagination)$/.test(x.data.phase))) {
           expect(n.data.frame_rotation_deg).toBe(0);
+        }
+      }
+    }
+  });
+
+  it('the ITI keeps the trial angle (the rotated grid stays rotated throughout the trial)', () => {
+    for (const cond of Object.keys(BUILDERS)) {
+      for (const { params, nodes } of trials[cond]) {
+        for (const n of nodes.filter((x) => /_iti$/.test(x.data.phase))) {
+          expect(n.data.frame_rotation_deg).toBe(postEncodingRotationDeg(params));
         }
       }
     }

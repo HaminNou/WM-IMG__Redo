@@ -29,7 +29,12 @@
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
 import { config } from '../config.js';
-import { stampTrialData, HINT_FLASH_AFTER_MS, HINT_FLASH_PERIOD_MS } from './shared.js';
+import {
+  stampTrialData,
+  HINT_FLASH_AFTER_MS,
+  HINT_FLASH_PERIOD_MS,
+  BOTH_KEYS_WINDOW_MS,
+} from './shared.js';
 import { uploadConsentAndPractice, uploadCheckpoint } from '../uploader.js';
 import { getSessionObject } from '../storage.js';
 
@@ -175,8 +180,6 @@ export function resumeAfterRestGateNode({ blockLabel } = {}) {
     `,
     choices: 'NO_KEYS',
     on_load: () => {
-      let leftPressed = false;
-      let rightPressed = false;
       const leftEl = document.getElementById(RESUME_LEFT_KBD_ID);
       const rightEl = document.getElementById(RESUME_RIGHT_KBD_ID);
       const promptEl = document.getElementById(PROMPT_ID);
@@ -207,15 +210,31 @@ export function resumeAfterRestGateNode({ blockLabel } = {}) {
         }, HINT_FLASH_PERIOD_MS);
       }, HINT_FLASH_AFTER_MS);
 
+      /* Same rule as trialStartGateNode: both arrows must be DOWN together
+       * (keydowns within BOTH_KEYS_WINDOW_MS, each cleared on keyup), so a
+       * Left now and a Right seconds later do not pass. */
+      let leftDownTs = null;
+      let rightDownTs = null;
+      let passed = false;
       const onKeyDown = (e) => {
-        if (e.key === 'ArrowLeft') {
-          leftPressed = true;
+        if (e.repeat || passed) return;
+        const k = String(e.key).toLowerCase();
+        if (k !== 'arrowleft' && k !== 'arrowright') return;
+        e.preventDefault();
+        const now = performance.now();
+        if (k === 'arrowleft') {
+          leftDownTs = now;
           if (leftEl) leftEl.style.opacity = RESUME_DIM_OPACITY;
-        } else if (e.key === 'ArrowRight') {
-          rightPressed = true;
+        } else {
+          rightDownTs = now;
           if (rightEl) rightEl.style.opacity = RESUME_DIM_OPACITY;
         }
-        if (leftPressed && rightPressed) {
+        if (
+          leftDownTs !== null &&
+          rightDownTs !== null &&
+          Math.abs(leftDownTs - rightDownTs) <= BOTH_KEYS_WINDOW_MS
+        ) {
+          passed = true;
           cleanup();
           /* End the trial. jsPsych v8: finishTrial advances the timeline. */
           window.jsPsych?.finishTrial?.({
@@ -224,11 +243,23 @@ export function resumeAfterRestGateNode({ blockLabel } = {}) {
           });
         }
       };
+      const onKeyUp = (e) => {
+        const k = String(e.key).toLowerCase();
+        if (k === 'arrowleft') {
+          leftDownTs = null;
+          if (leftEl) leftEl.style.opacity = '';
+        } else if (k === 'arrowright') {
+          rightDownTs = null;
+          if (rightEl) rightEl.style.opacity = '';
+        }
+      };
       document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
 
       const cleanup = () => {
         stopFlashing();
         document.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('keyup', onKeyUp);
       };
       const trial = window.jsPsych?.getCurrentTrial?.();
       if (trial && typeof trial === 'object') {

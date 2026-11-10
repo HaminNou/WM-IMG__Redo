@@ -50,6 +50,7 @@
  */
 import { createEncodingNode } from './encoding-schedule.js';
 
+import { postEncodingRotationDeg } from './trial-record.js';
 import { arrowCueNode, imaginationNode, trialStartGateNode, itiNode } from './shared.js';
 
 /* I-only dummies sit in M-slots — the slot positions that the matched
@@ -163,6 +164,7 @@ export function iOnlyTrial(params) {
       phase: 'i_only_iti',
       fixation: '',
       background_shade: params.background_shade,
+      rotation_deg: postEncodingRotationDeg(params),
     }),
   ];
 }

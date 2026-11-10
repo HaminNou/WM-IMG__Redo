@@ -195,6 +195,12 @@ export function iDTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
-  out.push(itiNode({ phase: 'i_d_iti', background_shade: params.background_shade }));
+  out.push(
+    itiNode({
+      phase: 'i_d_iti',
+      background_shade: params.background_shade,
+      rotation_deg: postEncodingRotationDeg(params),
+    })
+  );
   return out;
 }

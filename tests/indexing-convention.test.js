@@ -84,6 +84,7 @@ const EXACT = {
   trials_since_pattern_reminder: COUNT0,
   /* EVENTS.csv and the wide files */
   Trial: ONE(24),
+  Attempt: ONE(2),
   Event_Index: ONE(6, { first: true }),
   Encoding_Position: ONE(3),
   Slot_In_Stream: ONE(6, { first: true }),
@@ -158,7 +159,7 @@ function parseCsv(text) {
 }
 const num = (v) => (v === 'NA' || v === '' || v === undefined ? null : Number(v));
 
-let raw = [];
+const raw = [];
 let files = {};
 const tables = {};
 

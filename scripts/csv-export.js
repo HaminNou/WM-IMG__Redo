@@ -23,7 +23,9 @@
  *             Qmark_ (probe)
  *   suffixes  _Cell, _CellTY, _OrderN, _Type, _Res, _ResVA, _RecTI, _RecTI_1,
  *             _RecTY
- *   coding    ResVA: 1=correct, 0=incorrect, -1=skipped
+ *   coding    ResVA: 1=correct, 0=incorrect, -1=skipped (kept for old consumers)
+ *             Correct01: 1=correct, 0=wrong INCLUDING no response (pre-reg: no response = wrong)
+ *             Is_Practice / Attempt / Trial_Guard_Excluded identify practice passes and guard flags
  *             Cell: "[row, col]" string with one space after the comma
  *             Probe Type: 1=T_on, 2=T_off, 3=F_on, 4=F_off (from §6.2 taxonomy)
  *   filtering Criterion1: rt < 250 ms → NA
@@ -662,12 +664,14 @@ export function groupTrialRows(rowsByParticipant) {
           block_label: r.block_label,
           trial_index_in_block: r.trial_index_in_block,
           attempt: passes.get(baseKey) ?? 1,
+          guard_flagged: false,
           encoding: null,
           probes: [],
           stars: [],
         });
       }
       const g = groups.get(key);
+      if (typeof r.guard_flags === 'string' && r.guard_flags) g.guard_flagged = true;
       const phase = r.phase;
       if (phase.endsWith('_encoding')) g.encoding = r;
       else if (phase.endsWith('_probe')) g.probes.push(r);
@@ -691,6 +695,7 @@ const PROBE_FIELD_SUFFIXES = Object.freeze([
   'Type',
   'Res',
   'ResVA',
+  'Correct01',
   'Key',
   'RecTI',
   'RecTI_1',
@@ -703,6 +708,7 @@ const STAR_FIELD_SUFFIXES = Object.freeze([
   'CellTY',
   'Res',
   'ResVA',
+  'Correct01',
   'Key',
   'RecTI',
   'RecTI_1',
@@ -716,6 +722,23 @@ const SESSION_META_COLUMNS = Object.freeze([
   'Pilot_Run',
   'Pilot_Label',
 ]);
+
+/* Correct01: 1 correct, 0 wrong INCLUDING no response (pre-reg: no response = wrong). A
+ * row without a response is 0 whatever its correctness flag says. */
+function correct01(row, correctFlag) {
+  return row.responded === true && correctFlag === true ? 1 : 0;
+}
+
+/* Trial-level identity columns shared by every wide file: practice attempts 1 and 2 share the
+ * same Participant/Block/Trial key, so Attempt (and Is_Practice) disambiguate them. */
+const TRIAL_FLAG_COLUMNS = Object.freeze(['Is_Practice', 'Attempt', 'Trial_Guard_Excluded']);
+function trialFlagFields(group) {
+  return {
+    Is_Practice: group.block_label === 'practice' ? 1 : 0,
+    Attempt: group.attempt ?? 1,
+    Trial_Guard_Excluded: group.guard_flagged === true ? 1 : 0,
+  };
+}
 
 function addProbeColumnNames(cols, prefix) {
   for (const suf of PROBE_FIELD_SUFFIXES) cols.push(`${prefix}_${suf}`);
@@ -736,6 +759,7 @@ function addProbeColumns(out, prefix, probeRow, criterion, encodingRow) {
   out[`${prefix}_Type`] = probeTypeCode(probeRow.probe_type);
   out[`${prefix}_Res`] = res;
   out[`${prefix}_ResVA`] = resVA;
+  out[`${prefix}_Correct01`] = correct01(probeRow, probeRow.probe_correct);
   out[`${prefix}_Key`] = extractResponseKey(probeRow);
   out[`${prefix}_RecTI`] = Number.isFinite(rt) ? rt : NA;
   out[`${prefix}_RecTI_1`] = criterion === 2 ? applyCriterion2(rt, resVA) : applyCriterion1(rt);
@@ -757,6 +781,7 @@ function addStarColumns(out, prefix, starRow, criterion, encodingRow) {
   out[`${prefix}_CellTY`] = cellTypeCode(starRow);
   out[`${prefix}_Res`] = res;
   out[`${prefix}_ResVA`] = resVA;
+  out[`${prefix}_Correct01`] = correct01(starRow, starRow.star_correct);
   out[`${prefix}_Key`] = extractResponseKey(starRow);
   out[`${prefix}_RecTI`] = Number.isFinite(rt) ? rt : NA;
   out[`${prefix}_RecTI_1`] = criterion === 2 ? applyCriterion2(rt, resVA) : applyCriterion1(rt);
@@ -831,6 +856,7 @@ export function buildWideRowDOnly(group, criterion, sessionMeta = {}) {
     Block: group.block_label,
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
+    ...trialFlagFields(group),
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
     ...reminderFields(group.encoding),
@@ -859,6 +885,7 @@ function buildColumnsForDOnly() {
     'Block',
     'Trial_Type',
     'Trial',
+    ...TRIAL_FLAG_COLUMNS,
     'Background_Shade',
     'Rotation_Deg',
     ...REMINDER_COLUMNS,
@@ -883,6 +910,7 @@ export function buildWideRowTOnly(group, criterion, sessionMeta = {}) {
     Block: group.block_label,
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
+    ...trialFlagFields(group),
     Background_Shade: group.encoding?.background_shade ?? NA,
     ...reminderFields(group.encoding),
   };
@@ -917,6 +945,7 @@ function buildColumnsForTOnly() {
     'Block',
     'Trial_Type',
     'Trial',
+    ...TRIAL_FLAG_COLUMNS,
     'Background_Shade',
     ...REMINDER_COLUMNS,
   ];
@@ -947,6 +976,7 @@ export function buildWideRowIOnly(group, criterion, sessionMeta = {}) {
     Block: group.block_label,
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
+    ...trialFlagFields(group),
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
     ...reminderFields(group.encoding),
@@ -972,6 +1002,7 @@ function buildColumnsForIOnly() {
     'Block',
     'Trial_Type',
     'Trial',
+    ...TRIAL_FLAG_COLUMNS,
     'Background_Shade',
     'Rotation_Deg',
     ...REMINDER_COLUMNS,
@@ -993,6 +1024,7 @@ export function buildWideRowID(group, criterion, sessionMeta = {}) {
     Block: group.block_label,
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
+    ...trialFlagFields(group),
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
     ...reminderFields(group.encoding),
@@ -1031,6 +1063,7 @@ function buildColumnsForID() {
     'Block',
     'Trial_Type',
     'Trial',
+    ...TRIAL_FLAG_COLUMNS,
     'Background_Shade',
     'Rotation_Deg',
     ...REMINDER_COLUMNS,
@@ -1059,6 +1092,7 @@ export function buildWideRowIT(group, criterion, sessionMeta = {}) {
     Block: group.block_label,
     Trial_Type: group.trial_type,
     Trial: group.trial_index_in_block + 1,
+    ...trialFlagFields(group),
     Background_Shade: group.encoding?.background_shade ?? NA,
     Rotation_Deg: rotationOf(group.encoding),
     ...reminderFields(group.encoding),
@@ -1100,6 +1134,7 @@ function buildColumnsForIT() {
     'Block',
     'Trial_Type',
     'Trial',
+    ...TRIAL_FLAG_COLUMNS,
     'Background_Shade',
     'Rotation_Deg',
     ...REMINDER_COLUMNS,

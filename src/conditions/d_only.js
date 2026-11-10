@@ -172,6 +172,12 @@ export function dOnlyTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
-  out.push(itiNode({ phase: 'd_only_iti', background_shade: params.background_shade }));
+  out.push(
+    itiNode({
+      phase: 'd_only_iti',
+      background_shade: params.background_shade,
+      rotation_deg: postEncodingRotationDeg(params),
+    })
+  );
   return out;
 }

@@ -349,8 +349,15 @@ export function timedResponseWindowNode({
  * `i_only.js`'s `iOnlyTrial` composer, which calls `itiNode({ fixation: '' })`
  * to keep the post-trial gap blank.
  */
-export function itiNode({ ms = 800, phase, fixation = '?', background_shade = null } = {}) {
+export function itiNode({
+  ms = 800,
+  phase,
+  fixation = '?',
+  background_shade = null,
+  rotation_deg = 0,
+} = {}) {
   return frameNode({
+    rotation_deg,
     mount_id: 'iti-mount',
     phase,
     trial_duration: ms,
@@ -580,7 +587,7 @@ const HINT_OPACITY_DIM = '0.15';
  * within this window of each other. 300 ms is loose enough that the
  * participant can press one fractionally before the other; tighter than
  * this risks frustrating participants whose finger timing is uneven. */
-const BOTH_KEYS_WINDOW_MS = 300;
+export const BOTH_KEYS_WINDOW_MS = 300;
 
 export const TRIAL_TYPE_LABELS = Object.freeze({
   d_only: 'Dots',
@@ -914,6 +921,11 @@ export function trialStartGateNode({
           liveTrial._gate_listeners_cleanup?.();
         } catch (err) {
           console.warn('[trialStartGateNode] listener cleanup threw', err);
+        }
+        try {
+          liveTrial._gate_hint_cleanup?.();
+        } catch (err) {
+          console.warn('[trialStartGateNode] hint cleanup threw', err);
         }
         liveTrial._gate_hint_cleanup = null;
         liveTrial._gate_listeners_cleanup = null;

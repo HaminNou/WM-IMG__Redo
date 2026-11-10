@@ -374,8 +374,8 @@ describe('rotation fields on the rows', () => {
     const rotations = spy.mock.calls.map(([opts]) => opts.rotation_deg);
     spy.mockRestore();
     /* Gate, encoding (mounted upright, then animated to the display angle exactly as in the
-     * imagery trials) and ITI are upright; retention and the three probes use the display angle. */
-    expect(rotations).toEqual([0, 0, ...Array(4).fill(params.display_rotation_deg), 0]);
+     * imagery trials) are upright; retention, the three probes and the ITI keep the display angle. */
+    expect(rotations).toEqual([0, 0, ...Array(5).fill(params.display_rotation_deg)]);
   }, 60000);
 
   it.each(['i_d', 'i_t'])(
@@ -388,8 +388,8 @@ describe('rotation fields on the rows', () => {
       const rotations = spy.mock.calls.map(([opts]) => opts.rotation_deg);
       spy.mockRestore();
       /* Gate, arrow cue, imagination and encoding mount upright (the encoding frame is then
-       * animated to the trial angle); retention and the three probes use the trial angle; ITI upright. */
-      expect(rotations).toEqual([0, 0, 0, 0, ...Array(4).fill(params.rotation_deg), 0]);
+       * animated to the trial angle); retention, the three probes and the ITI use the trial angle. */
+      expect(rotations).toEqual([0, 0, 0, 0, ...Array(5).fill(params.rotation_deg)]);
       const probes = probeRows(rows);
       expect(probes).toHaveLength(3);
       for (const r of probes) {
@@ -515,7 +515,14 @@ describe.each(Object.keys(CONDITIONS))(
     it('stamps frame rotation on retention, ITI, arrow-cue and imagination rows', () => {
       const iti = run.rows.filter((r) => phaseOf(r) === `${cond}_iti`);
       expect(iti).toHaveLength(1);
-      expect(iti[0].frame_rotation_deg).toBe(0);
+      /* The rotated hidden grid stays rotated until the next trial's gate (T-only has none). */
+      expect(iti[0].frame_rotation_deg).toBe(
+        cond === 'd_only'
+          ? params.display_rotation_deg
+          : cond === 't_only'
+            ? 0
+            : params.rotation_deg
+      );
       expect(Number.isFinite(iti[0].iti_onset_ts_ms)).toBe(true);
       for (const r of run.rows.filter((x) => phaseOf(x).endsWith('_retention'))) {
         const expected =

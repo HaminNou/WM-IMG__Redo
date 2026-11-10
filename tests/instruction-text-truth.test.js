@@ -270,3 +270,13 @@ describe('the deck pattern exemplar can be seen (finding F13)', () => {
     expect(html).toContain('mask-image');
   });
 });
+
+describe('T-only page 3 shows the central question mark it talks about', () => {
+  it('the page that mentions the central question mark draws the ? path, not the note glyph', () => {
+    const pages = tOnlyInstructionNode().pages;
+    const page = pages.find((p) => plain(p).includes('central question mark'));
+    expect(page).toBeTruthy();
+    expect(page).not.toContain('\u266a');
+    expect(page).toContain('stroke-linecap="round"'); /* the qmark path */
+  });
+});

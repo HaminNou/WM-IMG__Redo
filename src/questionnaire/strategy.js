@@ -167,19 +167,19 @@ export const STRATEGY_ITEMS = Object.freeze([
     id: 'strategy_q13',
     section: 'i_d',
     construct: 'continuous_visualization',
-    text: 'During the image+dot trials, I continued to hold the rotated pattern vividly in mind while responding to the dot tests.',
+    text: 'During the Stars + Dots trials, I continued to hold the rotated pattern vividly in mind while responding to the dot tests.',
   }),
   Object.freeze({
     id: 'strategy_q14',
     section: 'i_d',
     construct: 'selective_attention_switching',
-    text: 'During the image+dot trials, I switched my attention between visualizing the rotated pattern and tracking the dots, depending on what was on screen.',
+    text: 'During the Stars + Dots trials, I switched my attention between visualizing the rotated pattern and tracking the dots, depending on what was on screen.',
   }),
   Object.freeze({
     id: 'strategy_q15',
     section: 'i_d',
     construct: 'phase_specific_focus',
-    text: 'During the image+dot trials, even when it was not required, I kept a residual image of the rotated pattern in my mind while doing the dot tests.',
+    text: 'During the Stars + Dots trials, even when it was not required, I kept a residual image of the rotated pattern in my mind while doing the dot tests.',
   }),
   /* ------------------------------------------------------------------
    * SECTION 5 — Image + Tone dual (3 items parallel to Section 4, plus 1
@@ -190,19 +190,19 @@ export const STRATEGY_ITEMS = Object.freeze([
     id: 'strategy_q16',
     section: 'i_t',
     construct: 'continuous_visualization',
-    text: 'During the image+tone trials, I continued to hold the rotated pattern vividly in mind while responding to the tone tests.',
+    text: 'During the Stars + Tones trials, I continued to hold the rotated pattern vividly in mind while responding to the tone tests.',
   }),
   Object.freeze({
     id: 'strategy_q17',
     section: 'i_t',
     construct: 'selective_attention_switching',
-    text: 'During the image+tone trials, I switched my attention between visualizing the rotated pattern and tracking the tones, depending on the stimulus.',
+    text: 'During the Stars + Tones trials, I switched my attention between visualizing the rotated pattern and tracking the tones, depending on the stimulus.',
   }),
   Object.freeze({
     id: 'strategy_q18',
     section: 'i_t',
     construct: 'phase_specific_focus',
-    text: 'During the image+tone trials, even when it was not required, I kept a residual image of the rotated pattern in my mind while doing the tone tests.',
+    text: 'During the Stars + Tones trials, even when it was not required, I kept a residual image of the rotated pattern in my mind while doing the tone tests.',
   }),
   Object.freeze({
     id: 'strategy_q19',
