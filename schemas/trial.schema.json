@@ -1158,6 +1158,10 @@
       "type": "boolean",
       "description": "Demo rows: the demo was ended with Space."
     },
+    "demo_arrow_presses": {
+      "type": "integer",
+      "description": "Demo rows: how many times the participant pressed an arrow key while the 'Just watch and listen' banner was on screen (the demo presses the keys itself; each press made the banner jiggle). Key repeats are not counted."
+    },
     "gate_show_arrow": {
       "type": "boolean",
       "description": "Trial-start gate: the trial is an imagery trial (the arrow follows the gate)."

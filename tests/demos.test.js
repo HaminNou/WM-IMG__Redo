@@ -15,7 +15,7 @@
  *   - the composer wires a demo between every per-type instruction screen
  *     and that type's practice block
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   dOnlyDemoNode,
   tOnlyDemoNode,
@@ -23,6 +23,13 @@ import {
   iDDemoNode,
   iTDemoNode,
   enumerateDemoNarrationStrings,
+  jiggleWatchBanner,
+  playBuzz,
+  handleDemoArrowPress,
+  BUZZ_MIN_GAP_MS,
+  demoProbePlan,
+  mountResponseButtons,
+  DEMO_NO_PRESS_NOTE,
 } from '../src/instructions/demos.js';
 import { assembleInstructionsAndPractice } from '../src/instructions/index.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
@@ -217,5 +224,128 @@ describe('demo wiring in the instructions composer', () => {
       }
       expect(sawPractice, `expected practice trials after demo_${trialType}`).toBe(true);
     }
+  });
+});
+
+describe('"Just watch and listen" banner reacts to arrow presses during a demo', () => {
+  const mountBanner = () => {
+    document.body.innerHTML =
+      '<div id="demo-watch-banner-row"><div class="demo-watch-banner">Just watch and listen, don\'t respond yet</div></div>';
+  };
+  let created;
+  beforeEach(() => {
+    created = [];
+    const node = () => ({
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      type: '',
+      frequency: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+      gain: { setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+    });
+    window.AudioContext = function FakeCtx() {
+      this.state = 'running';
+      this.currentTime = 1;
+      this.destination = {};
+      this.addEventListener = () => {};
+      this.createOscillator = () => (created.push('osc'), node());
+      this.createGain = () => node();
+    };
+  });
+  afterEach(() => {
+    delete window.AudioContext;
+    document.body.innerHTML = '';
+  });
+
+  it('jiggles the banner and returns true; false when the banner is not on screen', () => {
+    expect(jiggleWatchBanner()).toBe(false);
+    mountBanner();
+    expect(jiggleWatchBanner()).toBe(true);
+    expect(
+      document.querySelector('.demo-watch-banner').classList.contains('demo-watch-banner--jiggle')
+    ).toBe(true);
+  });
+
+  it('counts each press, buzzes at most once per gap, ignores key repeats', () => {
+    mountBanner();
+    const st = { arrowPresses: 0, lastBuzzAt: -Infinity };
+    expect(handleDemoArrowPress(st, { key: 'ArrowLeft' }, 1000)).toBe(true);
+    expect(handleDemoArrowPress(st, { key: 'ArrowRight' }, 1000 + BUZZ_MIN_GAP_MS / 2)).toBe(true);
+    expect(handleDemoArrowPress(st, { key: 'ArrowLeft', repeat: true }, 5000)).toBe(false);
+    expect(handleDemoArrowPress(st, { key: 'ArrowLeft' }, 1000 + BUZZ_MIN_GAP_MS + 1)).toBe(true);
+    expect(st.arrowPresses).toBe(3);
+    expect(created.length).toBe(2); // 3 presses, the middle one inside the gap
+  });
+
+  it('does nothing when the banner is hidden (replay prompt): no count, no buzz', () => {
+    document.body.innerHTML = '<div id="demo-watch-banner-row"></div>';
+    const st = { arrowPresses: 0, lastBuzzAt: -Infinity };
+    expect(handleDemoArrowPress(st, { key: 'ArrowLeft' }, 1000)).toBe(false);
+    expect(st.arrowPresses).toBe(0);
+    expect(created.length).toBe(0);
+  });
+
+  it('playBuzz is silent and safe when the audio context is not running or missing', () => {
+    window.AudioContext = function Suspended() {
+      this.state = 'suspended';
+      this.addEventListener = () => {};
+    };
+    // a context created earlier in the file may be cached; either outcome must not throw
+    expect(() => playBuzz()).not.toThrow();
+  });
+});
+
+describe('recognition demo press plan (both keys demonstrated)', () => {
+  it('demonstrates BOTH Left and Right, with mixed Yes/No answers', () => {
+    const plan = demoProbePlan();
+    expect(plan).toHaveLength(3);
+    const sides = plan.map((q) => q.pressedSide);
+    expect(sides).toContain('left');
+    expect(sides).toContain('right');
+    expect(sides).toEqual(['right', 'left', 'left']);
+    expect(plan.map((q) => q.probe.isTarget)).toEqual([true, false, true]);
+  });
+
+  it('contains exactly one deliberate error, and it is the last press', () => {
+    const plan = demoProbePlan();
+    expect(plan.filter((q) => !q.isCorrect)).toHaveLength(1);
+    expect(plan[2].isCorrect).toBe(false);
+    expect(plan[2].pressedSide).not.toBe(plan[2].correctSide);
+  });
+});
+
+describe('demo response row', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="demo-buttons-row"></div>';
+  });
+
+  it('left and right hand glyphs differ in orientation (right is mirrored)', () => {
+    mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+    const l = document.querySelector('.demo-hand[data-side="left"] .demo-hand-glyph');
+    const r = document.querySelector('.demo-hand[data-side="right"] .demo-hand-glyph');
+    expect(l).not.toBeNull();
+    expect(r).not.toBeNull();
+    expect(l.textContent).toBe(r.textContent);
+    /* The mirror is applied by the stylesheet rule keyed on data-side. */
+    const src = document.querySelector('.demo-hand[data-side="right"]');
+    expect(src).not.toBeNull();
+  });
+
+  it('stylesheet mirrors only the right-hand glyph', async () => {
+    const fs = await import('node:fs');
+    const code = fs.readFileSync(`${process.cwd()}/src/instructions/demos.js`, 'utf8');
+    expect(code).toMatch(
+      /\.demo-hand\[data-side="right"\] \.demo-hand-glyph \{ transform: scaleX\(-1\)/
+    );
+    expect(code).not.toMatch(/\.demo-hand\[data-side="left"\] \.demo-hand-glyph \{ transform/);
+  });
+
+  it('shows the "do not press any keys" line with the buttons', () => {
+    mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+    const note = document.querySelector('.demo-no-press-note');
+    expect(note?.textContent).toBe(
+      'The demonstration presses the keys for you. Please do not press any keys.'
+    );
+    expect(DEMO_NO_PRESS_NOTE).toBe(note.textContent);
   });
 });

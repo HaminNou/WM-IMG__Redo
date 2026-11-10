@@ -139,6 +139,7 @@ import { addStar, recolourStar } from '../visuals/star.js';
 import { addOpenSquare } from '../visuals/dummy.js';
 import { onPatternCells, offPatternCells } from '../grid.js';
 import { playToneByCell } from '../audio/tones.js';
+import { getAudioContext } from '../audio/context.js';
 import { FEEDBACK_COLOR_CORRECT, FEEDBACK_COLOR_WRONG, sleep } from '../conditions/shared.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { getSessionPRNG } from '../prng.js';
@@ -343,8 +344,29 @@ function demoFrameTemplate(taskNumber, title) {
         user-select: none;
         pointer-events: none;
       }
-      /* Two hand glyphs — one resting under each key cap (left ✋ on the
-       * left arrow, right 🤚 on the right arrow). Both stay visible across
+      /* Played when the participant presses an arrow key while the banner is
+       * up: the demo presses the keys by itself, and a participant who copies
+       * it is told, visibly, that she should not. */
+      .demo-watch-banner.demo-watch-banner--jiggle {
+        animation: demo-watch-jiggle 480ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+      }
+      @keyframes demo-watch-jiggle {
+        10%, 90% { transform: translateX(-2px) rotate(-0.6deg); }
+        20%, 80% { transform: translateX(5px) rotate(0.9deg); }
+        30%, 50%, 70% { transform: translateX(-9px) rotate(-1.4deg); }
+        40%, 60% { transform: translateX(9px) rotate(1.4deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .demo-watch-banner.demo-watch-banner--jiggle {
+          animation: demo-watch-flash 480ms ease-out both;
+        }
+        @keyframes demo-watch-flash {
+          0%, 100% { background: rgba(119, 33, 57, 0.08); }
+          30% { background: rgba(119, 33, 57, 0.35); }
+        }
+      }
+      /* Two hand glyphs — one resting under each key cap (a left and a mirrored right
+       * hand on the left and right arrows). Both stay visible across
        * the entire response phase so the participant sees the realistic
        * two-hand keyboard posture they will adopt for the practice and
        * main task. Only the responding hand wiggles (up/down) to simulate
@@ -363,6 +385,19 @@ function demoFrameTemplate(taskNumber, title) {
         filter: grayscale(1) brightness(0.45) drop-shadow(0 2px 4px rgba(0,0,0,0.25));
       }
       .demo-hand.is-visible { opacity: 1; }
+      /* Same emoji for both hands; the right-hand glyph is mirrored so the
+       * pair reads as a left and a right hand (thumbs toward the middle).
+       * The mirror lives on an inner span so the wiggle keyframes (which set
+       * transform on .demo-hand) do not override it. */
+      .demo-hand-glyph { display: inline-block; }
+      .demo-hand[data-side="right"] .demo-hand-glyph { transform: scaleX(-1); }
+      .demo-no-press-note {
+        margin: 0.35rem 0 0;
+        text-align: center;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        color: rgba(0,0,0,0.6);
+      }
       @keyframes demo-hand-wiggle {
         0%   { transform: translateY(0) scale(1);
                filter: grayscale(1) brightness(0.45) drop-shadow(0 2px 4px rgba(0,0,0,0.25)); }
@@ -545,7 +580,13 @@ function makeDemoController() {
    * button, which is mouse-only by design), so arrow presses are
    * silently absorbed by the listener to prevent stray responses from
    * leaking into the next trial. */
-  const state = { cancelled: false, spaceArmed: false, currentNarration: null };
+  const state = {
+    cancelled: false,
+    spaceArmed: false,
+    currentNarration: null,
+    arrowPresses: 0,
+    lastBuzzAt: -Infinity,
+  };
   return {
     state,
     /**
@@ -875,13 +916,14 @@ function pickDemoCells() {
     /* M/S-slot fillers (open squares): different cells from above so the
      * demo's 6-slot sequence never repeats a cell. */
     fillerCells: [offCells[0], onCells[1], offCells[2]],
-    /* Probes: 2 targets (T_on, T_off) + 1 foil (F_off). At set-size 3
-     * trials must carry 1–2 targets; keeping 2 lets the demo show both
-     * Yes-on and Yes-off correct-presses before the No-press. */
+    /* Probes: target, foil, target (T_on, F_off, T_off). At set-size 3
+     * trials must carry 1–2 targets. The order makes the three demonstrated
+     * presses Right (Yes), Left (No), Left (No, the deliberate error) so
+     * BOTH keys are shown (see demoProbePlan). */
     probeCells: [
-      { cell: onCells[0], isTarget: true, label: 'on' }, // T_on
-      { cell: offCells[1], isTarget: true, label: 'off' }, // T_off
-      { cell: offCells[4], isTarget: false, label: 'off' }, // F_off
+      { cell: onCells[0], isTarget: true, label: 'on' }, // T_on  -> Yes (right), correct
+      { cell: offCells[4], isTarget: false, label: 'off' }, // F_off -> No (left), correct
+      { cell: offCells[1], isTarget: true, label: 'off' }, // T_off -> No (left), deliberately wrong
     ],
     /* Star cells: 2 on-pattern (correct = On-pattern button) + 1 off-pattern. */
     starCells: [
@@ -892,12 +934,38 @@ function pickDemoCells() {
   };
 }
 
+/* Index of the one deliberately wrong press in every recognition demo. */
+const DEMO_WRONG_PROBE_INDEX = 2;
+
+/**
+ * Pure press plan for the three recognition probes of a demo: for each probe
+ * the correct side, the side the demo presses, and whether that press is
+ * correct. Exactly one press (DEMO_WRONG_PROBE_INDEX) is deliberately wrong.
+ * With the probe order target, foil, target this demonstrates Right (Yes),
+ * Left (No) and Left (No, wrong), so both keys are shown.
+ */
+export function demoProbePlan() {
+  const { probeCells } = pickDemoCells();
+  return probeCells.map((probe, p) => {
+    const correctSide = probe.isTarget ? 'right' : 'left';
+    const pressedSide =
+      p === DEMO_WRONG_PROBE_INDEX ? (correctSide === 'right' ? 'left' : 'right') : correctSide;
+    return { probe, correctSide, pressedSide, isCorrect: pressedSide === correctSide };
+  });
+}
+
 /* ─── Button + hand UI ──────────────────────────────────────────────── */
+
+/* Non-narrated, always-visible reminder shown with the response buttons
+ * (recognition and star demos): the demo presses the keys itself. It is
+ * removed together with the buttons (clearResponseButtons / askReplay). */
+export const DEMO_NO_PRESS_NOTE =
+  'The demonstration presses the keys for you. Please do not press any keys.';
 
 /**
  * Mount a left/right button pair plus a pair of resting hand glyphs in
  * the demo's reserved button row. The hands sit in the flow below each
- * arrow-key cap (left ✋ under ←, right 🤚 under →), persistently mirroring
+ * arrow-key cap (a left and a mirrored right hand under ← and →), persistently mirroring
  * the bimanual keyboard posture the participant will adopt for the
  * practice and main task. `animateButtonPress` reveals them and wiggles
  * only the responding hand.
@@ -912,7 +980,7 @@ function pickDemoCells() {
  * rightHand }` or `null` if the button row is missing (defensive — should
  * never happen at runtime).
  */
-function mountResponseButtons({ leftLabel, rightLabel }) {
+export function mountResponseButtons({ leftLabel, rightLabel }) {
   const row = document.getElementById('demo-buttons-row');
   if (!row) return null;
   /* Per-button column stacks: button on top, arrow-key cap, then a hand
@@ -921,6 +989,7 @@ function mountResponseButtons({ leftLabel, rightLabel }) {
    * main task (left hand on ←, right hand on →); only the responding
    * hand wiggles during animateButtonPress while the other stays put. */
   row.innerHTML = `
+    <div class="demo-buttons-wrap" style="display: flex; flex-direction: column; align-items: center;">
     <div class="demo-buttons-container" style="
       position: relative;
       display: inline-flex;
@@ -933,15 +1002,17 @@ function mountResponseButtons({ leftLabel, rightLabel }) {
           <span class="demo-btn-label">${leftLabel}</span>
         </button>
         <span class="demo-btn-key" data-side="left" aria-hidden="true">&larr;</span>
-        <span class="demo-hand" data-side="left" aria-hidden="true">✋</span>
+        <span class="demo-hand" data-side="left" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>
       </div>
       <div class="demo-btn-stack">
         <button type="button" class="demo-btn" data-side="right">
           <span class="demo-btn-label">${rightLabel}</span>
         </button>
         <span class="demo-btn-key" data-side="right" aria-hidden="true">&rarr;</span>
-        <span class="demo-hand" data-side="right" aria-hidden="true">🤚</span>
+        <span class="demo-hand" data-side="right" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>
       </div>
+    </div>
+    <p class="demo-no-press-note">${DEMO_NO_PRESS_NOTE}</p>
     </div>
   `;
   const container = row.querySelector('.demo-buttons-container');
@@ -1009,8 +1080,72 @@ function hideWatchListenBanner() {
   if (row) row.innerHTML = '';
 }
 
+/** Length of the "don't respond" jiggle, ms (keep equal to the CSS animation). */
+export const JIGGLE_MS = 480;
+/** Shortest gap between two buzzes, ms: a held or hammered key is one buzz, not a drone. */
+export const BUZZ_MIN_GAP_MS = 350;
+
 /**
- * Reveal both resting hands (left ✋ on ←, right 🤚 on →). Idempotent —
+ * Shake the "Just watch and listen, don't respond yet" banner. Restarts the
+ * animation if it is already running. Returns false when the banner is not on
+ * screen (for example at the replay prompt, where the participant is meant to act).
+ */
+export function jiggleWatchBanner() {
+  const el = document.querySelector('#demo-watch-banner-row .demo-watch-banner');
+  if (!el) return false;
+  el.classList.remove('demo-watch-banner--jiggle');
+  void el.offsetWidth; // force a reflow so the animation restarts
+  el.classList.add('demo-watch-banner--jiggle');
+  return true;
+}
+
+/**
+ * A short, soft buzz (about 0.2 s, low sawtooth, quiet) through the study's audio
+ * context. Never throws, never waits for audio, and does nothing when the context
+ * is not running (a buzz must not queue up behind a suspended context and play late).
+ */
+export function playBuzz() {
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state !== 'running') return false;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(150, t0);
+    osc.frequency.linearRampToValueAtTime(110, t0 + 0.2);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+    gain.gain.setValueAtTime(0.12, t0 + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.21);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.22);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The participant pressed an arrow key during a demo. Counts the press, jiggles the
+ * banner and buzzes (at most once per BUZZ_MIN_GAP_MS). Held-key repeats are ignored.
+ * Only reacts while the banner is on screen.
+ */
+export function handleDemoArrowPress(state, event, now = performance.now()) {
+  if (event?.repeat) return false;
+  if (!jiggleWatchBanner()) return false;
+  state.arrowPresses = (state.arrowPresses ?? 0) + 1;
+  if (now - (state.lastBuzzAt ?? -Infinity) >= BUZZ_MIN_GAP_MS) {
+    state.lastBuzzAt = now;
+    playBuzz();
+  }
+  return true;
+}
+
+/**
+ * Reveal both resting hands (left on ←, mirrored right on →). Idempotent —
  * safe to call before every press; the CSS opacity transition handles
  * the fade and re-applying `.is-visible` while already visible is a
  * no-op.
@@ -1110,7 +1245,7 @@ function pressOutcomeCaption({ pressedLabel, correctLabel, isCorrect, stimulusNa
  * the participant sees both green and red outcomes inside the loop).
  */
 async function runDOnlyMiniTrial(frame, ctl) {
-  const { memCells, fillerCells, probeCells } = pickDemoCells();
+  const { memCells, fillerCells } = pickDemoCells();
   /* Live D-only trials show the dots on the grid turned by the trial's
    * display angle (the same stratified angle as the imagery conditions), and
    * retention and the probes stay on that rotated frame. The demo does the
@@ -1173,15 +1308,12 @@ async function runDOnlyMiniTrial(frame, ctl) {
    * end-of-loop teardown after the third probe completes. */
   const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
 
-  /* Press plan: probes 0..1 press correctly, probe 2 presses wrong. This
-   * mixes Yes/No correct-presses with one wrong-press at the tail, so the
-   * participant sees 2 green and 1 red feedback case per loop. */
-  const wrongIndex = 2;
-  for (let p = 0; p < probeCells.length; p++) {
-    const probe = probeCells[p];
-    const correctSide = probe.isTarget ? 'right' : 'left';
-    const pressedSide =
-      p === wrongIndex ? (correctSide === 'right' ? 'left' : 'right') : correctSide;
+  /* Press plan (demoProbePlan): Right/Yes correct, Left/No correct, then
+   * one deliberate wrong press (Left/No on a target), so both keys are shown
+   * and the participant sees 2 green and 1 red feedback case per loop. */
+  const probePlan = demoProbePlan();
+  for (let p = 0; p < probePlan.length; p++) {
+    const { probe, correctSide, pressedSide } = probePlan[p];
 
     if (!(await ctl.narrate(`Test ${p + 1} of 3: was a dot just shown in this location?`))) {
       return;
@@ -1226,7 +1358,7 @@ async function runDOnlyMiniTrial(frame, ctl) {
  * stimulus is auditory.
  */
 async function runTOnlyMiniTrial(frame, ctl) {
-  const { memCells, fillerCells, probeCells } = pickDemoCells();
+  const { memCells, fillerCells } = pickDemoCells();
 
   /* Mount the persistent WATCH-AND-LISTEN banner — stays on screen
    * for the whole mini-trial (including the probe loop). Buttons are
@@ -1267,12 +1399,9 @@ async function runTOnlyMiniTrial(frame, ctl) {
    * loopify teardown will clear them after the third probe completes. */
   const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
 
-  const wrongIndex = 2;
-  for (let p = 0; p < probeCells.length; p++) {
-    const probe = probeCells[p];
-    const correctSide = probe.isTarget ? 'right' : 'left';
-    const pressedSide =
-      p === wrongIndex ? (correctSide === 'right' ? 'left' : 'right') : correctSide;
+  const probePlan = demoProbePlan();
+  for (let p = 0; p < probePlan.length; p++) {
+    const { probe, correctSide, pressedSide } = probePlan[p];
 
     /* Probe tone first, then the spoken prompt asks about it. Same
      * tone-first rationale as the encoding loop above. */
@@ -1457,7 +1586,7 @@ async function runIDMiniTrial(frame, ctl) {
    * kind of stimulus inside the circle. */
   if (!(await ctl.advanceCaption(''))) return;
 
-  const { memCells, starCells, probeCells } = pickDemoCells();
+  const { memCells, starCells } = pickDemoCells();
   const wrongStarIndex = 2;
   for (let i = 0; i < 3; i++) {
     /* Dot encoding window — visual only, no response required. The
@@ -1541,12 +1670,9 @@ async function runIDMiniTrial(frame, ctl) {
   setFixation(frame, '?');
   if (!(await ctl.wait(DEMO_EVENT_TAIL_MS))) return;
 
-  const wrongProbeIndex = 2;
-  for (let p = 0; p < probeCells.length; p++) {
-    const probe = probeCells[p];
-    const correctSide = probe.isTarget ? 'right' : 'left';
-    const pressedSide =
-      p === wrongProbeIndex ? (correctSide === 'right' ? 'left' : 'right') : correctSide;
+  const probePlan = demoProbePlan();
+  for (let p = 0; p < probePlan.length; p++) {
+    const { probe, correctSide, pressedSide } = probePlan[p];
 
     if (!(await ctl.narrate(`Dot test ${p + 1} of 3: was a dot shown in this location?`))) {
       return;
@@ -1628,7 +1754,7 @@ async function runITMiniTrial(frame, ctl) {
    * opener already covered both rules. */
   if (!(await ctl.advanceCaption(''))) return;
 
-  const { memCells, starCells, probeCells } = pickDemoCells();
+  const { memCells, starCells } = pickDemoCells();
   const wrongStarIndex = 2;
   for (let i = 0; i < 3; i++) {
     /* Tone encoding — purely auditory, no response. The persistent
@@ -1703,12 +1829,9 @@ async function runITMiniTrial(frame, ctl) {
   setFixation(frame, '?');
   if (!(await ctl.wait(DEMO_EVENT_TAIL_MS))) return;
 
-  const wrongProbeIndex = 2;
-  for (let p = 0; p < probeCells.length; p++) {
-    const probe = probeCells[p];
-    const correctSide = probe.isTarget ? 'right' : 'left';
-    const pressedSide =
-      p === wrongProbeIndex ? (correctSide === 'right' ? 'left' : 'right') : correctSide;
+  const probePlan = demoProbePlan();
+  for (let p = 0; p < probePlan.length; p++) {
+    const { probe, correctSide, pressedSide } = probePlan[p];
 
     /* Probe tone first, then the prompt narration asks about it. */
     if (!(await ctl.wait(DEMO_EVENT_LEAD_MS))) return;
@@ -1757,7 +1880,7 @@ const DEMO_MAX_REPLAYS = 2;
 /**
  * After a mini-trial finishes, offer the participant a single
  * "Repeat the demonstration" affordance inside the caption box. Resolves
- * with `true` if they request a replay (button click or right-arrow key)
+ * with `true` if they request a replay (mouse click on the button)
  * and `false` if they decline by pressing Space (which jsPsych's
  * `htmlKeyboardResponse` owns as the trial-advance shortcut, flipping
  * `ctl.state.cancelled` via on_finish — the polling timer below catches
@@ -2029,6 +2152,8 @@ function buildDemoNode({ phase, taskNumber, title, run, factory }) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
           e.stopPropagation();
+          /* The demo presses the keys itself; a participant who copies it is told not to. */
+          handleDemoArrowPress(ctl.state, e);
           return;
         }
         if (e.key === ' ' || e.code === 'Space') {
@@ -2048,8 +2173,10 @@ function buildDemoNode({ phase, taskNumber, title, run, factory }) {
         console.error(`[demo:${phase}] schedule error`, err);
       });
     },
-    on_finish: () => {
+    on_finish: (data) => {
       const trial = window.jsPsych?.getCurrentTrial?.();
+      if (data && typeof data === 'object')
+        data.demo_arrow_presses = trial?._demo_state?.arrowPresses ?? 0;
       if (trial?._demo_state) trial._demo_state.cancelled = true;
       if (trial?._demo_keydown_handler) {
         document.removeEventListener('keydown', trial._demo_keydown_handler, true);
