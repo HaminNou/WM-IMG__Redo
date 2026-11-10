@@ -51,6 +51,7 @@ import {
   FEEDBACK_COLOR_WRONG,
   KEY_YES,
   KEY_NO,
+  isFirstPracticeTrial,
 } from './shared.js';
 
 /* Encoding length = 1500 ms pre-stim pad + 3×M + 3×S. The pad keeps the
@@ -70,6 +71,7 @@ function trialStartNode(params) {
     phase: 't_only_trial_start',
     background_shade: params.background_shade,
     trialType: 't_only',
+    prominent: isFirstPracticeTrial(params),
     data: { background_shade: params.background_shade },
   });
 }

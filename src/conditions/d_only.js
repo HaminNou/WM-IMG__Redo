@@ -48,6 +48,7 @@ import {
   FEEDBACK_COLOR_WRONG,
   KEY_YES,
   KEY_NO,
+  isFirstPracticeTrial,
 } from './shared.js';
 
 /* Encoding length = 1500 ms rotation + stabilisation + 3×M + 3×S. The
@@ -68,6 +69,7 @@ function trialStartNode(params) {
     phase: 'd_only_trial_start',
     background_shade: params.background_shade,
     trialType: 'd_only',
+    prominent: isFirstPracticeTrial(params),
     data: { background_shade: params.background_shade },
   });
 }

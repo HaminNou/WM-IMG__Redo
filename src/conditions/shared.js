@@ -589,6 +589,29 @@ const HINT_OPACITY_DIM = '0.15';
  * this risks frustrating participants whose finger timing is uneven. */
 export const BOTH_KEYS_WINDOW_MS = 300;
 
+/* The first gate after a task's demonstration (the first practice trial of each
+ * task) is made impossible to miss: the instruction is a centred box with a
+ * coloured border instead of the small pill at the bottom of the screen. Later
+ * gates keep the pill, so the box never covers the grid on every trial. */
+const PROMINENT_HINT_OPACITY_NORMAL = '1';
+const PROMINENT_HINT_OPACITY_DIM = '0.35';
+const PROMINENT_HINT_BORDER_COLOUR = '#772139';
+export const PROMINENT_HINT_TEXT =
+  'Press the Left (\u2190) and Right (\u2192) arrow keys at the same time to start the practice trials.';
+export const STANDARD_HINT_TEXT =
+  'Press the Left and Right arrow keys at the same time to start the next trial.';
+const PROMINENT_POP_IN_MS = 260;
+
+/**
+ * True for the first practice trial of a task (the gate that follows that task's
+ * demonstration). Practice trials carry `trial_meta.is_practice` and a 0-based
+ * `block_position` within their single-task practice block.
+ */
+export function isFirstPracticeTrial(params) {
+  const meta = params?.trial_meta;
+  return meta?.is_practice === true && meta?.block_position === 0;
+}
+
 export const TRIAL_TYPE_LABELS = Object.freeze({
   d_only: 'Dots',
   t_only: 'Tones',
@@ -605,8 +628,11 @@ export function trialStartGateNode({
   background_shade = null,
   postGateDelayMs = POST_GATE_DELAY_MS,
   trialType = null,
+  prominent = false,
   data = {},
 } = {}) {
+  const normalOpacity = prominent ? PROMINENT_HINT_OPACITY_NORMAL : HINT_OPACITY_NORMAL;
+  const dimOpacity = prominent ? PROMINENT_HINT_OPACITY_DIM : HINT_OPACITY_DIM;
   const mountId = `trial-start-gate-mount-${Math.random().toString(36).slice(2, 9)}`;
   const hintId = `trial-start-hint-${Math.random().toString(36).slice(2, 9)}`;
   const labelId = `trial-type-label-${Math.random().toString(36).slice(2, 9)}`;
@@ -701,37 +727,81 @@ export function trialStartGateNode({
        * one-line sentence inside a snug rectangle that hugs the text. */
       const hintEl = document.createElement('div');
       hintEl.id = hintId;
-      hintEl.className = 'trial-start-hint';
-      hintEl.textContent =
-        'Press the Left and Right arrow keys at the same time to start the next trial.';
+      hintEl.className = prominent
+        ? 'trial-start-hint trial-start-hint--prominent'
+        : 'trial-start-hint';
+      hintEl.textContent = prominent ? PROMINENT_HINT_TEXT : STANDARD_HINT_TEXT;
+      if (prominent) hintEl.setAttribute('role', 'status');
+      const hintPosition = prominent
+        ? [
+            /* Centred box with a coloured border: the participant cannot miss it. */
+            'position: fixed',
+            'top: 50%',
+            'left: 50%',
+            'transform: translate(-50%, -50%)',
+            'box-sizing: border-box',
+            'width: max-content',
+            'max-width: min(34rem, 86vw)',
+            'text-align: center',
+            'background: #FFFFFF',
+            'color: #000000',
+            'font-size: 26px',
+            'font-weight: 700',
+            'line-height: 1.4',
+            'padding: 1.4rem 2.2rem',
+            `border: 5px solid ${PROMINENT_HINT_BORDER_COLOUR}`,
+            'border-radius: 0.9rem',
+            'box-shadow: 0 12px 40px rgba(0,0,0,0.35)',
+            'z-index: 1002',
+          ]
+        : [
+            'position: fixed',
+            'bottom: 30px',
+            'left: 50%',
+            'transform: translateX(-50%)',
+            'background: #FFFFFF',
+            'color: #000000',
+            'font-size: 18px',
+            'font-weight: 600',
+            'line-height: 1.3',
+            'padding: 0.55rem 1.1rem',
+            'border: 1.5px solid #000000',
+            'border-radius: 0.55rem',
+            'box-shadow: 0 1px 2px rgba(0,0,0,0.10)',
+            'z-index: 1000',
+            'white-space: nowrap',
+          ];
       hintEl.setAttribute(
         'style',
         [
-          'position: fixed',
-          'bottom: 30px',
-          'left: 50%',
-          'transform: translateX(-50%)',
-          'background: #FFFFFF',
-          'color: #000000',
-          'font-size: 18px',
-          'font-weight: 600',
-          'line-height: 1.3',
-          'padding: 0.55rem 1.1rem',
-          'border: 1.5px solid #000000',
-          'border-radius: 0.55rem',
-          'box-shadow: 0 1px 2px rgba(0,0,0,0.10)',
-          `opacity: ${HINT_OPACITY_NORMAL}`,
+          ...hintPosition,
+          `opacity: ${normalOpacity}`,
           'pointer-events: none',
-          'z-index: 1000',
           'font-family: system-ui, sans-serif',
           'letter-spacing: 0.01em',
-          'white-space: nowrap',
           /* Animate opacity changes so the flash is a smooth pulse rather
            * than a jarring blink. */
           'transition: opacity 200ms linear',
         ].join('; ') + ';'
       );
       document.body.appendChild(hintEl);
+      if (
+        prominent &&
+        typeof hintEl.animate === 'function' &&
+        !window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+      ) {
+        /* A short pop-in so the box draws the eye. Skipped when the participant
+         * asks the system for reduced motion. The keyframes repeat the centring
+         * transform because an animated transform replaces the element's own. */
+        hintEl.animate(
+          [
+            { transform: 'translate(-50%, -50%) scale(0.82)', opacity: 0 },
+            { transform: 'translate(-50%, -50%) scale(1.04)', opacity: 1, offset: 0.7 },
+            { transform: 'translate(-50%, -50%) scale(1)', opacity: Number(normalOpacity) },
+          ],
+          { duration: PROMINENT_POP_IN_MS, easing: 'ease-out' }
+        );
+      }
 
       let labelEl = null;
       if (trialType && TRIAL_TYPE_LABELS[trialType]) {
@@ -805,7 +875,7 @@ export function trialStartGateNode({
           clearInterval(flashInterval);
           flashInterval = null;
         }
-        if (hintEl) hintEl.style.opacity = HINT_OPACITY_NORMAL;
+        if (hintEl) hintEl.style.opacity = normalOpacity;
       };
 
       flashTimeout = setTimeout(() => {
@@ -813,7 +883,7 @@ export function trialStartGateNode({
         flashInterval = setInterval(() => {
           if (!hintEl) return;
           flashDim = !flashDim;
-          hintEl.style.opacity = flashDim ? HINT_OPACITY_DIM : HINT_OPACITY_NORMAL;
+          hintEl.style.opacity = flashDim ? dimOpacity : normalOpacity;
         }, HINT_FLASH_PERIOD_MS);
       }, HINT_FLASH_AFTER_MS);
 
@@ -937,6 +1007,7 @@ export function trialStartGateNode({
       gate_show_arrow: showArrow,
       gate_rotation_deg: showArrow ? rotation_deg : null,
       gate_trial_type: trialType || null,
+      gate_prominent: prominent === true,
       ...data,
     },
   };

@@ -59,6 +59,7 @@ import {
   FEEDBACK_COLOR_WRONG,
   KEY_YES,
   KEY_NO,
+  isFirstPracticeTrial,
 } from './shared.js';
 
 /**
@@ -75,6 +76,7 @@ function gatePreambleNodes(params) {
       phase: 'i_t_trial_start',
       background_shade: params.background_shade,
       trialType: 'i_t',
+      prominent: isFirstPracticeTrial(params),
       data: {
         rotation_deg: params.rotation_deg,
         background_shade: params.background_shade,

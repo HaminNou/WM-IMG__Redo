@@ -1174,6 +1174,10 @@
       "type": ["string", "null"],
       "description": "Trial-start gate: condition label shown to the participant."
     },
+    "gate_prominent": {
+      "type": "boolean",
+      "description": "Trial-start gate: the instruction was shown as the centred, coloured-border box (the first practice trial of each task, right after its demonstration) instead of the small pill at the bottom."
+    },
     "gate_passed_at_ms": {
       "type": "integer",
       "description": "Trial-start gate: ms from gate onset to the moment both arrow keys were down."

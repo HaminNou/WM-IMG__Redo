@@ -51,7 +51,13 @@
 import { createEncodingNode } from './encoding-schedule.js';
 
 import { postEncodingRotationDeg } from './trial-record.js';
-import { arrowCueNode, imaginationNode, trialStartGateNode, itiNode } from './shared.js';
+import {
+  arrowCueNode,
+  imaginationNode,
+  trialStartGateNode,
+  itiNode,
+  isFirstPracticeTrial,
+} from './shared.js';
 
 /* I-only dummies sit in M-slots — the slot positions that the matched
  * dual-task conditions (I+D, I+T) use for memory items (dots / tones).
@@ -93,6 +99,7 @@ function gatePreambleNodes(params) {
       phase: 'i_only_trial_start',
       background_shade: params.background_shade,
       trialType: 'i_only',
+      prominent: isFirstPracticeTrial(params),
       data: {
         rotation_deg: params.rotation_deg,
         background_shade: params.background_shade,
