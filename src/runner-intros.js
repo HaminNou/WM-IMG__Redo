@@ -28,6 +28,7 @@ import { narrateNowIfPresent, unmountToggle } from './visuals/voiceover-slide.js
 import { getVoiceover } from './visuals/voiceover.js';
 import { continueHintHtml } from './visuals/continue-hint.js';
 import { TRIAL_TYPE_LABELS, trialTypeTagHtml } from './conditions/shared.js';
+import { traceMarker } from './debug/trace-adapters.js';
 
 /**
  * Leaving a narrated screen: stop any utterance still running and remove the "Voice on/off"
@@ -84,6 +85,7 @@ export function mainAIntroNode() {
      * `narrateNowIfPresent` from `on_load` triggers narration for the
      * [data-voiceover-target] in this stimulus only. */
     on_load: () => {
+      traceMarker('MAIN BLOCK 1 of 2: practice is over');
       narrateNowIfPresent();
     },
   };
@@ -167,6 +169,7 @@ export function mainBIntroNode() {
     `,
     choices: [' '],
     data: { phase: 'main_b_intro' },
+    on_load: () => traceMarker('MAIN BLOCK 2 of 2'),
   };
   registerHiddenNavStep(stepId, mainBIntroNode);
   return trackHiddenNavNode(node, stepId);

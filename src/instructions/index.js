@@ -69,6 +69,7 @@ import {
   computePracticeAccuracy,
   formatPracticeFeedbackHtml,
 } from '../scheduler/practice.js';
+import { traceMarker } from '../debug/trace-adapters.js';
 import { setPracticeIteration } from '../scheduler/trial-meta.js';
 import { getSessionPRNG } from '../prng.js';
 import {
@@ -212,6 +213,9 @@ export function assembleInstructionsAndPractice({
     on_start: () => {
       attemptCount += 1;
       setPracticeIteration(attemptCount);
+      traceMarker(
+        attemptCount > 1 ? `PRACTICE REPEAT: attempt ${attemptCount}` : 'PRACTICE: attempt 1'
+      );
       iterationStartRow = window.jsPsych?.data?.get().count() ?? 0;
     },
     data: () => ({
@@ -238,6 +242,9 @@ export function assembleInstructionsAndPractice({
           willRetry,
           attemptCount,
         };
+        traceMarker(
+          `PRACTICE FEEDBACK: ${acc.correct}/${acc.total} correct, ${passed ? 'criterion met' : willRetry ? 'below criterion, will repeat' : 'below criterion, no more attempts'}`
+        );
         return formatPracticeFeedbackHtml({ acc, passed, willRetry, criterion });
       },
       choices: [' '],

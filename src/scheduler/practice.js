@@ -41,6 +41,7 @@ import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import { getSessionPRNG } from '../prng.js';
 import { assembleBlock } from './block.js';
+import { traceMarker } from '../debug/trace-adapters.js';
 import { setPracticeIteration } from './trial-meta.js';
 import { consumeDeveloperSkip } from '../hidden-nav.js';
 import { continueHintHtml } from '../visuals/continue-hint.js';
@@ -196,6 +197,9 @@ export function practiceBlock({
     on_start: () => {
       attemptCount += 1;
       setPracticeIteration(attemptCount);
+      traceMarker(
+        attemptCount > 1 ? `PRACTICE REPEAT: attempt ${attemptCount}` : 'PRACTICE: attempt 1'
+      );
       iterationStartRow = window.jsPsych?.data?.get().count() ?? 0;
     },
     data: () => ({
@@ -220,6 +224,9 @@ export function practiceBlock({
         willRetry,
         attemptCount,
       };
+      traceMarker(
+        `PRACTICE FEEDBACK: ${acc.correct}/${acc.total} correct, ${passed ? 'criterion met' : willRetry ? 'below criterion, will repeat' : 'below criterion, no more attempts'}`
+      );
       return formatFeedbackHtml({ acc, passed, willRetry, criterion });
     },
     choices: [' '],

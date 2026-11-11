@@ -32,6 +32,7 @@ import { createGridFrame } from '../visuals/frame.js';
 import { buildPatternOverlay, showPattern } from '../visuals/pattern.js';
 import { config } from '../config.js';
 import { stampTrialData } from './shared.js';
+import { traceSetup } from '../debug/trace-adapters.js';
 
 const MOUNT_ID = 'pattern-phase-mount';
 
@@ -71,6 +72,7 @@ export function patternPhaseNode({ block_label, trial_index_in_block, background
       buildPatternOverlay(frame);
       showPattern(frame);
       stampTrialData('pattern_onset_ts_ms', performance.now());
+      traceSetup('pattern_reminder', { duration_ms: config.pattern.pattern_phase_duration_ms });
     },
     data: {
       phase: 'pattern_phase',

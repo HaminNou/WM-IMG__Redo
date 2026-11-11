@@ -51,6 +51,15 @@ import { setTrialCounter, TRIAL_TYPE_TAG_COLOURS } from './trial-counter.js';
 import { unmountToggle as unmountVoiceoverToggle } from '../visuals/voiceover-slide.js';
 import { getVoiceover } from '../visuals/voiceover.js';
 import { createTrialResponseButtons } from '../visuals/response-buttons.js';
+import {
+  traceTrialStart,
+  traceTrialEnd,
+  traceSetup,
+  traceProbeOnset,
+  traceProbeAnswer,
+  traceProbeClosed,
+  traceKeyIssue,
+} from '../debug/trace-adapters.js';
 
 const ROTATION_ARROW_ASSET_URL = `${import.meta.env.BASE_URL}assets/rotation-arrow.png`;
 
@@ -178,6 +187,7 @@ export function frameNode({
   on_load,
   on_finish,
   timestamp_field = null,
+  trace_kind = null,
 } = {}) {
   const { html, mount } = gridMount(mount_id);
   return {
@@ -190,6 +200,7 @@ export function frameNode({
       const frame = mount({ rotation_deg, fixation, background_shade });
       on_load?.(frame);
       if (timestamp_field) stampTrialData(timestamp_field, performance.now());
+      if (trace_kind) traceSetup(trace_kind, { rotation_deg, duration_ms: trial_duration });
     },
     on_finish,
     data: { phase, frame_rotation_deg: rotation_deg, ...data },
@@ -219,6 +230,7 @@ export function timedResponseWindowNode({
   on_finish,
   timestamp_field = null,
   response_buttons = null,
+  trace_probe = null,
 } = {}) {
   const state = {
     buttons: null,
@@ -245,6 +257,7 @@ export function timedResponseWindowNode({
     state.onset_closed = true;
     state.buttons?.hide();
     on_onset_end?.(state.frame, state);
+    if (trace_probe) traceProbeClosed(trace_probe, state);
   };
 
   const teardown = () => {
@@ -297,15 +310,18 @@ export function timedResponseWindowNode({
         const t = eventTime(e);
         if (state.onset_ts === null || t < state.onset_ts) {
           state.early_keypresses += 1;
+          traceKeyIssue('probe', 'early', key);
           return;
         }
         const elapsedMs = t - state.onset_ts;
         if (state.onset_closed || elapsedMs >= onset_ms) {
           state.late_keypresses += 1;
+          traceKeyIssue('probe', 'late', key);
           return;
         }
         if (state.response_key !== null) {
           state.extra_keypresses += 1;
+          traceKeyIssue('probe', 'extra', key);
           return;
         }
         state.response_key = key;
@@ -315,6 +331,7 @@ export function timedResponseWindowNode({
         state.response_ts_ms = Math.round(t);
         state.buttons?.press(key);
         on_response?.(state.frame, state, key);
+        if (trace_probe) traceProbeAnswer(trace_probe, state, key);
       };
       window.addEventListener('keydown', state.key_handler, { capture: true });
 
@@ -325,6 +342,7 @@ export function timedResponseWindowNode({
         state.raf_id = null;
         state.onset_ts = ts;
         if (timestamp_field) stampTrialData(timestamp_field, ts);
+        if (trace_probe) traceProbeOnset(trace_probe, ts);
         on_onset?.(state.frame, state, ts);
         if (!state.onset_closed) state.buttons?.show();
         state.onset_timer = setTimeout(closeOnset, Math.max(0, ts + onset_ms - performance.now()));
@@ -389,7 +407,9 @@ export function itiNode({
     on_finish: () => {
       document.body.style.cursor = '';
       clearTrialPageBackground();
+      traceTrialEnd();
     },
+    trace_kind: 'iti',
   });
 }
 
@@ -482,6 +502,7 @@ export function arrowCueNode({
           tintFilter
       );
       frame.wrapper.appendChild(arrowImg);
+      traceSetup('arrow_cue', { arrow_deg: rotation_deg, rotation_deg, duration_ms: durationMs });
     },
     data: {
       phase,
@@ -541,6 +562,7 @@ export function imaginationNode({
       });
       mount.appendChild(frame.wrapper);
       stampTrialData('imagination_onset_ts_ms', performance.now());
+      traceSetup('imagination', { duration_ms: durationMs });
     },
     data: {
       phase,
@@ -699,6 +721,7 @@ export function trialStartGateNode({
   trialType = null,
   prominent = false,
   data = {},
+  traceParams = null,
 } = {}) {
   const normalOpacity = prominent ? PROMINENT_HINT_OPACITY_NORMAL : HINT_OPACITY_NORMAL;
   const dimOpacity = prominent ? PROMINENT_HINT_OPACITY_DIM : HINT_OPACITY_DIM;
@@ -783,6 +806,7 @@ export function trialStartGateNode({
       if (Number.isFinite(overallN) && Number.isFinite(overallTotal)) {
         setTrialCounter(overallN, overallTotal);
       }
+      traceTrialStart(traceParams ?? { trial_type: trialType, background_shade });
 
       /* Trial-start hint at the bottom of the viewport
        * (`position: fixed; bottom: 30px; font-size: 18px`). Appended to <body> so it sits
@@ -967,6 +991,7 @@ export function trialStartGateNode({
            * dark default. */
           setTrialPageBackground(background_shade);
           document.body.style.cursor = 'none';
+          traceSetup('gate_passed', { after_ms: gatePassedAtMs });
           window.jsPsych?.finishTrial?.();
         };
         if (postGateDelayMs > 0) {

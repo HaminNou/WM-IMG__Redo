@@ -41,6 +41,8 @@ const ALL_CALLS = () => {
   trace.abort('x');
   trace.marker('m');
   trace.warn('w', { a: 1 });
+  trace.mute(true);
+  trace.mute(false);
 };
 
 beforeEach(() => {
@@ -451,5 +453,40 @@ describe('trace never throws on malformed input', () => {
       throw new Error('console broke');
     });
     expect(() => trace.trialStart({ trial_type: 'i_d' })).not.toThrow();
+  });
+});
+
+describe('sub-groups close at the end of a stage, and mute', () => {
+  beforeEach(() => _setTraceEnabled(true));
+
+  it("'iti' and 'encoding_end' close ENCODING / RECALL so the next lines sit at trial level", () => {
+    trace.trialStart({ trial_type: 'i_only' });
+    trace.encodingEvent(1, { kind: 'star', cell: 3 });
+    expect(_openGroupDepth()).toBe(2);
+    trace.setup('iti', { duration_ms: 800 });
+    expect(_openGroupDepth()).toBe(1);
+    trace.probe({ kind: 'dot', cell: 3, is_target: true });
+    expect(_openGroupDepth()).toBe(2);
+    trace.setup('encoding_end');
+    expect(_openGroupDepth()).toBe(1);
+    trace.trialEnd({});
+    expect(balanced()).toBe(true);
+  });
+
+  it('mute(true) closes the trial and silences the trace until mute(false); it is inert when off', () => {
+    trace.trialStart({ trial_type: 'i_d' });
+    trace.mute(true);
+    expect(_openGroupDepth()).toBe(0);
+    const before = METHODS.reduce((n, m) => n + spies[m].mock.calls.length, 0);
+    trace.trialStart({ trial_type: 'i_d' });
+    trace.marker('x');
+    expect(METHODS.reduce((n, m) => n + spies[m].mock.calls.length, 0)).toBe(before);
+    trace.mute(false);
+    trace.marker('x');
+    expect(lines('log').some((l) => l.includes('x'))).toBe(true);
+    _setTraceEnabled(false);
+    const n = METHODS.reduce((k, m) => k + spies[m].mock.calls.length, 0);
+    trace.mute(true);
+    expect(METHODS.reduce((k, m) => k + spies[m].mock.calls.length, 0)).toBe(n);
   });
 });

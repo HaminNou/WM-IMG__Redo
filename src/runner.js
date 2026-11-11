@@ -140,6 +140,7 @@ const jsPsych = initJsPsych({
   },
   on_trial_finish: stampFinishedTrial,
   on_finish: () => {
+    trace.abort('end of task');
     markUploadDone();
     /* Stamp session-level metadata onto every row for the analyst. Upload
      * already ran in the upload-progress node; this just adds session-wide

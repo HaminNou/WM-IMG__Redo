@@ -17,6 +17,7 @@
  *   trace.abort(reason)                trial ended abnormally: warn and close everything
  *   trace.marker(text, opts)           rest / block boundary / practice notice line
  *   trace.warn(text, data)             console.warn for an anomaly
+ *   trace.mute(on)                     silence the trace while the experimenter skips trials (hidden-nav)
  *
  * Rules that make it safe:
  *  - Active only in debug mode (see debug-mode.js). The decision is read ONCE at module load into a
@@ -93,6 +94,9 @@ const KIND_SYMBOL = Object.freeze({
 /* ---------------------------------------------------------------- state */
 
 let ON = false;
+/* Muted while the experimenter skips forward (hidden-nav U): the neutralised trials run through
+ * their nodes in a few milliseconds and must not print a group each. */
+let MUTED = false;
 try {
   ON = isDebugMode();
 } catch {
@@ -133,7 +137,10 @@ export function isTraceOn() {
 export function _setTraceEnabled(on) {
   if (!on) closeAll();
   ON = on === true;
-  if (!ON) st = freshState();
+  if (!ON) {
+    st = freshState();
+    MUTED = false;
+  }
 }
 
 /** Test helper: inject the clock (a function returning ms). */
@@ -296,7 +303,7 @@ function openSub(name) {
 /** Wrap a function: no-op when off, never throws. */
 function guarded(fn) {
   return (...args) => {
-    if (!ON) return undefined;
+    if (!ON || MUTED) return undefined;
     try {
       return fn(...args);
     } catch {
@@ -405,12 +412,12 @@ const banner = guarded((info = {}) => {
  * One setup line (not part of ENCODING/RECALL). `kind` is free text, conventionally one of:
  * 'gate', 'pattern_reminder', 'arrow_cue' (detail: arrow_deg, rotation_deg), 'imagination',
  * 'rotation_turn', 'rotation_hold' (rotation_deg, duration_ms), 'retention', 'iti'.
- * 'retention' first closes an open ENCODING group.
+ * 'retention', 'iti' and 'encoding_end' first close an open ENCODING / RECALL sub-group.
  * @param {string} kind
  * @param {string|object} [detail] text, or an object formatted as key=value (`*_deg` -> degrees, `*_ms` -> ms)
  */
 const setup = guarded((kind, detail) => {
-  if (kind === 'retention') closeSub();
+  if (kind === 'retention' || kind === 'iti' || kind === 'encoding_end') closeSub();
   const label = String(kind ?? 'setup')
     .replace(/_/g, ' ')
     .toUpperCase();
@@ -730,6 +737,28 @@ const warn = guarded((text, data) => {
   console.warn(...args);
 });
 
+/**
+ * Mute / unmute the trace (hidden-nav skip: neutralised trials stay silent). Muting first closes any
+ * open trial group with a warning, so the console never shows a dangling group.
+ * @param {boolean} on
+ */
+function mute(on) {
+  if (!ON) return;
+  try {
+    if (on === true && !MUTED) {
+      if (st.open) {
+        out('warn', [[`${SYMBOLS.warn} TRIAL ABORTED: skipped by the experimenter`, 'warn']]);
+      }
+      closeAll();
+      st = freshState();
+      resetReveal();
+    }
+    MUTED = on === true;
+  } catch {
+    /* the trace never throws */
+  }
+}
+
 /** The one trace surface used by the trial code. */
 export const trace = Object.freeze({
   banner,
@@ -746,4 +775,5 @@ export const trace = Object.freeze({
   abort,
   marker,
   warn,
+  mute,
 });

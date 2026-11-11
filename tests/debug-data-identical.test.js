@@ -24,6 +24,9 @@ vi.mock('../src/audio/tones.js', async (importOriginal) => {
 
 import { _resetStorageForTests, initStorage } from '../src/storage.js';
 import { runTrial, plannedTrials, REAL_FAKE_TIMERS } from './helpers/real-rows.js';
+import { setSessionPRNG } from '../src/prng.js';
+import { resetSequencePools } from '../src/scheduler/within-trial.js';
+import { singleTypePractice } from '../src/scheduler/practice.js';
 import { installReveal, uninstallReveal } from '../src/debug/reveal.js';
 import { _setTraceEnabled } from '../src/debug/trace.js';
 
@@ -34,11 +37,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function run(cond, debug) {
+/** A main trial (first of Main A) or the second practice trial (the first has the self-paced notice). */
+function paramsFor(cond, kind) {
+  if (kind === 'main') return plannedTrials('debug-identical')[cond][0];
+  setSessionPRNG(`debug-identical-practice-${cond}`);
+  resetSequencePools();
+  return singleTypePractice({ trialType: cond, trialsPerType: 2 }).trialParams[1];
+}
+
+async function run(cond, debug, kind = 'main', policy = { starRtMs: 700, probeRtMs: 600 }) {
   _resetStorageForTests();
   await initStorage({ backend: 'memory' });
   vi.useFakeTimers({ toFake: REAL_FAKE_TIMERS });
-  const params = plannedTrials('debug-identical')[cond][0];
+  const params = paramsFor(cond, kind);
   const revealRows = [];
   let timer = null;
   if (debug) {
@@ -54,7 +65,7 @@ async function run(cond, debug) {
       );
     }, 120);
   }
-  const { rows } = await runTrial(cond, params, { starRtMs: 700, probeRtMs: 600 });
+  const { rows } = await runTrial(cond, params, policy);
   if (timer) clearInterval(timer);
   uninstallReveal();
   _setTraceEnabled(false);
@@ -72,14 +83,25 @@ async function run(cond, debug) {
 }
 
 describe('debug on vs off', () => {
-  for (const cond of ['d_only', 'i_d']) {
-    it(`${cond}: every recorded row is identical`, async () => {
-      const off = await run(cond, false);
-      const on = await run(cond, true);
-      expect(on.rows.length).toBeGreaterThan(5);
-      expect(on.rows).toEqual(off.rows);
-      expect(on.revealRows.length).toBeGreaterThan(0);
-      expect(on.revealRows.every((r) => r.phase === 'debug_reveal')).toBe(true);
-    }, 120000);
+  for (const cond of ['d_only', 't_only', 'i_only', 'i_d', 'i_t']) {
+    for (const kind of ['main', 'practice']) {
+      it(`${cond} ${kind}: every recorded row is identical`, async () => {
+        const off = await run(cond, false, kind);
+        const on = await run(cond, true, kind);
+        expect(on.rows.length).toBeGreaterThan(5);
+        expect(on.rows).toEqual(off.rows);
+        expect(on.revealRows.length).toBeGreaterThan(0);
+        expect(on.revealRows.every((r) => r.phase === 'debug_reveal')).toBe(true);
+      }, 120000);
+    }
   }
+
+  it('also with misses, late and extra keys (the anomaly lines)', async () => {
+    const policy = { starRtMs: 700, probeRtMs: null, spamKeys: true, probeExtraPressMs: 200 };
+    for (const cond of ['i_d', 't_only']) {
+      const off = await run(cond, false, 'main', policy);
+      const on = await run(cond, true, 'main', policy);
+      expect(on.rows).toEqual(off.rows);
+    }
+  }, 120000);
 });
