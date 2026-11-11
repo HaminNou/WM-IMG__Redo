@@ -9,7 +9,7 @@
  * This tool never modifies it. Re-run it whenever the full file is regenerated.
  *
  * KEPT (see KEEP_TRIAL / KEEP_SLOT / KEEP_PROBE / KEEP_STAR below, the single source of truth)
- *   who / which run   subject, is_analysed_run, is_pilot_run, run_status
+ *   who / which run   subject, is_analysed_run, is_pilot_run, debug_mode, run_status
  *   the trial         trial_uid, condition (task), block_label, is_practice, presentation_index,
  *                     block_position, pool_index, rotation, background shade, the stimulus
  *                     sequence, outcome counts, the exclusion flags the registered rules use
@@ -54,6 +54,7 @@ export const KEEP_TRIAL = Object.freeze([
   'run_status',
   'is_analysed_run',
   'is_pilot_run',
+  'debug_mode',
   'trial_uid',
   'condition',
   'block_label',
@@ -81,6 +82,7 @@ export const KEEP_TRIAL = Object.freeze([
   'n_probes_anticipatory',
   'n_probes_missing_row',
   'trial_guard_excluded',
+  'debug_reveal_seen',
 ]);
 
 export const KEEP_SLOT = Object.freeze([

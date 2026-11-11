@@ -24,7 +24,7 @@
  *                 Prolific id gets the next number the first time it is seen and keeps it
  *                 forever, so adding participants later never renumbers anyone. Sessions
  *                 without a Prolific id (previews) have no subject number (NA).
- *   1. identity   participant_id, prolific_pid, study_id, session_id, is_preview, is_pilot_run,
+ *   1. identity   participant_id, prolific_pid, study_id, session_id, is_preview, is_pilot_run, debug_mode,
  *                 pilot_label, build_id, schema_version. Filled on EVERY row from the file
  *                 envelope; where a raw row carries its own value (the `session_info` row does)
  *                 that value is kept and a disagreement is counted in the manifest.
@@ -114,6 +114,7 @@ export const IDENTITY_COLUMNS = Object.freeze([
   'session_id',
   'is_preview',
   'is_pilot_run',
+  'debug_mode',
   'pilot_label',
   'build_id',
   'schema_version',
@@ -178,6 +179,7 @@ const SESSION_EVENT_PHASES = new Set([
   'back_pressed',
   'runtime_error',
   'runtime_diagnostic',
+  'debug_reveal',
 ]);
 
 const END_PHASES = new Set(['end_of_task_intro', 'upload_session_end', 'completion_redirect']);
@@ -484,6 +486,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       session_id: params.session_id ?? null,
       is_preview: params.is_preview ?? null,
       is_pilot_run: entry.session?.is_pilot_run ?? null,
+      debug_mode: entry.session?.debug_mode ?? null,
       pilot_label: entry.session?.pilot_label ?? null,
       build_id: entry.session?.build_id ?? null,
       schema_version: entry.session?.schema_version ?? null,

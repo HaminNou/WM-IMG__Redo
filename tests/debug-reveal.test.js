@@ -240,6 +240,30 @@ describe('overlay', () => {
   });
 });
 
+describe('console line with the trace on', () => {
+  afterEach(() => _setTraceEnabled(false));
+  it('is a styled timed marker at the level of the open sub-group, and opens no group', () => {
+    _setTraceEnabled(true);
+    const groups = vi.spyOn(console, 'group').mockImplementation(() => {});
+    vi.spyOn(console, 'groupEnd').mockImplementation(() => {});
+    trace.trialStart({ trial_type: 'i_d' });
+    trace.encodingPlan([]);
+    const before = groups.mock.calls.length;
+    mountFrame();
+    logSpy.mockClear();
+    gg();
+    expect(groups.mock.calls.length).toBe(before);
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    const [f, ...css] = logSpy.mock.calls[0];
+    expect(String(f).replace(/%c/g, '')).toMatch(
+      /^\s*[+-]\d+\.\d\d s\s+── reveal ON {2}trial main_a-001-i_d/
+    );
+    expect(css.every((c) => typeof c === 'string')).toBe(true);
+    expect(String(f)).not.toContain('[debug]');
+    trace.trialEnd();
+  });
+});
+
 describe('data rows', () => {
   it('writes exactly one debug_reveal row per toggle with the documented fields', () => {
     mountFrame();

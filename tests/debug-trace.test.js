@@ -377,6 +377,26 @@ describe('group balance (on)', () => {
     expect(balanced()).toBe(true);
   });
 
+  it('warns when the next trial starts before the previous one ended, and stays balanced', () => {
+    trace.trialStart({ trial_type: 'i_d' });
+    trace.encodingPlan([]);
+    trace.trialStart({ trial_type: 'd_only' });
+    expect(lines('warn').some((l) => l.includes('TRIAL ABORTED: next trial started before'))).toBe(
+      true
+    );
+    trace.trialEnd();
+    expect(balanced()).toBe(true);
+    expect(_openGroupDepth()).toBe(0);
+  });
+
+  it('no warning when the previous trial ended normally', () => {
+    trace.trialStart({ trial_type: 'i_d' });
+    trace.trialEnd();
+    trace.trialStart({ trial_type: 'd_only' });
+    trace.trialEnd();
+    expect(spies.warn).not.toHaveBeenCalled();
+  });
+
   it('out-of-order calls never leave dangling groups', () => {
     trace.probe({ kind: 'dot', cell: 1 }); /* no trial open: flat lines */
     trace.encodingEvent(1, { kind: 'dot', cell: 1 });

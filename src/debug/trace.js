@@ -37,7 +37,7 @@
  * relative) or `at_ms` (a performance.now() value) on any info object; otherwise the current time is used.
  */
 import { isDebugMode } from './debug-mode.js';
-import { resetReveal } from './reveal.js';
+import { resetReveal, setRevealNote } from './reveal.js';
 import { config } from '../config.js';
 import { BUILD_COMMIT, BUILD_TIME } from '../build-info.js';
 import { cellRowCol, isOnPattern, isCentre } from '../grid.js';
@@ -330,6 +330,12 @@ function guarded(fn) {
  */
 
 const trialStart = guarded((meta = {}) => {
+  if (st.open) {
+    /* The previous trial never reached trialEnd/abort: say so before the group is closed. */
+    out('warn', [
+      [`${SYMBOLS.warn} TRIAL ABORTED: next trial started before this one ended`, 'warn'],
+    ]);
+  }
   closeAll();
   st = freshState();
   st.t0 = isNum(meta.at_ms) ? meta.at_ms : nowFn();
@@ -716,15 +722,30 @@ const abort = guarded((reason) => {
 /**
  * A one-line marker (rest, block boundary, practice repeat, practice notice, counter, reveal toggle).
  * @param {string} text
- * @param {{closeTrial?: boolean}} [opts] `closeTrial: true` also ends the open trial group first (use for rests/boundaries)
+ * @param {{closeTrial?: boolean, timed?: boolean}} [opts] `closeTrial: true` also ends the open trial group first (use for rests/boundaries); `timed: true` prefixes the trial time stamp
  */
 const marker = guarded((text, opts = {}) => {
   if (opts.closeTrial === true) {
     closeAll();
     st = freshState();
   }
-  out('log', [[`── ${String(text)} ──`, 'sub']]);
+  /* `timed` (used inside a trial) puts the usual time stamp in front, so the line sits in the
+   * same column as the other lines of the current group or sub-group. */
+  const lead = opts.timed === true && st.open ? [stamp(opts), '  '] : [];
+  out('log', [...lead, [`── ${String(text)} ──`, 'sub']]);
 });
+
+/**
+ * The reveal toggle line (called by reveal.js through `setRevealNote`): a timed marker that leaves
+ * the open trial group and its ENCODING / RECALL sub-group as they are.
+ * @returns {boolean} true if the trace printed it (reveal.js falls back to console.log otherwise)
+ */
+function revealNote(text) {
+  if (!ON || MUTED) return false;
+  marker(text, { closeTrial: false, timed: true });
+  return true;
+}
+setRevealNote(revealNote);
 
 /**
  * console.warn for an anomaly (missing response, late/early/extra key, tone error, hidden page ...).

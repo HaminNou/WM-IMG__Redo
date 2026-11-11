@@ -81,6 +81,7 @@ export const LEAD_COLUMNS = Object.freeze([
   'is_analysed_run',
   'is_preview',
   'is_pilot_run',
+  'debug_mode',
   'study_id',
   'session_id',
   'row_key',
@@ -108,6 +109,7 @@ export const TRIAL_CONTEXT_COLUMNS = Object.freeze([
   'trial_star_excluded',
   'star_correct_all',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'guard_flags',
   'guard_n',
   'user_gain',
@@ -195,6 +197,7 @@ export function buildTrialTable(
       is_analysed_run: analysed !== null && analysed !== undefined && analysed === e.run_id,
       is_preview: params.is_preview ?? null,
       is_pilot_run: e.session?.is_pilot_run ?? null,
+      debug_mode: e.session?.debug_mode ?? null,
       study_id: params.study_id ?? null,
       session_id: params.session_id ?? null,
     });

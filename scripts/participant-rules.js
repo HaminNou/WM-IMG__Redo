@@ -53,6 +53,20 @@ export const EXPECTED_MAIN_TRIALS = 5 * config.blocks.main_trials_per_type;
  */
 export const CALIBRATION_FALLBACK_TOLERANCE = 0.05;
 
+/** Exclusion reason for a run made with the experimenter debug tools (answers were visible). */
+export const DEBUG_SESSION_REASON = 'debug_session';
+
+/**
+ * True if the run was made with the experimenter debug tools: any row stamped
+ * `debug_mode: true` (session_info and the jsPsych properties) or any
+ * `debug_reveal` event row with the reveal switched on.
+ */
+export function isDebugRun(rows) {
+  return (rows ?? []).some(
+    (r) => r?.debug_mode === true || (r?.phase === 'debug_reveal' && r.debug_reveal_on === true)
+  );
+}
+
 const MAIN_PHASE_ENCODING = /^(d_only|t_only|i_only|i_d|i_t)_encoding$/;
 
 /* ---------- Attention checks ---------- */
@@ -181,6 +195,9 @@ export function evaluateRun(rows, opts = {}) {
   if (cal.status === 'inconsistent_accepted') reasons.push('screen_calibration_inconsistent');
   if (attention.excluded) reasons.push('instructional_attention_checks');
   if (belowFloor(d.accuracy) || belowFloor(t.accuracy)) reasons.push('single_task_floor');
+  /* Tooling rule, not a pre-registered one: a debug session showed the answers. */
+  const debugSession = isDebugRun(rows);
+  if (debugSession) reasons.push(DEBUG_SESSION_REASON);
   const screenedOut = (rows ?? []).some((r) => r?.exit_reason);
   const hasCompletionRow = (rows ?? []).some((r) => r?.phase === 'completion_redirect');
   const completed = !screenedOut && hasCompletionRow;
@@ -194,6 +211,7 @@ export function evaluateRun(rows, opts = {}) {
     d_only_floor: belowFloor(d.accuracy),
     t_only_floor: belowFloor(t.accuracy),
     reasons,
+    debug_session: debugSession,
     excluded: reasons.length > 0,
     completed,
     screened_out: screenedOut,
@@ -249,6 +267,7 @@ export function summariseParticipantRuns(runs, opts = {}) {
     retained: status === 'retained',
     excluded: status === 'excluded',
     reasons: analysed ? ev.reasons : [],
+    debug_session: ev.debug_session === true,
     /* The three rule inputs, from the analysed run (or the run shown). */
     attention: ev.attention,
     calibration_status: ev.calibration_status,
@@ -279,6 +298,8 @@ export function summariseParticipantRuns(runs, opts = {}) {
  * Which sample a session belongs to, for the sampling-plan counts:
  *   - 'preview': no Prolific PID at all (a researcher opening the link without the
  *     Prolific parameters, a LOCAL_ session id, an old dump). Never counted.
+ *   - 'debug': the session was run with the experimenter debug tools (debug_mode).
+ *     Never counted, even in a pilot batch: the answers were visible.
  *   - 'pilot': the session was run with the pilot flag (?pilot=1). Counted only
  *     when the batch being summarised is itself a pilot batch.
  *   - 'real': everything else.
@@ -286,11 +307,12 @@ export function summariseParticipantRuns(runs, opts = {}) {
  * SESSION_ID is missing from the URL of a genuine participant, who has a PID and
  * must not be dropped silently (pilot-summary warns about that combination).
  *
- * @param {object|null|undefined} session  the session meta (params.prolific_pid, is_pilot_run)
- * @returns {'real'|'pilot'|'preview'}
+ * @param {object|null|undefined} session  the session meta (params.prolific_pid, is_pilot_run, debug_mode)
+ * @returns {'real'|'pilot'|'preview'|'debug'}
  */
 export function sampleClass(session) {
   if (!session?.params?.prolific_pid) return 'preview';
+  if (session?.debug_mode === true) return 'debug';
   if (session?.is_pilot_run === true) return 'pilot';
   return 'real';
 }

@@ -54,6 +54,16 @@ let revealOn = false;
 let revealUid = null;
 let lastGAt = null;
 let currentFrame = null;
+/** @type {((text: string) => boolean)|null} console writer registered by trace.js (avoids an import cycle) */
+let noteSink = null;
+
+/**
+ * Register the writer for the reveal ON/OFF console line (trace.js passes its styled marker).
+ * @param {(text: string) => boolean} fn returns true if it printed the line
+ */
+export function setRevealNote(fn) {
+  noteSink = typeof fn === 'function' ? fn : null;
+}
 
 /** Is the reveal installed (debug mode on)? */
 export function isRevealInstalled() {
@@ -207,7 +217,14 @@ export function resetReveal() {
 function toggle() {
   const data = readTrialData();
   if (!frameLive(currentFrame)) {
-    console.log('[debug] reveal: no grid on screen (press G G inside a trial)');
+    const note = 'reveal: no grid on screen (press G G inside a trial)';
+    let printed = false;
+    try {
+      printed = noteSink?.(note) === true;
+    } catch {
+      /* fall through to the plain line */
+    }
+    if (!printed) console.log(`[debug] ${note}`);
     return;
   }
   revealOn = !revealOn;
@@ -226,10 +243,16 @@ function toggle() {
   } catch (err) {
     console.error('[debug] reveal row not written', err);
   }
-  console.log(
-    `[debug] reveal ${revealOn ? 'ON' : 'OFF'}  trial ${row.trial_uid ?? '?'}  node ${row.debug_node_phase ?? '?'}` +
-      (revealOn ? `  ${readoutText(currentFrame.rotation_deg)}` : '')
-  );
+  const text =
+    `reveal ${revealOn ? 'ON' : 'OFF'}  trial ${row.trial_uid ?? '?'}  node ${row.debug_node_phase ?? '?'}` +
+    (revealOn ? `  ${readoutText(currentFrame.rotation_deg)}` : '');
+  let printed = false;
+  try {
+    printed = noteSink?.(text) === true;
+  } catch {
+    /* fall through to the plain line */
+  }
+  if (!printed) console.log(`[debug] ${text}`);
 }
 
 function isEditable(t) {

@@ -76,5 +76,31 @@ The G key is never counted as a response (the response handlers only accept thei
   (the node that was running), `ts` (performance.now, ms), plus the usual clock fields.
   Exclude any trial that has a `debug_reveal` row with `debug_reveal_on: true`.
 
-Nothing else changes: timing, keys, stimuli, scoring and every other recorded value are identical with and without debug
-(`tests/debug-data-identical.test.js` compares the rows of the same seeded trials).
+The trace leaves every recorded value identical (stimuli, keys, scores, feedback, row contents; checked by
+`tests/debug-data-identical.test.js`). It does not promise identical timing: console calls can cost a frame on the
+experimenter's own run, which is one more reason never to use it with participants.
+
+## Exporter columns and the exclusion reason
+
+The analysis tools carry the flags, so debug sessions and trials can be found and dropped:
+
+| Tool / file                                                                                        | Column                                                                                                    |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `raw-to-csv.js` (every row)                                                                        | `debug_mode` (after `is_pilot_run`); `debug_reveal` rows have `session_stage = session_event` and no task |
+| `trials-to-csv.js` / `analysis-csv.js`                                                             | `debug_mode` (after `is_pilot_run`), `debug_reveal_seen` (after `trial_guard_excluded`)                   |
+| `csv-export.js` tidy tables (`trials`, `stars`, `probes`, `encoding_events`)                       | `debug_reveal_seen`                                                                                       |
+| `csv-export.js` wide files, `EVENTS`, `CALIBRATION_SUMMARY`, `PARTICIPANT_SUMMARY`, `DEMOGRAPHICS` | `Debug_Mode` (0/1); wide files also `Debug_Reveal_Seen` (0/1)                                             |
+| `EXPORT_MANIFEST.json`                                                                             | `debug_mode_flags`                                                                                        |
+
+- `debug_reveal_seen` is true if a `debug_reveal` row with `debug_reveal_on: true` belongs to the trial (matched by `trial_uid`;
+  a toggle without a uid belongs to the trial window it falls in). It is separate from `trial_guard_excluded`, which stays about display guards.
+- Participant level (`scripts/participant-rules.js`, used by `pilot-summary.js` and `csv-export.js`): a run with any row
+  `debug_mode: true` or a reveal-on row gets the exclusion reason **`debug_session`** (listed in `Exclusion_Reasons`, so the run is not
+  `retained`). The session is also classed `Sample_Class = debug`: never counted in the sampling plan, not even in a pilot batch, and
+  `pilot-summary` reports `DEBUG_SESSIONS_NOT_COUNTED`. `debug_session` is a tooling rule, not one of the three pre-registered rules.
+
+## Before the main batch
+
+Make sure the reveal and the trace are switched off for the main batch: nothing in the page stops a participant who adds
+`&pilot=1&debug=1` to the URL. The researcher accepted this risk for now. The data flags above make such a session detectable
+(`debug_mode`, `Sample_Class = debug`, reason `debug_session`), so check `PARTICIPANT_SUMMARY.csv` before analysing.
