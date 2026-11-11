@@ -54,6 +54,7 @@ import { svgEl } from './svg.js';
 import { questionMarkPath, QMARK_STROKE_MM } from './fixation-mark.js';
 import { config } from '../config.js';
 import { gridSizeMm, cellTopLeftMm } from '../grid.js';
+import { onFrameCreated, onFrameRotated } from '../debug/reveal.js';
 import {
   BULLSEYE_COLOUR_DARK,
   FIXATION_MARK_COLOUR_DARK,
@@ -265,6 +266,9 @@ export function createGridFrame({ rotation_deg = 0, fixation = '', background_sh
   /* Apply the initial fixation state from the very first paint. */
   applyFixation(frame, fixation);
 
+  /* Experimenter debug reveal: a no-op unless debug mode is on (see src/debug). */
+  onFrameCreated(frame);
+
   return frame;
 }
 
@@ -272,6 +276,7 @@ export function setRotation(frame, rotation_deg) {
   const mid = gridSizeMm() / 2;
   frame.rotor.setAttribute('transform', `rotate(${rotation_deg} ${mid} ${mid})`);
   frame.rotation_deg = rotation_deg;
+  onFrameRotated(frame);
 }
 
 /**

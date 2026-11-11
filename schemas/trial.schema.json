@@ -66,6 +66,7 @@
         "rest",
         "rest_resume_gate",
         "pattern_phase",
+        "debug_reveal",
         "d_only_trial_start",
         "d_only_encoding",
         "d_only_retention",
@@ -1328,6 +1329,18 @@
     "pilot_label": {
       "type": ["string", "null"],
       "description": "`session_info`: pilot label."
+    },
+    "debug_mode": {
+      "type": "boolean",
+      "description": "`session_info` and upload envelope: true when the experimenter debug tools (console trace, secret grid reveal; see DEBUGGING.md) were active in this session. Only possible on a pilot, dev or localhost session with `debug=1` in the URL. Exclude such sessions from analysis."
+    },
+    "debug_reveal_on": {
+      "type": "boolean",
+      "description": "`debug_reveal`: true when the hidden grid and pattern were switched on, false when switched off."
+    },
+    "debug_node_phase": {
+      "type": ["string", "null"],
+      "description": "`debug_reveal`: `phase` of the trial node that was running when the reveal was toggled."
     },
     "both_arrows_pressed": {
       "type": "boolean",
