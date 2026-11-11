@@ -16,7 +16,7 @@
  *
  * Each node carries a `[data-voiceover-target]` body and registers a
  * hidden-nav checkpoint so the experimenter's `U` / `R` keys advance
- * through them. `endOfTaskIntroNode` also unmounts the `Trial X / 120`
+ * through them. `endOfTaskIntroNode` also unmounts the `X/120` counter
  * counter on entry so it doesn't leak into the questionnaire chain.
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
@@ -98,12 +98,12 @@ const TAG_MEANING = Object.freeze({
   d_only: 'remember the dots, then answer Yes or No for each dot test.',
   t_only: 'remember the tones, then answer Yes or No for each tone test.',
   i_only: 'picture the pattern and judge each star: On-pattern or Not on-pattern.',
-  i_d: 'judge each star against the pattern and remember the dots for the dot tests.',
-  i_t: 'judge each star against the pattern and remember the tones for the tone tests.',
+  i_d: 'judge each star against the pattern and remember the dots.',
+  i_t: 'judge each star against the pattern and remember the tones.',
 });
 
 /* A small stand-in for the circle under the example tag: the bull's-eye ring and dot. */
-const MINI_CIRCLE_HTML = `<span aria-hidden="true" style="display: inline-block; position: relative; width: 4.2rem; height: 4.2rem; border: 2px solid rgba(255, 255, 255, 0.55); border-radius: 50%; box-sizing: border-box;"><span style="position: absolute; top: 50%; left: 50%; width: 0.45rem; height: 0.45rem; margin: -0.225rem 0 0 -0.225rem; border-radius: 50%; background: rgba(255, 255, 255, 0.8);"></span></span>`;
+const MINI_CIRCLE_HTML = `<span class="tag-reminder-circle" aria-hidden="true" style="display: inline-block; position: relative; width: 4.2rem; height: 4.2rem; border: 2px solid rgba(255, 255, 255, 0.55); border-radius: 50%; box-sizing: border-box;"><span style="position: absolute; top: 50%; left: 50%; width: 0.45rem; height: 0.45rem; margin: -0.225rem 0 0 -0.225rem; border-radius: 50%; background: rgba(255, 255, 255, 0.8);"></span></span>`;
 
 /**
  * One-time slide shown as the last screen before the first trial gate of Block 1: before
@@ -115,23 +115,25 @@ export function mainATagReminderNode() {
   const rows = Object.keys(TRIAL_TYPE_LABELS)
     .map(
       (type) =>
-        `<li style="display: flex; align-items: center; gap: 0.8rem; margin: 0.55rem 0;"><span style="flex: 0 0 10.5rem;">${trialTypeTagHtml(type)}</span><span>– ${TAG_MEANING[type]}</span></li>`
+        `<li class="tag-reminder-row" style="display: flex; align-items: center; gap: 0.8rem; margin: 0.55rem 0;"><span style="flex: 0 0 10.5rem; text-align: left;">${trialTypeTagHtml(type)}</span><span class="tag-reminder-meaning" style="white-space: nowrap;">– ${TAG_MEANING[type]}</span></li>`
     )
     .join('');
   const node = {
     type: htmlKeyboardResponse,
     stimulus: `
-      <div style="max-width: 40rem; margin: 0 auto;">
+      <div class="slide-text tag-reminder" style="max-width: 56rem; margin: 0 auto;">
         <h2>Before every trial: check the tag</h2>
-        <div style="text-align: center; margin: 0.6rem 0 0.8rem;">
+        <div class="tag-reminder-example" style="text-align: center; margin: 0.6rem 0 0.8rem;">
           ${trialTypeTagHtml('d_only')}
           <div style="margin-top: 0.5rem;">${MINI_CIRCLE_HTML}</div>
         </div>
         <div>
           <p>Before every trial starts, look at the small tag at the top of
           the circle. It tells you which kind of task the upcoming trial is,
-          so you know what to expect.</p>
-          <ul style="list-style: none; padding: 0; margin: 0.8rem 0 0;">${rows}</ul>
+          so you know what to expect. The five kinds of trial are mixed in a
+          random order, so you cannot know in advance which one comes next:
+          check the tag before you start each trial.</p>
+          <div style="text-align: center;"><ul style="display: inline-block; text-align: left; list-style: none; padding: 0; margin: 0.8rem 0 0;">${rows}</ul></div>
           ${continueHintHtml('Press <kbd>Space</kbd> to start the first trial.')}
         </div>
       </div>
@@ -192,7 +194,7 @@ export function endOfTaskIntroNode() {
     data: { phase: 'end_of_task_intro' },
     on_finish: leaveNarratedScreen,
     on_load: () => {
-      /* Main task is over — remove the dim "Trial X / 120" overlay so it
+      /* Main task is over — remove the small gray "X/120" counter so it
        * doesn't bleed into the questionnaire chain. */
       unmountTrialCounter();
       /* Voiceover scope (see runner.js): selective per-screen narration.

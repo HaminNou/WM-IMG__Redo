@@ -71,6 +71,17 @@ function buildHtml(startPx, pass) {
     horizontal. Drag the slider until the left and right edges of the blue
     rectangle line up with the edges of the card.
   </p>
+  <!-- Slider and note first, the card rectangle below them: the rectangle grows with the
+       slider (up to about 535 px tall), so with the slider underneath it the slider
+       dropped below the fold on a short window and could not be reached without scrolling.
+       Above the rectangle it stays where it is. -->
+  <input id="cc-slider" type="range" min="${SLIDER_MIN_PX}" max="${SLIDER_MAX_PX}" step="1"
+         value="${startPx}" aria-label="Card width"
+         style="width: 36rem; max-width: 90%;" />
+  <p style="opacity: 0.7; margin-top: 0.75rem;">
+    A standard card is <strong>85.6 mm</strong> wide. The arrow keys move the
+    slider one pixel at a time.
+  </p>
   <div id="cc-stage" style="margin: 1rem auto; position: relative; min-height: 14rem;">
     <div id="cc-rect"
          style="position: absolute; left: 50%; top: 0; transform: translateX(-50%);
@@ -79,13 +90,6 @@ function buildHtml(startPx, pass) {
                 background: linear-gradient(135deg, #1f3a8a 0%, #1e40af 100%);">
     </div>
   </div>
-  <input id="cc-slider" type="range" min="${SLIDER_MIN_PX}" max="${SLIDER_MAX_PX}" step="1"
-         value="${startPx}" aria-label="Card width"
-         style="width: 36rem; max-width: 90%;" />
-  <p style="opacity: 0.7; margin-top: 0.75rem;">
-    A standard card is <strong>85.6 mm</strong> wide. The arrow keys move the
-    slider one pixel at a time.
-  </p>
 `;
 }
 

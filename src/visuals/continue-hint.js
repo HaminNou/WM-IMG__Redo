@@ -54,5 +54,5 @@ const PILL_STYLE = [
  *   author-controlled, so no escaping is performed here).
  */
 export function continueHintHtml(innerHtml) {
-  return `<div style="text-align: center; width: 100%;"><div style="${PILL_STYLE}">${innerHtml}</div></div>`;
+  return `<div class="continue-hint-row" style="text-align: center; width: 100%;"><div class="continue-hint" style="${PILL_STYLE}">${innerHtml}</div></div>`;
 }

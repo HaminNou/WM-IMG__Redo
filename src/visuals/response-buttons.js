@@ -108,17 +108,13 @@ const TRIAL_BUTTON_CSS = `
         color: #000000;
         border-color: #000000;
       }
+      /* The key the participant pressed: the label turns bold. Nothing else changes
+       * (no colour, no movement), so it can never read as correct/incorrect feedback. */
       .trial-response-buttons .demo-btn-stack.is-pressed .demo-btn {
-        background: #772139;
-        border-color: #772139;
-        color: #FFFFFF;
-        transform: translateY(3px);
-        box-shadow: 0 1px 0 #000000;
+        font-weight: 900;
       }
       .trial-response-buttons .demo-btn-stack.is-pressed .demo-btn-key {
-        background: #772139;
-        border-color: #772139;
-        color: #FFFFFF;
+        font-weight: 900;
       }
       .trial-response-buttons--large .demo-btn {
         font-size: 1.9rem;

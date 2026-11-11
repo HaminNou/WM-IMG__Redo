@@ -35,7 +35,12 @@ import { config } from '../config.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { slideStimulusPage } from '../visuals/slide-layout.js';
 import { FEEDBACK_GREEN, FEEDBACK_RED } from './feedback-words.js';
-import { ARROW_MEANING_HTML, ARROW_MEANING_TEXT, PATTERN_REMINDER_SECONDS } from './shared-copy.js';
+import {
+  ARROW_MEANING_HTML,
+  ARROW_MEANING_TEXT,
+  NO_HEAD_ROTATION_HTML,
+  PATTERN_REMINDER_SECONDS,
+} from './shared-copy.js';
 
 /* See `slide-layout.js` for the unification rationale — the H2 title
  * and the plugin's Previous/Next nav land at the same y across every
@@ -84,6 +89,7 @@ export function iOnlyInstructionNode() {
         tells you to <strong>turn the pattern in your mind</strong>, like
         rotating a piece of paper. ${ARROW_MEANING_HTML} Hold this turned
         pattern in mind.</p>
+        <p>${NO_HEAD_ROTATION_HTML}</p>
         <p>After the arrow goes away you'll have about
         <strong>5 seconds</strong> to imagine and turn the pattern, then the
         trial continues automatically.</p>

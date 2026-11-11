@@ -228,7 +228,7 @@ export function slideTextPage({ title, body, narration }) {
     'flex: 0 0 auto; width: 100%; margin: 0 0 0.5rem; display: flex; align-items: center; justify-content: center;';
   return `
     <div class="${SLIDE_TEXT_CLASS}" style="${compactWrapperStyle}">
-      <div style="${compactTitleRowStyle}">
+      <div class="slide-title-row" style="${compactTitleRowStyle}">
         <h2 style="${SLIDE_TITLE_H2_STYLE}">${title}</h2>
       </div>
       <div style="${SLIDE_BODY_STYLE}" data-voiceover-target${scriptAttr}>${body}</div>
@@ -250,6 +250,15 @@ const SLIDE_STAR_CELL_CENTRE_MM = { cx: 15, cy: 35 };
 const SLIDE_DOT_R_MM = 2.5; /* config.memory.dot_diameter_mm / 2 */
 const SLIDE_STAR_R_MM = 2.5; /* config.imagery.star_size_mm / 2 */
 const SLIDE_ARROW_PX = 100; /* config.imagery.rotation_arrow_size_px */
+/* On a short window the exemplar circle is capped (see SLIDE_CIRCLE_MAX_VAR); the
+ * arrow then shrinks with it, keeping its share of the circle (100 px of the
+ * ~276 px full-size circle). At full size `min()` leaves it at exactly 100 px. */
+const SLIDE_ARROW_FRACTION_PCT = 36;
+/* Custom property that caps the exemplar circle's side on instruction slides. It is
+ * unset (no cap) on tall windows and set in index.html's short-window rules, so a
+ * deck page with a lot of text still shows its Previous / Next row without scrolling.
+ * Trial and demo circles are not affected. */
+const SLIDE_CIRCLE_MAX_VAR = '--slide-circle-max';
 /* Slide-stamp arrows render TILTED by default — an upright arrow does not
  * read as a rotation cue. The angle is intentionally NOT any of the live
  * trial's rotation values (live trials use integer angles from
@@ -404,12 +413,12 @@ function slideStimulusSvg(kinds, { arrowAngleDeg = SLIDE_ARROW_DEFAULT_TILT_DEG 
   const arrowTurns = (arrowAngleDeg / 360).toFixed(6);
   const arrow = want.has('arrow')
     ? `<img src="${getRotationArrowUrl()}" alt="rotation cue"
-            style="position: absolute; top: 50%; left: 50%; width: ${SLIDE_ARROW_PX}px; height: ${SLIDE_ARROW_PX}px;
+            style="position: absolute; top: 50%; left: 50%; width: min(${SLIDE_ARROW_PX}px, ${SLIDE_ARROW_FRACTION_PCT}%); height: min(${SLIDE_ARROW_PX}px, ${SLIDE_ARROW_FRACTION_PCT}%);
                    transform: translate(-50%, -50%) rotate(${arrowTurns}turn); pointer-events: none; z-index: 10; user-select: none;
                    filter: brightness(0) saturate(100%) drop-shadow(1px 0 0 #fff) drop-shadow(-1px 0 0 #fff) drop-shadow(0 1px 0 #fff) drop-shadow(0 -1px 0 #fff); ${ARROW_CENTRE_HOLE_STYLE}" />`
     : '';
   return `
-    <div style="position: relative; width: calc(var(--mm) * ${SLIDE_VIEWBOX_MM}); height: calc(var(--mm) * ${SLIDE_VIEWBOX_MM}); margin: 0 auto;">
+    <div class="slide-circle" style="position: relative; --slide-circle-full: calc(var(--mm) * ${SLIDE_VIEWBOX_MM}); width: min(var(--slide-circle-full), var(${SLIDE_CIRCLE_MAX_VAR}, 100vh)); height: min(var(--slide-circle-full), var(${SLIDE_CIRCLE_MAX_VAR}, 100vh)); margin: 0 auto;">
       ${svg}${arrow}
     </div>
   `;
@@ -452,16 +461,16 @@ export function slideStimulusPage({ title, body, narration, exemplar = [], arrow
    * leftover viewport height so the plugin nav row lands at a stable y
    * on every page regardless of body length. */
   return `
-    <div class="${SLIDE_TEXT_CLASS}" style="${SLIDE_STYLE_TEXT} align-items: center;">
-      <div style="${SLIDE_TITLE_ROW_STYLE}">
+    <div class="${SLIDE_TEXT_CLASS} slide-deck" style="${SLIDE_STYLE_TEXT} align-items: center;">
+      <div class="slide-title-row" style="${SLIDE_TITLE_ROW_STYLE}">
         <h2 style="${SLIDE_TITLE_H2_STYLE}">${title}</h2>
       </div>
-      <div style="flex: 0 0 auto; width: 100%; text-align: left;"
+      <div class="slide-body" style="flex: 0 0 auto; width: 100%; text-align: left;"
            data-voiceover-target${scriptAttr}>${body}</div>
-      <div style="flex: 0 0 auto; display: flex; align-items: center; justify-content: center; margin-top: 2rem;">
+      <div class="slide-circle-row" style="flex: 0 0 auto; display: flex; align-items: center; justify-content: center; margin-top: 2rem;">
         ${stim}
       </div>
-      <div style="flex: 1 0 auto; min-height: 1rem;" aria-hidden="true"></div>
+      <div class="slide-spacer" style="flex: 1 0 auto; min-height: 1rem;" aria-hidden="true"></div>
     </div>
   `;
 }

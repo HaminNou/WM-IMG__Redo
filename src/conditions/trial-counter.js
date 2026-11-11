@@ -1,45 +1,32 @@
 /**
- * Overall trial-counter overlay — a small dim badge at the top-left of the
- * viewport that persists across every trial sub-node (gate, encoding,
- * retention, probes, feedback, ITI) so the participant always sees their
- * progress through the main task.
+ * Overall trial-counter overlay: a small gray "5/120" at the top-left of the
+ * viewport that persists across every sub-node of a main trial (gate, encoding,
+ * retention, probes, feedback, ITI), so the participant always sees how far
+ * they are through the main task, counted across both blocks.
  *
- * The overlay carries:
- *   - a SOLID COLOURED SQUARE encoding the trial type (5 distinct hues from
- *     Okabe–Ito's colourblind-safe palette — see TYPE_COLOURS), so the
- *     participant can identify which task they are currently on at a glance
- *     without having to remember the order;
- *   - the trial number ("Trial X / 120") inside / next to the square.
+ * Colour. The trial pages are white or light gray and the rest of the UI is dark,
+ * so one fixed colour cannot be legible on both. The gray is therefore chosen by a
+ * stylesheet rule that follows the page: dark gray on a trial page (the
+ * `data-trial-bg` attribute that `setTrialPageBackground` puts on <html>), light
+ * gray on the dark surface. The rule does not depend on when the counter was mounted.
  *
- * Top-left placement rationale:
- *   1. Western reading order makes top-left peripheral / least competing
- *      with the central fixation locus during the trial — a top-RIGHT
- *      placement falls in the saccadic-priority hemifield for right-handed
- *      majority and is more likely to capture attention away from the
- *      bull's-eye.
- *   2. Convention. E-Prime, Inquisit, and OpenSesame default progress
- *      indicators to the top-left of the stimulus canvas; participants
- *      familiar with online experiments expect them there.
- *   3. The dim "Trial X / N" overlay shares the top-left placement, so the
- *      two do not compete as separate visual landmarks.
+ * Top-left placement: least competing with the central fixation point, and where
+ * participants of online experiments expect a progress indicator.
  *
- * The overlay is body-level (`position: fixed`) so it sits above the
- * jsPsych content area regardless of where the grid mount is. Each main-
- * trial gate's on_load calls `setTrialCounter(N, total, trialType)` to
- * update it; the end-of-task intro removes it via `unmountTrialCounter()`
- * so it doesn't bleed into the questionnaire.
+ * The overlay is body-level (`position: fixed`), so it sits above the jsPsych content
+ * area wherever the grid mounts. Each main-trial gate's on_load calls
+ * `setTrialCounter(N, total)`; the end-of-task intro removes it with
+ * `unmountTrialCounter()` so it does not bleed into the questionnaire. It is a
+ * singleton: repeated calls reuse the same node.
  *
- * Mounted on demand and singleton — repeated `setTrialCounter` calls reuse
- * the same DOM nodes instead of creating duplicates.
+ * (The trial type is shown by the tag above the circle, not here; the third argument of
+ * `setTrialCounter` is accepted and ignored so existing callers keep working.)
  */
 const COUNTER_ID = 'overall-trial-counter';
-const TAG_ID = 'overall-trial-counter-tag';
-const TEXT_ID = 'overall-trial-counter-text';
+const STYLE_ID = 'overall-trial-counter-style';
 
-/* Okabe–Ito colourblind-safe palette (Okabe & Ito 2008, "Color Universal
- * Design"). Five of eight hues — picked for maximum mutual contrast in
- * the Wong (2011) Nature Methods extension of that palette. The palette
- * is invariant under deuteranopia/protanopia/tritanopia simulations. */
+/* Same palette as the trial-type tag pills above the circle (shared.js uses it for the
+ * coloured dot in each pill). Okabe & Ito (2008), colourblind-safe. */
 const TYPE_COLOURS = Object.freeze({
   d_only: '#0072B2', // blue
   t_only: '#009E73', // bluish green
@@ -48,72 +35,54 @@ const TYPE_COLOURS = Object.freeze({
   i_t: '#D55E00', // vermillion
 });
 
+/* Gray on the dark surface and on the white / light-gray trial pages (WCAG contrast
+ * about 6 : 1 on the dark surface, 4.6 : 1 on the light gray page, 7 : 1 on white). */
+export const COUNTER_COLOUR_ON_DARK = '#9a9a9a';
+export const COUNTER_COLOUR_ON_TRIAL_PAGE = '#5a5a5a';
+
 const CONTAINER_STYLE =
   [
     'position: fixed',
     'top: 12px',
     'left: 16px',
-    'display: inline-flex',
-    'align-items: center',
-    'gap: 8px',
-    'color: rgba(255, 255, 255, 0.6)',
     'font-size: 13px',
+    'font-weight: 500',
     'font-family: system-ui, sans-serif',
+    'font-variant-numeric: tabular-nums',
     'letter-spacing: 0.02em',
     'pointer-events: none',
     'z-index: 1000',
     'user-select: none',
   ].join('; ') + ';';
 
-const TAG_BASE_STYLE =
-  [
-    'display: inline-block',
-    'width: 12px',
-    'height: 12px',
-    'border-radius: 2px',
-    /* Subtle dark outline so the tag remains visible against the
-     * task's near-black background even at low alpha. */
-    'box-shadow: 0 0 0 1px rgba(0,0,0,0.4)',
-  ].join('; ') + ';';
+function ensureCounterStyle() {
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `
+    #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_DARK}; }
+    html[data-trial-bg] #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_TRIAL_PAGE}; }
+  `;
+  document.head.appendChild(style);
+}
 
 /**
  * Update (or mount) the trial-counter overlay.
  *
- * @param {number} current   1-based trial index across all 120 trials
- * @param {number} total     total trial count (120)
- * @param {string} [trialType]   one of d_only / t_only / i_only / i_d / i_t.
- *                               If omitted or unknown, the colour tag is
- *                               hidden — useful for non-main-task contexts.
+ * @param {number} current   1-based trial index across all 120 main trials
+ * @param {number} total     total number of main trials (120)
  */
-export function setTrialCounter(current, total, trialType) {
+export function setTrialCounter(current, total) {
+  ensureCounterStyle();
   let container = document.getElementById(COUNTER_ID);
-  let tag, text;
   if (!container) {
     container = document.createElement('div');
     container.id = COUNTER_ID;
-    container.className = 'overall-trial-counter';
     container.setAttribute('style', CONTAINER_STYLE);
-    tag = document.createElement('span');
-    tag.id = TAG_ID;
-    tag.className = 'overall-trial-counter-tag';
-    text = document.createElement('span');
-    text.id = TEXT_ID;
-    text.className = 'overall-trial-counter-text';
-    container.appendChild(tag);
-    container.appendChild(text);
+    container.setAttribute('aria-hidden', 'true');
     document.body.appendChild(container);
-  } else {
-    tag = container.querySelector(`#${TAG_ID}`);
-    text = container.querySelector(`#${TEXT_ID}`);
   }
-  const colour = trialType && TYPE_COLOURS[trialType];
-  if (colour) {
-    tag.setAttribute('style', `${TAG_BASE_STYLE} background: ${colour};`);
-    tag.style.display = 'inline-block';
-  } else {
-    tag.style.display = 'none';
-  }
-  text.textContent = `Trial ${current} / ${total}`;
+  container.textContent = `${current}/${total}`;
 }
 
 export function unmountTrialCounter() {
@@ -121,6 +90,5 @@ export function unmountTrialCounter() {
   if (el && el.parentNode) el.parentNode.removeChild(el);
 }
 
-/* Surfaced for tests + downstream UI (e.g., a legend at the start of
- * Main A explaining what each colour means). */
+/* Surfaced for tests and for the trial-type tag pills (shared.js). */
 export const TRIAL_TYPE_TAG_COLOURS = TYPE_COLOURS;

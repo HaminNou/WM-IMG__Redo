@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  *
- * Tests for the dim "Trial X / 120" top-left overlay (`trial-counter.js`)
+ * Tests for the small gray "X/120" top-left overlay (`trial-counter.js`)
  * and the main-blocks stamping that drives it.
  *
  * Test scope:
@@ -17,6 +17,8 @@ import {
   setTrialCounter,
   unmountTrialCounter,
   TRIAL_TYPE_TAG_COLOURS,
+  COUNTER_COLOUR_ON_DARK,
+  COUNTER_COLOUR_ON_TRIAL_PAGE,
 } from '../src/conditions/trial-counter.js';
 import { generateMainBlockPair } from '../src/scheduler/main-blocks.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
@@ -26,63 +28,77 @@ const COUNTER_ID = 'overall-trial-counter';
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  document.head.innerHTML = '';
   setSessionPRNG('trial-counter-test-seed');
   resetSequencePools();
 });
 
 describe('trial-counter overlay primitives', () => {
-  it('setTrialCounter mounts exactly one overlay carrying the expected trial number text', () => {
-    setTrialCounter(7, 120, 'd_only');
+  it('setTrialCounter mounts exactly one overlay that reads "7/120"', () => {
+    setTrialCounter(7, 120);
     const els = document.querySelectorAll(`#${COUNTER_ID}`);
     expect(els.length).toBe(1);
-    expect(els[0].textContent).toContain('Trial 7 / 120');
+    expect(els[0].textContent).toBe('7/120');
   });
 
-  it('overlay sits fixed at top-left in dim small text', () => {
-    setTrialCounter(1, 120, 'd_only');
+  it('overlay sits fixed at the top-left in small text, with no coloured square', () => {
+    setTrialCounter(1, 120);
     const el = document.getElementById(COUNTER_ID);
     const style = (el?.getAttribute('style') ?? '').toLowerCase();
     expect(style).toContain('position: fixed');
     expect(style).toContain('top: 12px');
     expect(style).toContain('left: 16px');
     expect(style).toContain('font-size: 13px');
-    /* Dim white — alpha bumped slightly (0.4 → 0.6) when the colour tag
-     * was added so the small tag sits readably against the dark task
-     * background; the text is still well below full-contrast. */
-    expect(style).toMatch(/color:\s*rgba\(255,\s*255,\s*255,\s*0\.6\)/);
+    expect(style).toContain('pointer-events: none');
+    expect(el.children.length).toBe(0);
+    expect(document.querySelector('#overall-trial-counter-tag')).toBeNull();
+  });
+
+  it('is gray on every surface: a stylesheet rule follows the page background', () => {
+    setTrialCounter(1, 120);
+    const css = document.getElementById('overall-trial-counter-style').textContent;
+    expect(css).toContain(`#${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_DARK}; }`);
+    expect(css).toContain(
+      `html[data-trial-bg] #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_TRIAL_PAGE}; }`
+    );
+    /* Both are neutral grays (r = g = b), never white and never red, and not set inline. */
+    for (const hex of [COUNTER_COLOUR_ON_DARK, COUNTER_COLOUR_ON_TRIAL_PAGE]) {
+      expect(hex).toMatch(/^#([0-9a-f]{2})\1\1$/i);
+    }
+    expect(document.getElementById(COUNTER_ID).getAttribute('style') ?? '').not.toMatch(
+      /(^|;)\s*color:/
+    );
+  });
+
+  it('the grays meet a readable contrast on the dark, white and light-gray pages', () => {
+    const lum = (hex) => {
+      const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const f = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(v[0]) + 0.7152 * f(v[1]) + 0.0722 * f(v[2]);
+    };
+    const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+    expect(ratio(COUNTER_COLOUR_ON_DARK, '#1a1a1a')).toBeGreaterThan(4.5);
+    expect(ratio(COUNTER_COLOUR_ON_TRIAL_PAGE, '#ffffff')).toBeGreaterThan(4.5);
+    expect(ratio(COUNTER_COLOUR_ON_TRIAL_PAGE, '#d3d3d3')).toBeGreaterThan(4.5);
   });
 
   it('repeated setTrialCounter calls update the same node, not duplicate it', () => {
-    setTrialCounter(1, 120, 'd_only');
-    setTrialCounter(2, 120, 't_only');
-    setTrialCounter(60, 120, 'i_t');
+    setTrialCounter(1, 120);
+    setTrialCounter(2, 120);
+    setTrialCounter(60, 120);
+    setTrialCounter(61, 120);
+    setTrialCounter(120, 120);
     const els = document.querySelectorAll(`#${COUNTER_ID}`);
     expect(els.length).toBe(1);
-    expect(els[0].textContent).toContain('Trial 60 / 120');
+    expect(els[0].textContent).toBe('120/120');
+    expect(document.querySelectorAll('#overall-trial-counter-style').length).toBe(1);
   });
 
-  it('renders a colour tag for the trial type using a colourblind-safe palette', () => {
-    /* All five trial-type colours come from the Okabe–Ito palette and must
-     * be visually distinguishable from each other AND from the dark task
-     * background. */
-    const types = Object.keys(TRIAL_TYPE_TAG_COLOURS);
-    expect(types).toEqual(expect.arrayContaining(['d_only', 't_only', 'i_only', 'i_d', 'i_t']));
-    /* All five colours unique. */
-    const values = Object.values(TRIAL_TYPE_TAG_COLOURS);
-    expect(new Set(values).size).toBe(5);
-
-    setTrialCounter(3, 120, 'i_d');
-    const tag = document.querySelector('#overall-trial-counter-tag');
-    expect(tag).not.toBeNull();
-    const tagStyle = (tag.getAttribute('style') ?? '').toLowerCase();
-    expect(tagStyle).toContain(TRIAL_TYPE_TAG_COLOURS.i_d.toLowerCase());
-  });
-
-  it('hides the colour tag when no trial type is supplied', () => {
-    setTrialCounter(5, 120);
-    const tag = document.querySelector('#overall-trial-counter-tag');
-    expect(tag).not.toBeNull();
-    expect(tag.style.display).toBe('none');
+  it('the trial-type colour table is still exported for the tag pills (five unique colours)', () => {
+    expect(Object.keys(TRIAL_TYPE_TAG_COLOURS)).toEqual(
+      expect.arrayContaining(['d_only', 't_only', 'i_only', 'i_d', 'i_t'])
+    );
+    expect(new Set(Object.values(TRIAL_TYPE_TAG_COLOURS)).size).toBe(5);
   });
 
   it('unmountTrialCounter removes the overlay and is safe to call twice', () => {
@@ -90,7 +106,6 @@ describe('trial-counter overlay primitives', () => {
     expect(document.getElementById(COUNTER_ID)).not.toBeNull();
     unmountTrialCounter();
     expect(document.getElementById(COUNTER_ID)).toBeNull();
-    /* Idempotent — no throw on a second call when nothing is mounted. */
     expect(() => unmountTrialCounter()).not.toThrow();
   });
 });

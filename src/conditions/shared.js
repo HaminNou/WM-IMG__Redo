@@ -771,14 +771,13 @@ export function trialStartGateNode({
       stampTrialData('trial_start_gate_onset_ts_ms', performance.now());
 
       /* Overall main-trial counter: only stamped during Main A / Main B by
-       * `generateMainBlockPair`. When present, mount or update the dim
-       * top-left "Trial X / N" overlay. The overlay persists across every
-       * sub-node of this trial and gets refreshed at the next gate. */
+       * `generateMainBlockPair`. When present, mount or update the small gray
+       * top-left "X/N" overlay. The overlay persists across every sub-node of
+       * this trial and gets refreshed at the next gate. */
       const overallN = data?.main_trial_number_overall;
       const overallTotal = data?.main_trial_total;
-      const overallType = data?.main_trial_type;
       if (Number.isFinite(overallN) && Number.isFinite(overallTotal)) {
-        setTrialCounter(overallN, overallTotal, overallType);
+        setTrialCounter(overallN, overallTotal);
       }
 
       /* Trial-start hint at the bottom of the viewport

@@ -27,6 +27,8 @@ import { trialStartGateNode } from '../src/conditions/shared.js';
 import {
   ARROW_MEANING_TEXT,
   ARROW_MEANING_HTML,
+  NO_HEAD_ROTATION_TEXT,
+  NO_HEAD_ROTATION_HTML,
   PATTERN_REMINDER_SECONDS,
 } from '../src/instructions/shared-copy.js';
 import {
@@ -278,5 +280,64 @@ describe('T-only page 3 shows the central question mark it talks about', () => {
     expect(page).toBeTruthy();
     expect(page).not.toContain('\u266a');
     expect(page).toContain('stroke-linecap="round"'); /* the qmark path */
+  });
+});
+
+describe('head rotation is not allowed (Tasks 3, 4 and 5)', () => {
+  const pageDom = (html) => {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    return el;
+  };
+  const arrowPage = (node) => node.pages.findIndex((p) => p.includes(ARROW_MEANING_HTML));
+
+  it('is one shared sentence: bold, says turn it in the mind, do not rotate or tilt the head', () => {
+    expect(NO_HEAD_ROTATION_TEXT).toBe(
+      'Head rotation is NOT allowed: turn the pattern only in your mind. Do not rotate or tilt your head.'
+    );
+    expect(NO_HEAD_ROTATION_HTML).toContain(NO_HEAD_ROTATION_TEXT);
+    const strong = pageDom(NO_HEAD_ROTATION_HTML).querySelector('strong');
+    expect(strong.textContent).toBe(NO_HEAD_ROTATION_TEXT);
+    /* The deck text is weight 300, so "bolder" would only reach 400: 700 is set outright. */
+    expect(strong.getAttribute('style')).toContain('font-weight: 700');
+  });
+
+  for (const [name, make] of Object.entries(IMAGERY_DECKS)) {
+    it(`${name}: the arrow page has it as its own bold paragraph right under the arrow text`, () => {
+      const node = make();
+      const i = arrowPage(node);
+      expect(i).toBeGreaterThanOrEqual(0);
+      const dom = pageDom(node.pages[i]);
+      const paras = [...dom.querySelectorAll('[data-voiceover-target] > p')];
+      const at = paras.findIndex((p) => p.innerHTML.includes(ARROW_MEANING_HTML));
+      expect(at).toBeGreaterThanOrEqual(0);
+      const mine = paras.findIndex((p) => p.textContent.trim() === NO_HEAD_ROTATION_TEXT);
+      expect(mine, 'its own paragraph').toBeGreaterThan(-1);
+      /* Directly under the paragraph that holds the arrow text. */
+      expect(mine - at).toBe(1);
+      expect(paras[mine].querySelector('strong').outerHTML).toBe(NO_HEAD_ROTATION_HTML);
+      /* The page still says "turn the pattern in your mind". */
+      expect(paras[at].textContent.replace(/\s+/g, ' ')).toContain('turn the pattern in your mind');
+    });
+
+    it(`${name}: no other page of the deck repeats it`, () => {
+      const node = make();
+      const i = arrowPage(node);
+      node.pages.forEach((p, k) => {
+        if (k !== i) expect(plain(p)).not.toMatch(/head/i);
+      });
+    });
+
+    it(`${name}: the narration of the pages is unchanged (it is harvested, one recording each)`, () => {
+      for (const p of make().pages) {
+        const script = p.match(/data-voiceover-script="([^"]*)"/)?.[1] ?? '';
+        expect(script.toLowerCase()).not.toContain('head');
+      }
+    });
+  }
+
+  it('the other two decks (Tasks 1 and 2) do not mention it', () => {
+    for (const make of [dOnlyInstructionNode, tOnlyInstructionNode])
+      expect(deckText(make())).not.toMatch(/head rotation/i);
   });
 });

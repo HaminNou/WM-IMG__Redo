@@ -124,7 +124,7 @@ describe('trialStartGateNode end-of-trial hint overlay', () => {
     expect(document.querySelectorAll('.trial-start-hint').length).toBe(1);
   });
 
-  it('mounts the dim trial counter when data.main_trial_number_overall is set', () => {
+  it('mounts the small gray trial counter when data.main_trial_number_overall is set', () => {
     const node = trialStartGateNode({
       trial_index_in_block: 0,
       phase: 'd_only_trial_start',
@@ -134,7 +134,7 @@ describe('trialStartGateNode end-of-trial hint overlay', () => {
     node.on_load();
     const counter = document.getElementById('overall-trial-counter');
     expect(counter).not.toBeNull();
-    expect(counter.textContent).toBe('Trial 17 / 120');
+    expect(counter.textContent).toBe('17/120');
   });
 
   it('mounts a .trial-type-label when trialType is provided', () => {

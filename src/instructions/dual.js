@@ -41,7 +41,7 @@ import { config } from '../config.js';
 import { registerInstructionFactory, trackInstructionNode } from '../hidden-nav.js';
 import { slideStimulusPage } from '../visuals/slide-layout.js';
 import { FEEDBACK_GREEN, FEEDBACK_RED } from './feedback-words.js';
-import { ARROW_MEANING_HTML, ARROW_MEANING_TEXT } from './shared-copy.js';
+import { ARROW_MEANING_HTML, ARROW_MEANING_TEXT, NO_HEAD_ROTATION_HTML } from './shared-copy.js';
 
 /* See `slide-layout.js` for the unification rationale — the H2 title
  * and the plugin's Previous/Next nav land at the same y across every
@@ -77,6 +77,7 @@ export function iDInstructionNode() {
         pattern in your mind and hold the turned pattern for the whole
         trial. ${ARROW_MEANING_HTML} After the arrow goes away you'll have
         about <strong>5 seconds</strong> to imagine and turn it.</p>
+        <p>${NO_HEAD_ROTATION_HTML}</p>
       `,
       narration: `Task 4 combines Task 3, the pattern, with Task 1, the dots. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. ${ARROW_MEANING_TEXT} After the arrow goes away you'll have about 5 seconds to imagine and turn it.`,
       exemplar: ['arrow'],
@@ -159,6 +160,7 @@ export function iTInstructionNode() {
         pattern in your mind and hold the turned pattern for the whole
         trial. ${ARROW_MEANING_HTML} After the arrow goes away you'll have
         about <strong>5 seconds</strong> to imagine and turn it.</p>
+        <p>${NO_HEAD_ROTATION_HTML}</p>
       `,
       narration: `Task 5 combines Task 3, the pattern, with Task 2, the tones. Each trial begins with the arrow: turn the pattern in your mind and hold the turned pattern for the whole trial. ${ARROW_MEANING_TEXT} After the arrow goes away you'll have about 5 seconds to imagine and turn it.`,
       exemplar: ['arrow'],

@@ -199,6 +199,18 @@ export function toneAudibilityAndComfortTrial() {
           max-width: 38rem;
           margin: 0 auto 1.25rem;
         }
+        /* Short window: smaller boxes and margins so the slider and the continue
+         * button stay in view without scrolling (the page is taller than 600 px
+         * otherwise). */
+        @media (max-height: 760px) {
+          .tac-bank { max-width: 27rem; margin-bottom: 0.75rem; }
+          .tac-instructions { max-width: 46rem; margin-bottom: 0.5rem; }
+          .tac-slider-wrap { margin-bottom: 0.5rem; }
+          .tac-wait-note { margin: 0.4rem auto !important; }
+        }
+        @media (max-height: 680px) {
+          .tac-bank { max-width: 24rem; gap: 6px; }
+        }
       </style>
       <h2>Sound check: adjust the volume to a comfortable level</h2>
       <div data-voiceover-target data-tac-narration>

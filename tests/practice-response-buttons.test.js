@@ -527,3 +527,23 @@ describe('developer skip (U) and the notice', () => {
     __resetHiddenNavForTests();
   });
 });
+
+describe('the pressed practice button is only bold, never coloured', () => {
+  it('the injected stylesheet changes nothing but font-weight for .is-pressed', async () => {
+    const { ensureResponseButtonStyles } = await import('../src/visuals/response-buttons.js');
+    document.head.innerHTML = '';
+    ensureResponseButtonStyles();
+    const css = document.getElementById('response-buttons-style').textContent;
+    const rules = [...css.matchAll(/([^{}]*\.is-pressed[^{}]*)\{([^}]*)\}/g)].map((m) => m[2]);
+    expect(rules.length).toBeGreaterThan(0);
+    for (const body of rules) {
+      const props = body
+        .split(';')
+        .map((d) => d.split(':')[0].trim())
+        .filter(Boolean);
+      expect(props).toEqual(['font-weight']);
+      expect(body).toMatch(/font-weight:\s*900/);
+    }
+    expect(css).not.toMatch(/is-pressed[^{}]*\{[^}]*(background|border|color|transform|shadow)/);
+  });
+});

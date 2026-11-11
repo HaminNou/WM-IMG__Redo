@@ -175,6 +175,117 @@
       }
 
       /* ─────────────────────────────────────────────────────────────────────
+       * Short-window fit for the instruction decks (slideStimulusPage in
+       * visuals/slide-layout.js). The decks are laid out for ~800 px of window
+       * height; on the 600–750 px windows of ordinary laptops the Previous /
+       * Next row fell below the fold on every page with more than a few lines.
+       * Below 820 px of height the page chrome is tightened (padding, title row,
+       * paragraph and circle margins), and the exemplar circle is capped to a share
+       * of the height through --slide-circle-max (slide-layout.js reads it; with no
+       * cap, tall windows keep the full-size circle). Below 760 px the body text
+       * drops from 18 px to 16 px and below 680 px the circle is capped at 32vh. Wording, colours and behaviour are
+       * unchanged. The rules use !important only because the slides carry their
+       * default geometry as inline styles.
+       * ──────────────────────────────────────────────────────────────────── */
+      @media (max-height: 820px) {
+        .slide-deck {
+          --slide-circle-max: 36vh;
+          padding-top: 0.6rem !important;
+          padding-bottom: 0.3rem !important;
+        }
+        .slide-deck > .slide-title-row {
+          min-height: 2.4rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        .slide-deck .slide-body p {
+          margin: 0.5rem 0 !important;
+        }
+        .slide-deck .slide-circle-row {
+          margin-top: 0.6rem !important;
+        }
+        .slide-deck .slide-spacer {
+          min-height: 0 !important;
+        }
+      }
+      /* The tag-reminder slide (runner-intros.js) is the tallest of the intro slides: title,
+       * example tag with a small circle, a three-line paragraph, five tag rows and the hint. It
+       * is 56 rem wide so that each description fits on one line (white-space: nowrap); on a
+       * window under 680 px high it loses some margins and the example circle shrinks. */
+      @media (max-height: 680px) {
+        .tag-reminder h2 {
+          margin: 0.5rem 0 0.4rem;
+        }
+        .tag-reminder .tag-reminder-example {
+          margin: 0.3rem 0 0.4rem !important;
+        }
+        .tag-reminder .tag-reminder-circle {
+          width: 3rem !important;
+          height: 3rem !important;
+        }
+        .tag-reminder p {
+          margin: 0.4rem 0;
+        }
+        .tag-reminder .tag-reminder-row {
+          margin: 0.2rem 0 !important;
+        }
+        .tag-reminder .continue-hint {
+          margin-top: 0.6rem !important;
+        }
+      }
+      /* Questionnaire pages (jsPsych survey-html-form: the five strategy pages and the
+       * music-background page) are tables of 4–8 statements with a drop-down each. On a short
+       * window they ran past the bottom, with the Continue button out of sight. The column is
+       * widened (so most statements are one line), the type is 16 px and the row padding is
+       * smaller, so each page fits down to 600 px of height. Wording and options are
+       * unchanged. */
+      @media (max-height: 820px) {
+        .jspsych-content:has(#jspsych-survey-html-form) {
+          max-width: min(94vw, 62rem);
+        }
+        #jspsych-survey-html-form-preamble,
+        #jspsych-survey-html-form {
+          font-size: 16px;
+          line-height: 1.35;
+        }
+        #jspsych-survey-html-form-preamble h2 {
+          margin: 0.4rem 0;
+          font-size: 1.4rem;
+        }
+        #jspsych-survey-html-form-preamble > div,
+        #jspsych-survey-html-form-preamble > p,
+        #jspsych-survey-html-form > div {
+          max-width: 60rem !important;
+        }
+        #jspsych-survey-html-form-preamble p {
+          margin-top: 0.3rem !important;
+          margin-bottom: 0.5rem !important;
+        }
+        #jspsych-survey-html-form td {
+          padding-top: 0.25rem !important;
+          padding-bottom: 0.25rem !important;
+          max-width: 46rem !important;
+        }
+        #jspsych-survey-html-form select {
+          padding-top: 0.2rem;
+          padding-bottom: 0.2rem;
+        }
+        #jspsych-survey-html-form-next {
+          margin-top: 0.5rem;
+        }
+      }
+      @media (max-height: 680px) {
+        .slide-deck {
+          --slide-circle-max: 32vh;
+        }
+      }
+      @media (max-height: 760px) {
+        .slide-deck .slide-body {
+          font-size: 16px;
+          line-height: 1.45;
+        }
+      }
+
+      /* ─────────────────────────────────────────────────────────────────────
        * Button + form-input theming – Light card-style controls
        * on the dark experimental background so action surfaces read clearly
        * across calibration / instructions / probe-feedback contexts.

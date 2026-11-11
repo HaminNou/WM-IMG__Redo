@@ -83,6 +83,37 @@ describe('main_a_tag_reminder slide', () => {
     expect(t).toMatch(/Stars \+ Tones[^.]*star[^.]*remember the tones/);
   });
 
+  it('says the order of the trials is random, so the tag has to be checked before each trial', () => {
+    const t = text(node.stimulus);
+    expect(t).toContain('mixed in a random order');
+    expect(t).toContain('you cannot know in advance which one comes next');
+    expect(t).toContain('check the tag before you start each trial');
+    /* No stronger claim than "random order" (the scheduler also limits runs of one type). */
+    expect(t).not.toMatch(/never more than|at most twice|equally often/i);
+  });
+
+  it('keeps every tag description on one line, in an aligned column of pills', () => {
+    const body = dom();
+    const rows = [...body.querySelectorAll('.tag-reminder-row')];
+    expect(rows).toHaveLength(5);
+    for (const row of rows) {
+      const meaning = row.querySelector('.tag-reminder-meaning');
+      expect(meaning.getAttribute('style')).toContain('white-space: nowrap');
+      /* The pill sits in a fixed-width, left-aligned cell, so all five start at one x. */
+      const cell = row.firstElementChild;
+      expect(cell.getAttribute('style')).toContain('flex: 0 0 10.5rem');
+      expect(cell.getAttribute('style')).toContain('text-align: left');
+    }
+    /* Wide enough column (the one-line rows are measured in a real browser, see
+     * tests/short-window-fit.test.js for what is pinned here). */
+    const wrapper = body.querySelector('.tag-reminder');
+    expect(wrapper.classList.contains('slide-text')).toBe(true);
+    expect(wrapper.getAttribute('style')).toMatch(/max-width:\s*56rem/);
+    /* Shortest wording that keeps them accurate: all five lines are short. */
+    for (const row of rows)
+      expect(row.querySelector('.tag-reminder-meaning').textContent.length).toBeLessThan(80);
+  });
+
   it('ends with the standard continue hint', () => {
     dom();
     const hint = document.body.textContent;

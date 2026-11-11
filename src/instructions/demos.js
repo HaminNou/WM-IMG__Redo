@@ -244,6 +244,79 @@ function pickDemoRotationAngle() {
 const ROTATION_ARROW_ASSET_URL = `${import.meta.env.BASE_URL}assets/rotation-arrow.png`;
 
 /**
+ * Short-window fit for the demo screen. The column needs about 1000 px of window height; the
+ * button row (buttons, key caps, hands and the "do not press" note) alone is about 190 px,
+ * so below that the hands and the Space hint fell under the fold and the researcher had to
+ * scroll (it overflowed even at 1920x940). Under 1040 px the rows are tightened (title,
+ * margins, caption box, banner, button and hand sizes); under 680 px a second step takes a
+ * little more. The circle keeps its calibrated size at every height. The caption box widens
+ * instead of growing taller (two lines of the longest caption) and the button row reserves
+ * its real height, so mounting the buttons no longer moves the circle. The defaults are
+ * inline styles, hence !important. Nothing is below 14 px (the note is 14.4 px).
+ */
+export const DEMO_SHORT_WINDOW_CSS = `
+      @media (max-height: 1040px) {
+        .demo-frame {
+          padding-top: 0.5rem !important;
+          padding-bottom: 0.3rem !important;
+        }
+        .demo-frame > .slide-title-row {
+          min-height: 2.2rem !important;
+          margin-bottom: 0.3rem !important;
+        }
+        .demo-spacer-above-circle { min-height: 0 !important; }
+        #demo-mount { margin-top: 0.5rem !important; }
+        .demo-caption-box {
+          width: min(40rem, 92vw) !important;
+          height: auto !important;
+          min-height: 4.6rem !important;
+          margin-top: 0.5rem !important;
+          padding: 0.45rem 1rem !important;
+        }
+        #demo-watch-banner-row {
+          min-height: 2.1rem !important;
+          margin-top: 0.4rem !important;
+        }
+        .demo-watch-banner { padding: 0.25rem 1rem; }
+        #demo-buttons-row {
+          min-height: 10rem !important;
+          align-items: flex-start !important;
+          margin-top: 0.25rem !important;
+        }
+        #demo-buttons-row .demo-buttons-container {
+          padding: 0.3rem 0.5rem 0.4rem !important;
+        }
+        #demo-buttons-row .demo-btn { padding: 0.5rem 1.3rem; }
+        #demo-buttons-row .demo-btn-stack { gap: 0.3rem; }
+        .demo-hand { font-size: 3rem; margin-top: 0.15rem; }
+        .demo-no-press-note { margin-top: 0.1rem; }
+        .demo-spacer-above-hint { height: 1rem !important; }
+      }
+      @media (max-height: 680px) {
+        .demo-frame {
+          padding-top: 0.3rem !important;
+        }
+        .demo-frame > .slide-title-row {
+          min-height: 1.8rem !important;
+          margin-bottom: 0.2rem !important;
+        }
+        .demo-frame > .slide-title-row h2 { font-size: 1.4rem !important; }
+        #demo-mount { margin-top: 0.3rem !important; }
+        .demo-caption-box {
+          min-height: 3.7rem !important;
+          margin-top: 0.3rem !important;
+          padding: 0.3rem 1rem !important;
+        }
+        .demo-watch-banner { font-size: 1rem; padding: 0.15rem 0.9rem; }
+        #demo-watch-banner-row { min-height: 1.8rem !important; margin-top: 0.25rem !important; }
+        #demo-buttons-row { min-height: 9.4rem !important; margin-top: 0.15rem !important; }
+        #demo-buttons-row .demo-btn { padding: 0.4rem 1.2rem; font-size: 1rem; }
+        .demo-hand { font-size: 2.1rem; margin-top: 0.1rem; }
+        #demo-buttons-row .demo-buttons-container { padding: 0.2rem 0.5rem 0.3rem !important; }
+      }
+`;
+
+/**
  * Demo HTML scaffold — see file-header layout description.
  *
  * Outer wrapper geometry comes from `slide-layout.js::SLIDE_STYLE_DEMO`
@@ -374,7 +447,7 @@ function demoFrameTemplate(taskNumber, title) {
       .demo-no-press-note {
         margin: 0.35rem 0 0;
         text-align: center;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
         line-height: 1.35;
         color: rgba(0,0,0,0.6);
       }
@@ -393,9 +466,10 @@ function demoFrameTemplate(taskNumber, title) {
       .demo-hand.is-pressing {
         animation: demo-hand-wiggle 520ms cubic-bezier(0.22, 1, 0.36, 1);
       }
+${DEMO_SHORT_WINDOW_CSS}
     </style>
     <div class="demo-frame" style="${SLIDE_STYLE_DEMO}">
-      <div style="${SLIDE_TITLE_ROW_STYLE}">
+      <div class="slide-title-row" style="${SLIDE_TITLE_ROW_STYLE}">
         <h2 style="${SLIDE_TITLE_H2_STYLE}">Demonstration of Task ${taskNumber} – ${title}</h2>
       </div>
 
@@ -412,7 +486,7 @@ function demoFrameTemplate(taskNumber, title) {
         margin-top: 1rem;
       "></div>
 
-      <div style="
+      <div class="demo-caption-box" style="
         flex: 0 0 auto;
         width: 30rem;
         max-width: 90vw;
