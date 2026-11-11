@@ -40,6 +40,7 @@
  */
 import { createEncodingNode } from './encoding-schedule.js';
 import { practiceProbeButtons, practiceStarButtons } from './practice-buttons.js';
+import { traceProbeSpec } from '../debug/trace-adapters.js';
 import { postEncodingRotationDeg, probeFrameFields } from './trial-record.js';
 
 import { setFixation } from '../visuals/frame.js';
@@ -78,6 +79,7 @@ function gatePreambleNodes(params) {
       background_shade: params.background_shade,
       trialType: 'i_t',
       prominent: isFirstPracticeTrial(params),
+      traceParams: params,
       data: {
         rotation_deg: params.rotation_deg,
         background_shade: params.background_shade,
@@ -138,6 +140,7 @@ function retentionNode(params) {
     rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     timestamp_field: 'retention_onset_ts_ms',
+    trace_kind: 'retention',
     data: {
       trial_index_in_block: params.trial_index_in_block,
       background_shade: params.background_shade,
@@ -158,6 +161,7 @@ function probeNode(params, probe) {
     allowed_keys: [KEY_YES, KEY_NO],
     response_buttons: practiceProbeButtons(params),
     timestamp_field: 'probe_onset_ts_ms',
+    trace_probe: traceProbeSpec(params, probe, 'tone'),
     data: {
       trial_index_in_block: params.trial_index_in_block,
       background_shade: params.background_shade,

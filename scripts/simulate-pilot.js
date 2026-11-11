@@ -460,6 +460,7 @@ function stamp(row, seqRef, sessionMeta) {
     schema_version: SCHEMA_VERSION,
     build_id: BUILD_ID,
     is_pilot_run: sessionMeta.is_pilot_run,
+    debug_mode: sessionMeta.debug_mode,
     pilot_label: sessionMeta.pilot_label,
   };
 }
@@ -634,6 +635,7 @@ export function simulateOne(opts) {
 
   const sessionMeta = {
     is_pilot_run: true,
+    debug_mode: opts.debug === true,
     pilot_label: opts.pilotLabel ?? 'simulated',
   };
   const modelOpts = {
@@ -663,6 +665,7 @@ export function simulateOne(opts) {
           build_id: BUILD_ID,
           schema_version: SCHEMA_VERSION,
           is_pilot_run: sessionMeta.is_pilot_run,
+          debug_mode: sessionMeta.debug_mode,
           pilot_label: sessionMeta.pilot_label,
           started_at_iso: new Date(0).toISOString(),
           user_agent: 'simulate-pilot/1.0',
@@ -719,6 +722,7 @@ export function simulateOne(opts) {
     schema_version: SCHEMA_VERSION,
     build_id: BUILD_ID,
     is_pilot_run: sessionMeta.is_pilot_run,
+    debug_mode: sessionMeta.debug_mode,
     pilot_label: sessionMeta.pilot_label,
     started_at_iso: new Date(0).toISOString(),
     user_agent: 'simulate-pilot/1.0',

@@ -175,6 +175,10 @@
           "type": ["boolean", "null"],
           "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
         },
+        "debug_reveal_seen": {
+          "type": ["boolean", "null"],
+          "description": "True if the experimenter secret grid reveal (G G, src/debug/reveal.js) was switched on at any time during the trial, so the answers were visible. Exclude such trials. Separate from trial_guard_excluded, which stays about display guards."
+        },
         "guard_flags": {
           "type": ["string", "null"],
           "description": "Display-guard events recorded since the previous trial, comma separated. Empty if none."
@@ -495,6 +499,10 @@
         "trial_guard_excluded": {
           "type": ["boolean", "null"],
           "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
+        },
+        "debug_reveal_seen": {
+          "type": ["boolean", "null"],
+          "description": "True if the experimenter secret grid reveal (G G, src/debug/reveal.js) was switched on at any time during the trial, so the answers were visible. Exclude such trials. Separate from trial_guard_excluded, which stays about display guards."
         },
         "px_per_mm": {
           "type": ["number", "null"],
@@ -820,6 +828,10 @@
         "trial_guard_excluded": {
           "type": ["boolean", "null"],
           "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
+        },
+        "debug_reveal_seen": {
+          "type": ["boolean", "null"],
+          "description": "True if the experimenter secret grid reveal (G G, src/debug/reveal.js) was switched on at any time during the trial, so the answers were visible. Exclude such trials. Separate from trial_guard_excluded, which stays about display guards."
         },
         "px_per_mm": {
           "type": ["number", "null"],
@@ -1153,6 +1165,10 @@
         "trial_guard_excluded": {
           "type": ["boolean", "null"],
           "description": "True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion."
+        },
+        "debug_reveal_seen": {
+          "type": ["boolean", "null"],
+          "description": "True if the experimenter secret grid reveal (G G, src/debug/reveal.js) was switched on at any time during the trial, so the answers were visible. Exclude such trials. Separate from trial_guard_excluded, which stays about display guards."
         },
         "px_per_mm": {
           "type": ["number", "null"],

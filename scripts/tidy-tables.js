@@ -156,6 +156,14 @@ export function segmentTrials(rows) {
   const windows = [];
   let cur = null;
   let restSeen = false;
+  /* A reveal toggle can be written BEFORE the gate row of its own trial (the gate node
+   * writes its row when it ends), so a toggle that names its trial_uid is matched by uid;
+   * only a toggle without a uid falls back to the window it occurs in. */
+  const revealUids = new Set(
+    rows
+      .filter((r) => r?.phase === 'debug_reveal' && r.debug_reveal_on === true && r.trial_uid)
+      .map((r) => r.trial_uid)
+  );
   for (const r of chronological(rows)) {
     const ph = r.phase;
     if (typeof ph !== 'string') continue;
@@ -169,6 +177,7 @@ export function segmentTrials(rows) {
         probes: [],
         patternPhase: false,
         patternRow: null,
+        debugRevealSeen: Boolean(r.trial_uid) && revealUids.has(r.trial_uid),
         restBefore: restSeen,
         rows: [r],
       };
@@ -181,6 +190,12 @@ export function segmentTrials(rows) {
       continue;
     }
     if (!cur) continue;
+    /* Experimenter reveal toggle (src/debug/reveal.js): no phase regex matches it, so it is
+     * noted on the window here and never enters the trial's own rows. */
+    if (ph === 'debug_reveal') {
+      if (r.debug_reveal_on === true && !r.trial_uid) cur.debugRevealSeen = true;
+      continue;
+    }
     if (ph === 'pattern_phase') {
       cur.patternPhase = true;
       cur.patternRow = r;
@@ -256,6 +271,7 @@ export const TRIALS_COLUMNS = [
   'encoding_onset_ts_ms',
   'plan_source',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'guard_flags',
   'guard_n',
   'user_gain',
@@ -333,6 +349,7 @@ export const STARS_COLUMNS = [
   'guard_n',
   'user_gain',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'px_per_mm',
   'build_id',
 ];
@@ -415,6 +432,7 @@ export const PROBES_COLUMNS = [
   'audio_base_latency_ms',
   'tone_error',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'px_per_mm',
   'build_id',
 ];
@@ -499,6 +517,7 @@ export const EVENTS_COLUMNS = [
   'position_matches_runtime',
   'trial_star_excluded',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'px_per_mm',
   'build_id',
 ];
@@ -636,6 +655,8 @@ export const COLUMN_DOCS = {
     'Probe onset (animation-frame time of the first frame of the probe node) relative to encoding onset, ms; the origin of `rt_ms`.',
   trial_guard_excluded:
     'True if a display-guard event (zoom change, fullscreen loss, tab hidden, ...) was flagged on any row of the trial. This is the flag for the pre-registered guard exclusion.',
+  debug_reveal_seen:
+    'True if the experimenter secret grid reveal (G G, src/debug/reveal.js) was switched on at any time during the trial, so the answers were visible. Exclude such trials. Separate from trial_guard_excluded, which stays about display guards.',
   guard_flags:
     'Display-guard events recorded since the previous trial, comma separated. Empty if none.',
   guard_n: 'Number of display-guard events behind guard_flags.',
@@ -984,6 +1005,7 @@ function buildTidyForParticipant(participantId, rows, sessionMeta = {}) {
 
     const base = {
       trial_guard_excluded: flagged.length > 0,
+      debug_reveal_seen: w.debugRevealSeen === true,
       participant_id: participantId,
       trial_seq_session: seqNo,
       trial_uid: uid,
@@ -1656,6 +1678,7 @@ const BOOLEAN_COLUMNS = new Set([
   'said_yes',
   'probe_correct',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'key_log_overflow',
   'displayed',
   'truncated',

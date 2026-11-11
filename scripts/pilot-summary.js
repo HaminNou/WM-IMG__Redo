@@ -201,9 +201,13 @@ export function summariseParticipant(runs, { session, sourceLabel, nFiles } = {}
     build_id: session?.build_id ?? null,
     schema_version: session?.schema_version ?? null,
     is_pilot_run: session?.is_pilot_run ?? false,
+    debug_mode: session?.debug_mode === true || rules.debug_session === true,
     pilot_label: session?.pilot_label ?? null,
     is_preview: session?.params?.is_preview ?? null,
-    sample_class: sampleClass(session),
+    sample_class: sampleClass({
+      ...session,
+      debug_mode: session?.debug_mode === true || rules.debug_session === true,
+    }),
     started_at_iso: session?.started_at_iso ?? null,
     session_duration_min: estimateSessionDurationMin(rows),
     n_total_rows: rows.length,
@@ -295,6 +299,7 @@ function extractSessionFromChunkEnvelope(env) {
     build_id: env.build_id,
     schema_version: env.schema_version,
     is_pilot_run: env.is_pilot_run,
+    debug_mode: env.debug_mode,
     pilot_label: env.pilot_label,
     started_at_iso: env.started_at_iso,
     user_agent: env.user_agent,
@@ -428,6 +433,7 @@ export function aggregate(perParticipant, opts = {}) {
     classOf(s) === 'real' || (expectPilot === true && classOf(s) === 'pilot');
   const sampled = perParticipant.filter(isCounted);
   const notCountedPilot = perParticipant.filter((s) => !isCounted(s) && classOf(s) === 'pilot');
+  const notCountedDebug = perParticipant.filter((s) => !isCounted(s) && classOf(s) === 'debug');
   const notCountedPreview = perParticipant.filter((s) => !isCounted(s) && classOf(s) === 'preview');
   const nExcluded = sampled.filter((s) => s.attention.excluded).length;
   const exclusionRate = sampled.length > 0 ? nExcluded / sampled.length : null;
@@ -488,6 +494,13 @@ export function aggregate(perParticipant, opts = {}) {
       severity: 'warning',
       code: 'PILOT_SESSIONS_NOT_COUNTED',
       message: `${notCountedPilot.length} pilot session(s) (is_pilot_run=true; ${notCountedPilot.filter((x) => x.completed).length} completed) are not counted toward the sampling plan of this main batch`,
+    });
+  }
+  if (notCountedDebug.length > 0) {
+    issues.push({
+      severity: 'warning',
+      code: 'DEBUG_SESSIONS_NOT_COUNTED',
+      message: `${notCountedDebug.length} debug session(s) (debug_mode=true: the experimenter trace or grid reveal was on; ${notCountedDebug.filter((x) => x.completed).length} completed) are not counted and must be excluded from analysis`,
     });
   }
   if (notCountedPreview.length > 0) {
@@ -553,7 +566,9 @@ export function aggregate(perParticipant, opts = {}) {
 function renderPerParticipant(s) {
   const lines = [];
   lines.push(BOLD(`\n${basename(s.source ?? '(stream)')}`));
-  const flag = s.is_pilot_run ? CYAN('[PILOT]') : '';
+  const flag = [s.is_pilot_run ? CYAN('[PILOT]') : '', s.debug_mode ? CYAN('[DEBUG]') : '']
+    .filter(Boolean)
+    .join(' ');
   lines.push(`  pid=${s.prolific_pid ?? '(none)'}  build=${s.build_id ?? '(none)'}  ${flag}`);
   lines.push(
     `  rows=${s.n_total_rows} (main=${s.n_main_rows}, practice=${s.n_practice_rows})  duration≈${formatMin(s.session_duration_min)}`

@@ -66,6 +66,7 @@ export function buildSessionInfo(session, calibration, env = {}) {
     is_preview: session.params.is_preview === true,
     is_pilot_run: session.is_pilot_run === true,
     pilot_label: session.pilot_label ?? null,
+    debug_mode: session.debug_mode === true,
     prng_algorithm: PRNG_ALGORITHM,
     prng_seed_string: session.seed_string ?? null,
     prng_seed_uint32: session.prng_seed_uint32 ?? null,

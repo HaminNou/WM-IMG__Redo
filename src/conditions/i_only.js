@@ -110,6 +110,7 @@ function gatePreambleNodes(params) {
       background_shade: params.background_shade,
       trialType: 'i_only',
       prominent: isFirstPracticeTrial(params),
+      traceParams: params,
       data: {
         rotation_deg: params.rotation_deg,
         background_shade: params.background_shade,

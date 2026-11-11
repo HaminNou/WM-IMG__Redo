@@ -40,6 +40,7 @@
  */
 
 import { stopAllScheduledAudio, setAudioMuted } from './audio/dsp.js';
+import { trace } from './debug/trace.js';
 
 let installed = false;
 let installedHandler = null;
@@ -225,6 +226,7 @@ export function getHiddenNavTrialStartHook() {
     if (trial?._hidden_nav_checkpoint === true) {
       if (skipUntilNextCheckpoint) skipUntilNextCheckpoint = false;
       setAudioMuted(false);
+      trace.mute(false);
       return;
     }
     if (!skipUntilNextCheckpoint) {
@@ -237,9 +239,12 @@ export function getHiddenNavTrialStartHook() {
        * its next `await ctl.wait(…)` resolution without firing further
        * tones, regardless of what the gate is doing now. */
       setAudioMuted(false);
+      trace.mute(false);
       return;
     }
     if (!trial || typeof trial !== 'object') return;
+    /* Experimenter trace: close the trial that was skipped and keep the neutralised ones silent. */
+    trace.mute(true);
     trial.trial_duration = 0;
     trial.choices = 'NO_KEYS';
   };
@@ -340,6 +345,7 @@ export function installHiddenNav(jsPsych) {
     }
 
     /* key === 'r' */
+    trace.abort('experimenter navigation (R)');
     const { trimmedHistory, prevStepId } = findPreviousStepId(meta.stepId);
     const prevFactory = prevStepId ? stepFactories.get(prevStepId) : null;
     if (!prevFactory) return;

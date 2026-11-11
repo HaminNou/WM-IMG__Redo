@@ -39,6 +39,9 @@ import { uploadProgressNode, completionRedirectNode } from './conditions/debrief
 import { initStorage, appendTrialRow, recordWriteFailure } from './storage.js';
 import { assembleInstructionsAndPractice } from './instructions/index.js';
 import { assembleQuestionnaireChain } from './questionnaire/index.js';
+import { installReveal } from './debug/reveal.js';
+import { trace } from './debug/trace.js';
+import { emitAuxDataRow } from './conditions/shared.js';
 import { installHiddenNav, getHiddenNavTrialStartHook } from './hidden-nav.js';
 import { getToneBank } from './audio/tones.js';
 /* Note: `installVoiceoverSlideObserver` is intentionally NOT imported any
@@ -137,6 +140,7 @@ const jsPsych = initJsPsych({
   },
   on_trial_finish: stampFinishedTrial,
   on_finish: () => {
+    trace.abort('end of task');
     markUploadDone();
     /* Stamp session-level metadata onto every row for the analyst. Upload
      * already ran in the upload-progress node; this just adds session-wide
@@ -151,6 +155,7 @@ const jsPsych = initJsPsych({
         is_preview: session.params.is_preview,
         is_pilot_run: session.is_pilot_run,
         pilot_label: session.pilot_label,
+        debug_mode: session.debug_mode === true,
         prng_seed_uint32: session.prng_seed_uint32,
         schema_version: session.schema_version,
         build_id: session.build_id,
@@ -167,6 +172,11 @@ window.jsPsych = jsPsych;
 if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('devnav')) {
   installHiddenNav(jsPsych);
 }
+
+/* Experimenter debug tools (console trace + secret G-G grid reveal). Both are inert
+ * unless the URL has debug=1 on a pilot / dev / localhost session (see DEBUGGING.md). */
+installReveal({ emitRow: emitAuxDataRow });
+trace.banner({ seed: session.seed_string });
 
 /* Voiceover scope: read-aloud is restricted to the per-task demos.
  * Instruction decks, calibration intros, rest screens, debrief, consent,

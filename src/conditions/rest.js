@@ -37,6 +37,7 @@ import {
 } from './shared.js';
 import { uploadConsentAndPractice, uploadCheckpoint } from '../uploader.js';
 import { getSessionObject } from '../storage.js';
+import { traceMarker } from '../debug/trace-adapters.js';
 
 const COUNTDOWN_ID = 'rest-countdown';
 const TICK_MS = 1000;
@@ -94,6 +95,7 @@ export function restNode({ durationS, blockLabel, message, heading, session } = 
     trial_duration: totalMs,
     on_load: () => {
       stampTrialData('rest_started_ts_ms', performance.now());
+      traceMarker(`REST ${totalS} s (${blockLabel ?? 'inter_block'})`);
 
       /* Safety upload. The inter-block rest also sends the consent and
        * practice buckets; every rest sends a checkpoint file. It runs in the
@@ -180,6 +182,7 @@ export function resumeAfterRestGateNode({ blockLabel } = {}) {
     `,
     choices: 'NO_KEYS',
     on_load: () => {
+      traceMarker('REST over: waiting for both arrow keys');
       const leftEl = document.getElementById(RESUME_LEFT_KBD_ID);
       const rightEl = document.getElementById(RESUME_RIGHT_KBD_ID);
       const promptEl = document.getElementById(PROMPT_ID);

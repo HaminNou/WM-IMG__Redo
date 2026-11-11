@@ -646,6 +646,13 @@ export function groupTrialRows(rowsByParticipant) {
   const groups = new Map();
   const passes = new Map();
   for (const [pid, rows] of rowsByParticipant.entries()) {
+    /* Trials in which the experimenter's secret grid reveal was switched on (a debug_reveal
+     * row names the trial_uid; the toggle can precede the gate row of its trial). */
+    const revealUids = new Set(
+      rows
+        .filter((r) => r?.phase === 'debug_reveal' && r.debug_reveal_on === true && r.trial_uid)
+        .map((r) => r.trial_uid)
+    );
     for (const r of rows) {
       const trialType = trialTypeFromPhase(r.phase);
       if (!trialType) continue;
@@ -665,6 +672,7 @@ export function groupTrialRows(rowsByParticipant) {
           trial_index_in_block: r.trial_index_in_block,
           attempt: passes.get(baseKey) ?? 1,
           guard_flagged: false,
+          debug_reveal_seen: false,
           encoding: null,
           probes: [],
           stars: [],
@@ -672,6 +680,7 @@ export function groupTrialRows(rowsByParticipant) {
       }
       const g = groups.get(key);
       if (typeof r.guard_flags === 'string' && r.guard_flags) g.guard_flagged = true;
+      if (r.trial_uid && revealUids.has(r.trial_uid)) g.debug_reveal_seen = true;
       const phase = r.phase;
       if (phase.endsWith('_encoding')) g.encoding = r;
       else if (phase.endsWith('_probe')) g.probes.push(r);
@@ -720,6 +729,7 @@ const SESSION_META_COLUMNS = Object.freeze([
   'Build_ID',
   'Schema_Version',
   'Pilot_Run',
+  'Debug_Mode',
   'Pilot_Label',
 ]);
 
@@ -731,12 +741,18 @@ function correct01(row, correctFlag) {
 
 /* Trial-level identity columns shared by every wide file: practice attempts 1 and 2 share the
  * same Participant/Block/Trial key, so Attempt (and Is_Practice) disambiguate them. */
-const TRIAL_FLAG_COLUMNS = Object.freeze(['Is_Practice', 'Attempt', 'Trial_Guard_Excluded']);
+const TRIAL_FLAG_COLUMNS = Object.freeze([
+  'Is_Practice',
+  'Attempt',
+  'Trial_Guard_Excluded',
+  'Debug_Reveal_Seen',
+]);
 function trialFlagFields(group) {
   return {
     Is_Practice: group.block_label === 'practice' ? 1 : 0,
     Attempt: group.attempt ?? 1,
     Trial_Guard_Excluded: group.guard_flagged === true ? 1 : 0,
+    Debug_Reveal_Seen: group.debug_reveal_seen === true ? 1 : 0,
   };
 }
 
@@ -796,6 +812,7 @@ function addSessionMeta(out, meta) {
   out.Build_ID = meta.build_id ?? NA;
   out.Schema_Version = meta.schema_version ?? NA;
   out.Pilot_Run = meta.is_pilot_run === true ? 1 : 0;
+  out.Debug_Mode = meta.debug_mode === true ? 1 : 0;
   out.Pilot_Label = meta.pilot_label ?? NA;
 }
 
@@ -1222,6 +1239,7 @@ const EVENTS_COLUMNS = Object.freeze([
   'Build_ID',
   'Schema_Version',
   'Pilot_Run',
+  'Debug_Mode',
   'Pilot_Label',
   /* 1-based companions (added with tidy 1.1.0; the columns above keep their old values) */
   'Slot_In_Stream',
@@ -1311,6 +1329,7 @@ function composeEventsRows(group, sessionMeta = {}) {
     Build_ID: sessionMeta.build_id ?? NA,
     Schema_Version: sessionMeta.schema_version ?? NA,
     Pilot_Run: sessionMeta.is_pilot_run === true ? 1 : 0,
+    Debug_Mode: sessionMeta.debug_mode === true ? 1 : 0,
     Pilot_Label: sessionMeta.pilot_label ?? NA,
   };
   /* Visible stimuli of the encoding stream in presentation order: serial position among
@@ -1507,6 +1526,7 @@ const CALIBRATION_COLUMNS = Object.freeze([
   'Build_ID',
   'Schema_Version',
   'Pilot_Run',
+  'Debug_Mode',
   'Pilot_Label',
   'Started_At_ISO',
   'Session_Duration_Min',
@@ -1624,6 +1644,7 @@ export function extractCalibrationRow(participantId, sessionMeta, rows) {
     Build_ID: sessionMeta.build_id ?? NA,
     Schema_Version: sessionMeta.schema_version ?? NA,
     Pilot_Run: sessionMeta.is_pilot_run === true ? 1 : 0,
+    Debug_Mode: sessionMeta.debug_mode === true ? 1 : 0,
     Pilot_Label: sessionMeta.pilot_label ?? NA,
     Started_At_ISO: sessionMeta.started_at_iso ?? NA,
     Session_Duration_Min: estimateSessionDurationMin(rows),
@@ -2085,6 +2106,7 @@ const PARTICIPANT_COLUMNS = Object.freeze([
   'Session_ID',
   'Build_ID',
   'Pilot_Run',
+  'Debug_Mode',
   'Pilot_Label',
   'Sample_Class',
   'Status',
@@ -2174,8 +2196,12 @@ export function buildParticipantSummaryRows(perParticipant) {
       Session_ID: session?.params?.session_id ?? NA,
       Build_ID: session?.build_id ?? NA,
       Pilot_Run: flag(Boolean(session?.is_pilot_run)),
+      Debug_Mode: flag(session?.debug_mode === true || r.debug_session === true),
       Pilot_Label: session?.pilot_label ?? NA,
-      Sample_Class: sampleClass(session),
+      Sample_Class: sampleClass({
+        ...session,
+        debug_mode: session?.debug_mode === true || r.debug_session === true,
+      }),
       Status: r.status,
       Completed: flag(r.completed),
       Retained: flag(r.retained),
@@ -2222,6 +2248,7 @@ const DEMOGRAPHICS_COLUMNS = Object.freeze([
   'Build_ID',
   'Schema_Version',
   'Pilot_Run',
+  'Debug_Mode',
   'Pilot_Label',
   'Handedness',
   'Education',
@@ -2250,6 +2277,7 @@ export function extractDemographicsRow(participantId, sessionMeta, rows) {
     Build_ID: sessionMeta.build_id ?? NA,
     Schema_Version: sessionMeta.schema_version ?? NA,
     Pilot_Run: sessionMeta.is_pilot_run === true ? 1 : 0,
+    Debug_Mode: sessionMeta.debug_mode === true ? 1 : 0,
     Pilot_Label: sessionMeta.pilot_label ?? NA,
     Handedness: resp.handedness ?? NA,
     Education: resp.education ?? NA,
@@ -2279,6 +2307,7 @@ export function buildExportManifest({
     ...new Set(perParticipant.map((p) => p.session.schema_version).filter(Boolean)),
   ];
   const pilotFlags = [...new Set(perParticipant.map((p) => Boolean(p.session.is_pilot_run)))];
+  const debugFlags = [...new Set(perParticipant.map((p) => p.session.debug_mode === true))];
   return {
     generated_at_iso: generatedAtIso,
     generator: {
@@ -2290,6 +2319,7 @@ export function buildExportManifest({
     build_ids: buildIds,
     schema_versions: schemaVersions,
     is_pilot_run_flags: pilotFlags,
+    debug_mode_flags: debugFlags,
     heterogeneity_flags: {
       build_id_heterogeneous: buildIds.length > 1,
       schema_version_heterogeneous: schemaVersions.length > 1,

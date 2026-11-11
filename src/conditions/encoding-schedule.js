@@ -70,6 +70,17 @@ import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { stopAllScheduledAudio } from '../audio/dsp.js';
 import { createTrialResponseButtons } from '../visuals/response-buttons.js';
 import {
+  traceEncodingStart,
+  traceSlotEvent,
+  traceStarOpen,
+  traceStarAnswer,
+  traceStarClosed,
+  traceKeyIssue,
+  traceToneIssue,
+  traceSetup,
+  traceEncodingCut,
+} from '../debug/trace-adapters.js';
+import {
   stampTrialData,
   judgeStarResponse,
   emitAuxDataRow,
@@ -297,6 +308,8 @@ function startRun(ctx) {
     ? createTrialResponseButtons({ labels: ctx.response_buttons, anchorEl: frame.wrapper })
     : null;
   const t0 = performance.now();
+  /* Experimenter trace (null unless debug mode is on): the planned stream, printed once. */
+  const traceSlots = traceEncodingStart(params, { m_kind, s_kind, events: plan.events, t0 });
   const timers = new Set();
   const frames = new Set();
   let aborted = false;
@@ -365,7 +378,10 @@ function startRun(ctx) {
     if (key_log.length < KEY_LOG_MAX) key_log.push([k === KEY_ON ? 'R' : 'L', Math.round(t - t0)]);
     else summary.key_log_overflow = true;
     if (openWindow) openWindow.onKey(k, t);
-    else summary.keys_outside_window += 1;
+    else {
+      summary.keys_outside_window += 1;
+      traceKeyIssue('outside', 'extra', k);
+    }
   };
   window.addEventListener('keydown', onKey, { capture: true });
 
@@ -397,6 +413,7 @@ function startRun(ctx) {
        * records what was rendered and not only what was planned. */
       w.drawn_rotation_deg = frame.rotation_deg;
       w.onset = ts;
+      traceStarOpen(ev.slot, star, ts);
       ctx.slot_onsets_ts_ms[ev.slot] = Math.round(ts);
       w.onsetLagMs = round1(ts - (t0 + ev.start_ms));
       afterMs(ts + STAR_DURATION_MS - performance.now(), () => closeStarWindow(w, false));
@@ -406,19 +423,23 @@ function startRun(ctx) {
     w.onKey = (k, t) => {
       if (w.closed || w.onset === null) {
         summary.keys_outside_window += 1;
+        traceKeyIssue('outside', 'early', k);
         return;
       }
       const rt = t - w.onset;
       if (rt < 0) {
         w.early += 1;
+        traceKeyIssue('star', 'early', k);
         return;
       }
       if (rt >= STAR_DURATION_MS) {
         w.late += 1;
+        traceKeyIssue('star', 'late', k);
         return;
       }
       if (w.responded) {
         w.extra += 1;
+        traceKeyIssue('star', 'extra', k);
         return;
       }
       w.responded = true;
@@ -431,6 +452,7 @@ function startRun(ctx) {
       w.correct = judged.correct;
       /* Recolour in the key handler; it is painted on the next frame. */
       recolourStar(w.el, w.correct ? FEEDBACK_COLOR_CORRECT : FEEDBACK_COLOR_WRONG);
+      traceStarAnswer(ev.slot, star, w, t);
     };
     return w;
   }
@@ -451,6 +473,7 @@ function startRun(ctx) {
         removeAndRecordOffset(w.slot, w.el);
       }
     }
+    traceStarClosed(w.slot, w, truncated);
     writeStarRow(w, truncated);
   }
 
@@ -498,10 +521,17 @@ function startRun(ctx) {
     nextFrame((ts) => {
       setRotation(frame, angle_deg);
       summary.rotation_start_ts_ms = Math.round(ts);
+      traceSetup('rotation_turn', { rotation_deg: angle_deg, duration_ms: ROTATION_ANIMATION_MS });
     });
     at(ROTATION_ANIMATION_MS + 50, () => {
       frame.rotor.style.transition = '';
+      traceSetup('rotation_hold', {
+        rotation_deg: angle_deg,
+        duration_ms: PRE_ENCODING_PAD_MS - ROTATION_ANIMATION_MS,
+      });
     });
+  } else {
+    traceSetup('blank_pad', { duration_ms: PRE_ENCODING_PAD_MS });
   }
 
   /* ---- Slots ---- */
@@ -557,16 +587,20 @@ function startRun(ctx) {
             ctx.slot_audio_context_times_ms[ev.slot] = Math.round(when * 1000);
             Promise.resolve(playToneByCell(item.cell, { when })).catch((err) => {
               event.error = String(err?.message ?? err);
+              traceToneIssue({ error: event.error }, ev.slot);
             });
           } catch (err) {
             event.error = String(err?.message ?? err);
           }
+          traceSlotEvent(traceSlots, ev.slot, planned);
+          traceToneIssue(event, ev.slot);
         });
       } else {
         const cell = (item ?? dummy)?.cell;
         at(ev.start_ms, () => {
           nextFrame((ts) => {
             ctx.slot_onsets_ts_ms[ev.slot] = Math.round(ts);
+            traceSlotEvent(traceSlots, ev.slot, ts);
             if (cell === undefined) return;
             const el =
               m_kind === 'dot' && item
@@ -588,6 +622,7 @@ function startRun(ctx) {
         at(ev.start_ms, () => {
           nextFrame((ts) => {
             ctx.slot_onsets_ts_ms[ev.slot] = Math.round(ts);
+            traceSlotEvent(traceSlots, ev.slot, ts);
             if (cell === undefined) return;
             const el = addOpenSquare(frame, cell, { visible: false });
             afterMs(ts + ev.visible_ms - performance.now(), () =>
@@ -607,6 +642,7 @@ function startRun(ctx) {
 
   function abort(reason) {
     if (aborted) return;
+    if (reason !== 'complete') traceEncodingCut(reason);
     /* Write any star that is still open or has not started, before the
      * timers are cleared. */
     if (openWindow) closeStarWindow(openWindow, true);
@@ -614,6 +650,7 @@ function startRun(ctx) {
       for (const star of params.stars) {
         if (!closedSlots.has(star.slot_index_in_seq)) {
           closedSlots.add(star.slot_index_in_seq);
+          traceStarClosed(star.slot_index_in_seq, { onset: null }, true);
           writeStarRow(
             {
               slot: star.slot_index_in_seq,

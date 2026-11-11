@@ -16,6 +16,7 @@
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
+import { traceMarker } from '../debug/trace-adapters.js';
 import { continueHintHtml } from '../visuals/continue-hint.js';
 import {
   ARROW_KEY_SIDE,
@@ -84,6 +85,10 @@ export function practiceButtonsNoticeNode(params, task, labels) {
     `,
     choices: [' '],
     on_load: () => {
+      traceMarker(
+        'PRACTICE NOTICE: the response buttons will not be shown in the main trials',
+        false
+      );
       ensureResponseButtonStyles();
       const zoom = document.querySelector('.practice-buttons-notice-zoom');
       if (zoom) zoomIn(zoom);

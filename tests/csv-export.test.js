@@ -1153,7 +1153,7 @@ describe('extractDemographicsRow', () => {
     expect(row.Education).toBe('NA');
   });
 
-  it('exposes a column list with the 7-column shape for serialisation', () => {
+  it('exposes a column list with the 8-column shape for serialisation', () => {
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('Age');
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('Sex');
     expect(DEMOGRAPHICS_COLUMNS).not.toContain('First_Languages');
@@ -1163,7 +1163,7 @@ describe('extractDemographicsRow', () => {
       expect(DEMOGRAPHICS_COLUMNS).not.toContain(removed);
     for (const removed of ['Hearing', 'Hearing_Note', 'Vision', 'Medication', 'Medication_Note'])
       expect(DEMOGRAPHICS_COLUMNS).not.toContain(removed);
-    expect(DEMOGRAPHICS_COLUMNS.length).toBe(7);
+    expect(DEMOGRAPHICS_COLUMNS.length).toBe(8);
   });
 });
 
@@ -1418,6 +1418,7 @@ describe('column lists', () => {
         "Is_Practice",
         "Attempt",
         "Trial_Guard_Excluded",
+        "Debug_Reveal_Seen",
         "Background_Shade",
         "Rotation_Deg",
         "Pattern_Reminder",
@@ -1470,6 +1471,7 @@ describe('column lists', () => {
         "Build_ID",
         "Schema_Version",
         "Pilot_Run",
+        "Debug_Mode",
         "Pilot_Label",
       ]
     `);

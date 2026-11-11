@@ -134,6 +134,7 @@ function extractSessionFromEnvelope(env) {
     schema_version: env.schema_version,
     prng_seed_uint32: env.prng_seed_uint32,
     is_pilot_run: env.is_pilot_run,
+    debug_mode: env.debug_mode,
     pilot_label: env.pilot_label,
     started_at_iso: env.started_at_iso,
     user_agent: env.user_agent,

@@ -64,6 +64,7 @@ import {
   composeTidyTables,
 } from './tidy-tables.js';
 import { findLeaks, writeKeyFile } from './pseudonymise.js';
+import { debugRunsWarning } from './participant-rules.js';
 
 export const TRIALS_CSV_VERSION = '1.0.0';
 
@@ -81,6 +82,7 @@ export const LEAD_COLUMNS = Object.freeze([
   'is_analysed_run',
   'is_preview',
   'is_pilot_run',
+  'debug_mode',
   'study_id',
   'session_id',
   'row_key',
@@ -108,6 +110,7 @@ export const TRIAL_CONTEXT_COLUMNS = Object.freeze([
   'trial_star_excluded',
   'star_correct_all',
   'trial_guard_excluded',
+  'debug_reveal_seen',
   'guard_flags',
   'guard_n',
   'user_gain',
@@ -195,6 +198,7 @@ export function buildTrialTable(
       is_analysed_run: analysed !== null && analysed !== undefined && analysed === e.run_id,
       is_preview: params.is_preview ?? null,
       is_pilot_run: e.session?.is_pilot_run ?? null,
+      debug_mode: e.session?.debug_mode ?? null,
       study_id: params.study_id ?? null,
       session_id: params.session_id ?? null,
     });
@@ -262,11 +266,15 @@ export function buildTrialTable(
   const byTask = {};
   const byBlock = {};
   const perRunTrials = new Map();
+  const debugRuns = new Map();
   for (const r of out) {
     byTask[r.condition] = (byTask[r.condition] ?? 0) + 1;
     byBlock[r.block_label] = (byBlock[r.block_label] ?? 0) + 1;
     const k = `${r.subject}|${r.participant_id}|${r.run_id}`;
     perRunTrials.set(k, (perRunTrials.get(k) ?? 0) + 1);
+    if (r.debug_mode === true || r.debug_reveal_seen === true) {
+      debugRuns.set(k, { subject: r.subject ?? null, run_id: r.run_id ?? null });
+    }
   }
   return {
     rows: out,
@@ -283,6 +291,7 @@ export function buildTrialTable(
           n_trials: n,
         };
       }),
+      debug_runs: [...debugRuns.values()],
       context_mismatches: counts.contextMismatches,
       unplaced_child_rows: counts.unplacedChildRows,
       duplicate_positions: counts.duplicatePositions,
@@ -367,6 +376,8 @@ export function composeTrialCsv(perParticipant, opts = {}) {
     trials_by_task: s.trials_by_task,
     trials_by_block: s.trials_by_block,
     trials_per_run: s.trials_per_run,
+    /* names only (subject number + run id): never a raw Prolific id */
+    debug_runs: s.debug_runs,
     columns: dictionary,
     checks: {
       csv_round_trip_ok: true,
@@ -458,6 +469,7 @@ async function main(argv) {
       `  every cell re-read and matched; ${manifest.checks.context_mismatches} context mismatch(es), ${manifest.checks.unplaced_child_rows} unplaced child row(s)\n` +
       `  file:     ${outPath}\n  manifest: ${manifestPath}`
   );
+  if (manifest.debug_runs.length > 0) console.error(debugRunsWarning(manifest.debug_runs.length));
   for (const r of table.summary.trials_per_run) {
     console.error(`  subject ${r.subject ?? 'NA'}, run ${r.run_id}: ${r.n_trials} trials`);
   }

@@ -24,7 +24,7 @@
  *                 Prolific id gets the next number the first time it is seen and keeps it
  *                 forever, so adding participants later never renumbers anyone. Sessions
  *                 without a Prolific id (previews) have no subject number (NA).
- *   1. identity   participant_id, prolific_pid, study_id, session_id, is_preview, is_pilot_run,
+ *   1. identity   participant_id, prolific_pid, study_id, session_id, is_preview, is_pilot_run, debug_mode,
  *                 pilot_label, build_id, schema_version. Filled on EVERY row from the file
  *                 envelope; where a raw row carries its own value (the `session_info` row does)
  *                 that value is kept and a disagreement is counted in the manifest.
@@ -88,7 +88,12 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadAndFlattenDumps } from './dump-loader.js';
 import { expandInputPaths, formatCsvValue, trialTypeFromPhase, UTF8_BOM } from './csv-export.js';
-import { evaluateRun, summariseParticipantRuns } from './participant-rules.js';
+import {
+  debugRunsWarning,
+  evaluateRun,
+  isDebugRun,
+  summariseParticipantRuns,
+} from './participant-rules.js';
 import {
   defaultPrivateDir,
   findLeaks,
@@ -114,6 +119,7 @@ export const IDENTITY_COLUMNS = Object.freeze([
   'session_id',
   'is_preview',
   'is_pilot_run',
+  'debug_mode',
   'pilot_label',
   'build_id',
   'schema_version',
@@ -178,6 +184,7 @@ const SESSION_EVENT_PHASES = new Set([
   'back_pressed',
   'runtime_error',
   'runtime_diagnostic',
+  'debug_reveal',
 ]);
 
 const END_PHASES = new Set(['end_of_task_intro', 'upload_session_end', 'completion_redirect']);
@@ -484,6 +491,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       session_id: params.session_id ?? null,
       is_preview: params.is_preview ?? null,
       is_pilot_run: entry.session?.is_pilot_run ?? null,
+      debug_mode: entry.session?.debug_mode ?? null,
       pilot_label: entry.session?.pilot_label ?? null,
       build_id: entry.session?.build_id ?? null,
       schema_version: entry.session?.schema_version ?? null,
@@ -494,6 +502,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       run_id: entry.run_id ?? null,
       run_status: status,
       is_analysed_run: isAnalysed,
+      is_debug_run: entry.session?.debug_mode === true || isDebugRun(entry.rows),
       n_rows: entry.rows.length,
       seq_min: Math.min(...entry.rows.map((r) => r?.seq).filter(Number.isFinite)),
       seq_max: Math.max(...entry.rows.map((r) => r?.seq).filter(Number.isFinite)),
@@ -781,6 +790,10 @@ export function composeRawCsv(perParticipant, opts = {}) {
       sha256: sha256(csv),
     },
     runs: table.summary.runs,
+    /* names only (subject number + run id): never a raw Prolific id */
+    debug_runs: table.summary.runs
+      .filter((r) => r.is_debug_run)
+      .map((r) => ({ subject: r.subject, run_id: r.run_id })),
     rows_by_stage: table.summary.rows_by_stage,
     rows_by_task: table.summary.rows_by_task,
     phases_by_stage: table.summary.phases_by_stage,
@@ -989,6 +1002,7 @@ async function main(argv) {
       `  duplicates removed: ${manifest.input.duplicate_rows_dropped}; verification: every cell re-read and matched\n` +
       `  file:     ${outPath}\n  manifest: ${manifestPath}`
   );
+  if (manifest.debug_runs.length > 0) console.error(debugRunsWarning(manifest.debug_runs.length));
   for (const r of s.runs) {
     console.error(
       `  run ${r.run_id}: ${r.run_status}${r.is_analysed_run ? ' (analysed)' : ''}, ${r.n_rows} rows, seq ${r.seq_min}-${r.seq_max}, ${r.seq_gaps.length} gap(s)`

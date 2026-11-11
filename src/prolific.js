@@ -27,6 +27,7 @@ import {
 } from './storage.js';
 import { buildCompletionUrl } from './uploader.js';
 import { readPilotMode } from './pilot-mode.js';
+import { debugSessionStamp } from './debug/debug-mode.js';
 
 const REQUIRED_PARAMS = ['PROLIFIC_PID', 'STUDY_ID', 'SESSION_ID'];
 
@@ -141,6 +142,8 @@ export function initSession(rawParams = readProlificParams(), pilotMode = readPi
     is_pilot_run: pilotMode.is_pilot_run,
     pilot_label: pilotMode.pilot_label,
     pilot_source: pilotMode.source,
+    /* Experimenter debug tools (src/debug) were active; analysts exclude such sessions. */
+    ...debugSessionStamp(),
   };
 
   void initStorage()

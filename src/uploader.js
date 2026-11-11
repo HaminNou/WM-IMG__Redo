@@ -265,6 +265,7 @@ export function buildBucketEnvelope({ session, bucket, bucketIndex, totalBuckets
     build_id: session.build_id,
     is_pilot_run: session.is_pilot_run ?? false,
     pilot_label: session.pilot_label ?? null,
+    debug_mode: session.debug_mode === true,
     started_at_iso: session.started_at_iso,
     user_agent: session.user_agent,
     run_id: getRunId(),
