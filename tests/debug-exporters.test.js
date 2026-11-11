@@ -158,6 +158,8 @@ describe('exporters, end to end', () => {
     const out = join(work, 'raw.csv');
     const r = node('raw-to-csv.js', ['--keep-pid', '--out', out, join(work, 'in')]);
     expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/WARNING: 1 run\(s\) are DEBUG sessions/);
+    expect(JSON.parse(readFileSync(`${out}.manifest.json`, 'utf-8')).debug_runs).toHaveLength(1);
     const { cols, rows } = readTable(out);
     expect(cols).toContain('debug_mode');
     expect(cols.indexOf('debug_mode')).toBe(cols.indexOf('is_pilot_run') + 1);
@@ -173,6 +175,8 @@ describe('exporters, end to end', () => {
     const out = join(work, 'trials.csv');
     let r = node('trials-to-csv.js', ['--keep-pid', '--out', out, join(work, 'in')]);
     expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/WARNING: 1 run\(s\) are DEBUG sessions/);
+    expect(JSON.parse(readFileSync(`${out}.manifest.json`, 'utf-8')).debug_runs).toHaveLength(1);
     const { cols, rows } = readTable(out);
     expect(cols).toContain('debug_mode');
     expect(cols).toContain('debug_reveal_seen');
@@ -187,6 +191,8 @@ describe('exporters, end to end', () => {
     const ana = join(work, 'analysis.csv');
     r = node('analysis-csv.js', ['--in', out, '--out', ana]);
     expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toMatch(/WARNING: 1 run\(s\) are DEBUG sessions/);
+    expect(JSON.parse(readFileSync(`${ana}.manifest.json`, 'utf-8')).debug_runs).toHaveLength(1);
     const a = readTable(ana);
     expect(a.cols).toContain('debug_mode');
     expect(a.cols).toContain('debug_reveal_seen');

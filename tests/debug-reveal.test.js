@@ -232,6 +232,18 @@ describe('overlay', () => {
     frame.wrapper.remove();
     expect(document.querySelector('.debug-reveal')).toBeNull();
   });
+  it('pressed on a screen with a grid but no trial (a demo): console note only, no overlay, no row', () => {
+    window.jsPsych = {
+      getCurrentTrial: () => ({ data: { phase: 'demo_d_only' } }),
+    };
+    const frame = mountFrame();
+    gg();
+    expect(isRevealOn()).toBe(false);
+    expect(overlayOf(frame)).toBeNull();
+    expect(rows).toHaveLength(0);
+    expect(logSpy.mock.calls.some((c) => String(c[0]).includes('only inside a trial'))).toBe(true);
+  });
+
   it('pressed with no grid on screen: console note only, no row, no state', () => {
     gg();
     expect(isRevealOn()).toBe(false);

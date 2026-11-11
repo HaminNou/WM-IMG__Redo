@@ -105,7 +105,9 @@ describe.each(TASKS)('trace content, %s (main trial)', (cond) => {
     expect(all).toContain('ITI');
     const imagery = cond === 'i_only' || cond === 'i_d' || cond === 'i_t';
     if (imagery) {
-      expect(all).toMatch(/ARROW CUE\s+arrow=[-+]?\d+°\s+rotation=/);
+      expect(all).toMatch(
+        /ARROW CUE\s+arrow=[-+]?\d+°\s+\((?:clockwise|counter-clockwise)\)\s+rotation=/
+      );
       expect(all).toContain('IMAGINATION');
       expect(all).toContain('ROTATION TURN');
       expect(all).toContain('ROTATION HOLD');

@@ -216,8 +216,12 @@ export function resetReveal() {
 
 function toggle() {
   const data = readTrialData();
-  if (!frameLive(currentFrame)) {
-    const note = 'reveal: no grid on screen (press G G inside a trial)';
+  /* No live trial (e.g. a demo_* instruction screen): do nothing but print a note. */
+  const noTrial = typeof data.trial_uid !== 'string' || data.trial_uid === '';
+  if (noTrial || !frameLive(currentFrame)) {
+    const note = noTrial
+      ? 'reveal: only inside a trial (press G G during a trial)'
+      : 'reveal: no grid on screen (press G G inside a trial)';
     let printed = false;
     try {
       printed = noteSink?.(note) === true;

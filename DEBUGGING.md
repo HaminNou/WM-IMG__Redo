@@ -45,7 +45,7 @@ TRIAL 17/120  [Stars + Dots]  main_a #17  pool 5  shade=gray  rotation=+37° (cl
   │  +4.00 s     ⤷ feedback GREEN
   └
   ┌ RECALL
-  │  +0.50 s  TEST 2/3  T_off  ● DOT  cell 18 (r3,c3)  OFF  TARGET (encoded at position 1)
+  │  +0.50 s  TEST 2/3  T_off  ● DOT  cell 18 (r3,c3)  OFF  TARGET (memory item 1)
   │  +1.53 s     ⤷ key ArrowRight → YES · correct answer NO → ✘ INCORRECT · rt 1034 ms · feedback RED
   │ (table: test, probe, tag, role T/F, correct answer, key, response, ✔/✘, rt, feedback)
   └

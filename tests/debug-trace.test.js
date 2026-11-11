@@ -146,7 +146,7 @@ describe('trace formatting (on)', () => {
     const l = lines('log').pop();
     expect(l).toContain('+1.50 s');
     expect(l).toContain('ARROW CUE');
-    expect(l).toContain('arrow=+90°');
+    expect(l).toContain('arrow=+90° (clockwise)');
     expect(l).toContain('rotation=-45° (counter-clockwise)');
     expect(l).toContain('duration=1000 ms');
     expect(l).toContain('shown=yes');
@@ -183,6 +183,9 @@ describe('trace formatting (on)', () => {
     expect(rows[1]).toMatchObject({ tag: 'OFF', tone: 'tone #4 523.3 Hz', tested: 'not tested' });
     expect(rows[2].kind).toContain('HIDDEN');
     expect(rows[2].cell).toBe('');
+    /* `slot` is the serial position 1-6 of the stream; there is no separate `pos` column. */
+    expect(rows.every((r) => !('pos' in r))).toBe(true);
+    expect(rows.map((r) => r.slot)).toEqual([1, 2, 3, 4]);
     clock += 3000;
     trace.encodingEvent(3, { kind: 'dot', cell: 7, on_pattern: true });
     expect(lines('log').pop()).toMatch(/\+3\.00 s\s+slot 3\s+● DOT\s+cell 7 \(r1,c2\)\s+ON/);
@@ -260,7 +263,7 @@ describe('trace formatting (on)', () => {
       encoded_pos: 1,
     });
     expect(lines('log').pop()).toMatch(
-      /TEST 2\/3\s+T_off\s+● DOT\s+cell 18 \(r3,c3\)\s+OFF\s+TARGET \(encoded at position 1\)/
+      /TEST 2\/3\s+T_off\s+● DOT\s+cell 18 \(r3,c3\)\s+OFF\s+TARGET \(memory item 1\)/
     );
     trace.probeResponse({
       key: 'ArrowRight',
@@ -508,5 +511,16 @@ describe('sub-groups close at the end of a stage, and mute', () => {
     const n = METHODS.reduce((k, m) => k + spies[m].mock.calls.length, 0);
     trace.mute(true);
     expect(METHODS.reduce((k, m) => k + spies[m].mock.calls.length, 0)).toBe(n);
+  });
+  it('warnings carry a time stamp, and lines on the encoding clock say so', () => {
+    trace.trialStart({ trial_type: 'i_d', rotation_deg: 20 });
+    clock += 2000;
+    trace.warn('something odd');
+    expect(lines('warn').pop()).toMatch(/\+2\.00 s\s+.*something odd/);
+    trace.encodingPlan([{ slot: 1, serial_pos: 1, kind: 'dot', cell: 7, on_pattern: true }]);
+    trace.setup('rotation_turn', { rotation_deg: 20, duration_ms: 500 });
+    expect(lines('log').pop()).toContain('(encoding clock)');
+    trace.setup('retention', { duration_ms: 2000 });
+    expect(lines('log').pop()).not.toContain('(encoding clock)');
   });
 });

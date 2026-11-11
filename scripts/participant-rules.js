@@ -67,6 +67,15 @@ export function isDebugRun(rows) {
   );
 }
 
+/**
+ * The one console warning line the exporters print when debug sessions were processed.
+ * @param {number} n number of debug runs
+ * @returns {string}
+ */
+export function debugRunsWarning(n) {
+  return `WARNING: ${n} run(s) are DEBUG sessions (debug_mode true or a reveal was used): exclude them from analysis`;
+}
+
 const MAIN_PHASE_ENCODING = /^(d_only|t_only|i_only|i_d|i_t)_encoding$/;
 
 /* ---------- Attention checks ---------- */

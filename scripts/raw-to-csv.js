@@ -88,7 +88,12 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadAndFlattenDumps } from './dump-loader.js';
 import { expandInputPaths, formatCsvValue, trialTypeFromPhase, UTF8_BOM } from './csv-export.js';
-import { evaluateRun, summariseParticipantRuns } from './participant-rules.js';
+import {
+  debugRunsWarning,
+  evaluateRun,
+  isDebugRun,
+  summariseParticipantRuns,
+} from './participant-rules.js';
 import {
   defaultPrivateDir,
   findLeaks,
@@ -497,6 +502,7 @@ export function buildRawTable(perParticipant, { analysedRunsOnly = false } = {})
       run_id: entry.run_id ?? null,
       run_status: status,
       is_analysed_run: isAnalysed,
+      is_debug_run: entry.session?.debug_mode === true || isDebugRun(entry.rows),
       n_rows: entry.rows.length,
       seq_min: Math.min(...entry.rows.map((r) => r?.seq).filter(Number.isFinite)),
       seq_max: Math.max(...entry.rows.map((r) => r?.seq).filter(Number.isFinite)),
@@ -784,6 +790,10 @@ export function composeRawCsv(perParticipant, opts = {}) {
       sha256: sha256(csv),
     },
     runs: table.summary.runs,
+    /* names only (subject number + run id): never a raw Prolific id */
+    debug_runs: table.summary.runs
+      .filter((r) => r.is_debug_run)
+      .map((r) => ({ subject: r.subject, run_id: r.run_id })),
     rows_by_stage: table.summary.rows_by_stage,
     rows_by_task: table.summary.rows_by_task,
     phases_by_stage: table.summary.phases_by_stage,
@@ -992,6 +1002,7 @@ async function main(argv) {
       `  duplicates removed: ${manifest.input.duplicate_rows_dropped}; verification: every cell re-read and matched\n` +
       `  file:     ${outPath}\n  manifest: ${manifestPath}`
   );
+  if (manifest.debug_runs.length > 0) console.error(debugRunsWarning(manifest.debug_runs.length));
   for (const r of s.runs) {
     console.error(
       `  run ${r.run_id}: ${r.run_status}${r.is_analysed_run ? ' (analysed)' : ''}, ${r.n_rows} rows, seq ${r.seq_min}-${r.seq_max}, ${r.seq_gaps.length} gap(s)`

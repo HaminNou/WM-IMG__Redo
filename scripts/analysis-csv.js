@@ -43,6 +43,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseCsv } from './raw-to-csv.js';
+import { debugRunsWarning } from './participant-rules.js';
 
 export const ANALYSIS_CSV_VERSION = '1.0.0';
 export const N_SLOTS = 6;
@@ -224,6 +225,16 @@ export function composeAnalysisCsv(text, opts = {}) {
     throw new Error(`analysis-csv: verification failed:\n  ${problems.slice(0, 10).join('\n  ')}`);
   }
 
+  /* Debug sessions, from the debug_mode column (and the reveal flag), one entry per subject. */
+  const dm = index.get('debug_mode');
+  const rv = index.get('debug_reveal_seen');
+  const sj = index.get('subject');
+  const debugSubjects = new Set();
+  for (const r of body) {
+    if (r[dm]?.text === 'TRUE' || r[rv]?.text === 'TRUE') debugSubjects.add(r[sj]?.text ?? 'NA');
+  }
+  const debugRuns = [...debugSubjects].map((s) => ({ subject: s === 'NA' ? null : Number(s) }));
+
   const kept = new Set(want);
   const informationless = (k) => new Set(body.map((r) => r[k].text)).size <= 1;
   const dropped = header.filter((h) => !kept.has(h));
@@ -239,6 +250,7 @@ export function composeAnalysisCsv(text, opts = {}) {
     },
     input: { n_trials: records.length - 1, n_columns: header.length, sha256: sha256(text) },
     output: { n_trials: body.length, n_columns: want.length, sha256: sha256(csv) },
+    debug_runs: debugRuns,
     kept_columns: want,
     dropped_columns: dropped,
     dropped_columns_without_information: droppedUninformative.length,
@@ -303,6 +315,7 @@ function main(argv) {
       `(${m.dropped_columns.length} dropped)\n  every cell re-read and matched\n` +
       `  file:     ${opts.outPath}\n  manifest: ${manifestPath}`
   );
+  if (m.debug_runs.length > 0) console.error(debugRunsWarning(m.debug_runs.length));
   process.exit(0);
 }
 

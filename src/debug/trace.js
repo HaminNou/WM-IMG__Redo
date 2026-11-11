@@ -261,7 +261,9 @@ function kv(detail) {
     if (v === null || v === undefined) continue;
     if (isNum(v) && k.endsWith('_deg')) {
       const name = k.slice(0, -4);
-      bits.push(`${name}=${signed(v)}${k === 'rotation_deg' ? ` (${dir(v)})` : ''}`);
+      bits.push(
+        `${name}=${signed(v)}${k === 'rotation_deg' || k === 'arrow_deg' ? ` (${dir(v)})` : ''}`
+      );
     } else if (isNum(v) && k.endsWith('_ms')) bits.push(`${k.slice(0, -3)}=${v} ms`);
     else if (typeof v === 'boolean') bits.push(`${k}=${v ? 'yes' : 'no'}`);
     else if (typeof v === 'object') bits.push(`${k}=${JSON.stringify(v)}`);
@@ -427,7 +429,16 @@ const setup = guarded((kind, detail) => {
   const label = String(kind ?? 'setup')
     .replace(/_/g, ' ')
     .toUpperCase();
-  out('log', [stamp(detail), '  ', [`${SYMBOLS.setup} ${label}`, 'label'], '  ', kv(detail)]);
+  /* Inside ENCODING the stamp is on the encoding clock (rotation turn / hold): say so. */
+  const clock = st.sub === 'ENCODING' ? '  (encoding clock)' : '';
+  out('log', [
+    stamp(detail),
+    '  ',
+    [`${SYMBOLS.setup} ${label}`, 'label'],
+    '  ',
+    kv(detail),
+    ...(clock ? [[clock, 'dim']] : []),
+  ]);
 });
 
 /**
@@ -455,8 +466,8 @@ const encodingPlan = guarded((slots, opts = {}) => {
     const tag = tagPart(s);
     const hidden = s?.kind === 'hidden';
     return {
-      slot: s?.slot,
-      pos: s?.serial_pos ?? '',
+      /* `slot` = serial position 1-6 of the stream (not the memory-item number of the recall lines) */
+      slot: s?.serial_pos ?? s?.slot,
       kind: `${KIND_SYMBOL[s?.kind] ?? '?'} ${String(s?.kind ?? '?').toUpperCase()}`,
       cell: hidden ? '' : s?.cell,
       'row,col':
@@ -536,7 +547,7 @@ const star = guarded((info = {}) => {
       out('log', [t, '  ', `   ${SYMBOLS.sub} star window CLOSED`]);
       if (info.responded === false) {
         st.tally.no_responses += 1;
-        out('warn', [[`${SYMBOLS.warn} star: no response`, 'warn']]);
+        out('warn', [t, '  ', [`${SYMBOLS.warn} star: no response`, 'warn']]);
       }
       break;
     case 'feedback':
@@ -583,10 +594,7 @@ const probe = guarded((info = {}) => {
     : 'TEST';
   const role =
     info.is_target === true
-      ? [
-          `TARGET${isNum(info.encoded_pos) ? ` (encoded at position ${info.encoded_pos})` : ''}`,
-          'head',
-        ]
+      ? [`TARGET${isNum(info.encoded_pos) ? ` (memory item ${info.encoded_pos})` : ''}`, 'head']
       : info.is_target === false
         ? ['FOIL', 'head']
         : ['?', 'dim'];
@@ -753,7 +761,11 @@ setRevealNote(revealNote);
  * @param {object} [data] logged as an extra expandable argument
  */
 const warn = guarded((text, data) => {
-  const args = fmt([[`${SYMBOLS.warn} ${String(text)}`, 'warn']]);
+  /* Same time stamp as the other warnings (encoding clock inside ENCODING, trial clock elsewhere). */
+  const args = fmt([
+    ...(st.open ? [stamp(data), '  '] : []),
+    [`${SYMBOLS.warn} ${String(text)}`, 'warn'],
+  ]);
   if (data !== undefined) args.push(data);
   console.warn(...args);
 });
