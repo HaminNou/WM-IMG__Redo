@@ -774,8 +774,12 @@ export function trialStartGateNode({
        * `generateMainBlockPair`. When present, mount or update the small gray
        * top-left "X/N" overlay. The overlay persists across every sub-node of
        * this trial and gets refreshed at the next gate. */
-      const overallN = data?.main_trial_number_overall;
-      const overallTotal = data?.main_trial_total;
+      /* Read the LIVE trial's data: `stampMainTrialNumbers` (main-blocks.js) replaces
+       * `node.data` after this factory ran, so the factory's own `data` argument never
+       * carries the number. The factory argument is the fallback (unit tests, bypass). */
+      const liveData = window.jsPsych?.getCurrentTrial?.()?.data ?? data;
+      const overallN = liveData?.main_trial_number_overall ?? data?.main_trial_number_overall;
+      const overallTotal = liveData?.main_trial_total ?? data?.main_trial_total;
       if (Number.isFinite(overallN) && Number.isFinite(overallTotal)) {
         setTrialCounter(overallN, overallTotal);
       }

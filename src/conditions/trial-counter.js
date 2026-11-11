@@ -4,11 +4,8 @@
  * retention, probes, feedback, ITI), so the participant always sees how far
  * they are through the main task, counted across both blocks.
  *
- * Colour. The trial pages are white or light gray and the rest of the UI is dark,
- * so one fixed colour cannot be legible on both. The gray is therefore chosen by a
- * stylesheet rule that follows the page: dark gray on a trial page (the
- * `data-trial-bg` attribute that `setTrialPageBackground` puts on <html>), light
- * gray on the dark surface. The rule does not depend on when the counter was mounted.
+ * Colour: one dark gray (`COUNTER_COLOUR`), legible on every screen it appears on (the
+ * white and light-gray trial pages and the light-gray rest and block screens).
  *
  * Top-left placement: least competing with the central fixation point, and where
  * participants of online experiments expect a progress indicator.
@@ -23,7 +20,6 @@
  * `setTrialCounter` is accepted and ignored so existing callers keep working.)
  */
 const COUNTER_ID = 'overall-trial-counter';
-const STYLE_ID = 'overall-trial-counter-style';
 
 /* Same palette as the trial-type tag pills above the circle (shared.js uses it for the
  * coloured dot in each pill). Okabe & Ito (2008), colourblind-safe. */
@@ -35,10 +31,11 @@ const TYPE_COLOURS = Object.freeze({
   i_t: '#D55E00', // vermillion
 });
 
-/* Gray on the dark surface and on the white / light-gray trial pages (WCAG contrast
- * about 6 : 1 on the dark surface, 4.6 : 1 on the light gray page, 7 : 1 on white). */
-export const COUNTER_COLOUR_ON_DARK = '#9a9a9a';
-export const COUNTER_COLOUR_ON_TRIAL_PAGE = '#5a5a5a';
+/* One gray for every screen the counter shows on: the white and light-gray trial pages and
+ * the light-gray rest / resume-gate / block screens (WCAG contrast 6.9 : 1 on white, 4.6 : 1
+ * on the light gray). The counter is mounted only after the tag slide and removed at the
+ * end-of-task screen, so it never sits on a dark page. */
+export const COUNTER_COLOUR = '#5a5a5a';
 
 const CONTAINER_STYLE =
   [
@@ -46,6 +43,7 @@ const CONTAINER_STYLE =
     'top: 12px',
     'left: 16px',
     'font-size: 13px',
+    `color: ${COUNTER_COLOUR}`,
     'font-weight: 500',
     'font-family: system-ui, sans-serif',
     'font-variant-numeric: tabular-nums',
@@ -55,17 +53,6 @@ const CONTAINER_STYLE =
     'user-select: none',
   ].join('; ') + ';';
 
-function ensureCounterStyle() {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = `
-    #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_DARK}; }
-    html[data-trial-bg] #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_TRIAL_PAGE}; }
-  `;
-  document.head.appendChild(style);
-}
-
 /**
  * Update (or mount) the trial-counter overlay.
  *
@@ -73,7 +60,6 @@ function ensureCounterStyle() {
  * @param {number} total     total number of main trials (120)
  */
 export function setTrialCounter(current, total) {
-  ensureCounterStyle();
   let container = document.getElementById(COUNTER_ID);
   if (!container) {
     container = document.createElement('div');
