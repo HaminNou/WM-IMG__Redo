@@ -133,6 +133,11 @@ function screenCalibrationPass(passIdx) {
       const rect = document.getElementById('cc-rect');
       const stage = document.getElementById('cc-stage');
       const btn = document.querySelector('button.jspsych-btn[data-idx="0"]');
+      /* Put the button group above the card rectangle: the rectangle grows with the card
+       * width (up to about 390 px tall), so with the button underneath it the button could
+       * fall below the fold on a short window. Only the rectangle itself can extend lower. */
+      const btnGroup = btn?.closest('#jspsych-html-button-response-btngroup');
+      if (btnGroup && stage?.parentNode) stage.parentNode.insertBefore(btnGroup, stage);
       ps.t_load = performance.now();
 
       const draw = (px) => {

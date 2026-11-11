@@ -17,8 +17,7 @@ import {
   setTrialCounter,
   unmountTrialCounter,
   TRIAL_TYPE_TAG_COLOURS,
-  COUNTER_COLOUR_ON_DARK,
-  COUNTER_COLOUR_ON_TRIAL_PAGE,
+  COUNTER_COLOUR,
 } from '../src/conditions/trial-counter.js';
 import { generateMainBlockPair } from '../src/scheduler/main-blocks.js';
 import { resetSequencePools } from '../src/scheduler/within-trial.js';
@@ -54,32 +53,20 @@ describe('trial-counter overlay primitives', () => {
     expect(document.querySelector('#overall-trial-counter-tag')).toBeNull();
   });
 
-  it('is gray on every surface: a stylesheet rule follows the page background', () => {
+  it('is one neutral gray, set inline, and readable on the white and light-gray pages', () => {
     setTrialCounter(1, 120);
-    const css = document.getElementById('overall-trial-counter-style').textContent;
-    expect(css).toContain(`#${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_DARK}; }`);
-    expect(css).toContain(
-      `html[data-trial-bg] #${COUNTER_ID} { color: ${COUNTER_COLOUR_ON_TRIAL_PAGE}; }`
-    );
-    /* Both are neutral grays (r = g = b), never white and never red, and not set inline. */
-    for (const hex of [COUNTER_COLOUR_ON_DARK, COUNTER_COLOUR_ON_TRIAL_PAGE]) {
-      expect(hex).toMatch(/^#([0-9a-f]{2})\1\1$/i);
-    }
-    expect(document.getElementById(COUNTER_ID).getAttribute('style') ?? '').not.toMatch(
-      /(^|;)\s*color:/
-    );
-  });
-
-  it('the grays meet a readable contrast on the dark, white and light-gray pages', () => {
+    const style = document.getElementById(COUNTER_ID).getAttribute('style') ?? '';
+    expect(style).toContain(`color: ${COUNTER_COLOUR}`);
+    expect(COUNTER_COLOUR).toMatch(/^#([0-9a-f]{2})\1\1$/i);
     const lum = (hex) => {
       const v = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
       const f = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
       return 0.2126 * f(v[0]) + 0.7152 * f(v[1]) + 0.0722 * f(v[2]);
     };
     const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
-    expect(ratio(COUNTER_COLOUR_ON_DARK, '#1a1a1a')).toBeGreaterThan(4.5);
-    expect(ratio(COUNTER_COLOUR_ON_TRIAL_PAGE, '#ffffff')).toBeGreaterThan(4.5);
-    expect(ratio(COUNTER_COLOUR_ON_TRIAL_PAGE, '#d3d3d3')).toBeGreaterThan(4.5);
+    /* White trial page, light-gray trial page and the light-gray rest / block screens. */
+    expect(ratio(COUNTER_COLOUR, '#ffffff')).toBeGreaterThan(4.5);
+    expect(ratio(COUNTER_COLOUR, '#d3d3d3')).toBeGreaterThan(4.5);
   });
 
   it('repeated setTrialCounter calls update the same node, not duplicate it', () => {
@@ -91,7 +78,6 @@ describe('trial-counter overlay primitives', () => {
     const els = document.querySelectorAll(`#${COUNTER_ID}`);
     expect(els.length).toBe(1);
     expect(els[0].textContent).toBe('120/120');
-    expect(document.querySelectorAll('#overall-trial-counter-style').length).toBe(1);
   });
 
   it('the trial-type colour table is still exported for the tag pills (five unique colours)', () => {
@@ -163,5 +149,36 @@ describe('main-blocks gate-node stamping', () => {
       expect(node?.data?.main_trial_number_overall).toBeUndefined();
       expect(node?.data?.main_trial_total).toBeUndefined();
     }
+  });
+});
+
+describe('the counter mounts from the LIVE trial data (regression: main-blocks replaces node.data)', () => {
+  it('a real stamped main gate shows N/120 when jsPsych runs it', async () => {
+    const { trialStartGateNode } = await import('../src/conditions/shared.js');
+    /* The factory is called WITHOUT the number; the stamping later replaces node.data. */
+    const gate = trialStartGateNode({ trial_index_in_block: 0, phase: 'd_only_trial_start' });
+    expect(gate.data.main_trial_number_overall).toBeUndefined();
+    gate.data = { ...gate.data, main_trial_number_overall: 42, main_trial_total: 120 };
+    const div = document.createElement('div');
+    div.id = gate.stimulus.match(/id="([^"]+)"/)[1];
+    document.body.appendChild(div);
+    Object.defineProperty(window, 'jsPsych', {
+      value: { getCurrentTrial: () => gate, finishTrial: () => {} },
+      configurable: true,
+      writable: true,
+    });
+    gate.on_load();
+    expect(document.getElementById(COUNTER_ID)?.textContent).toBe('42/120');
+    gate.on_finish?.();
+  });
+
+  it('every gate of the generated plan carries its number on node.data (what the live trial reads)', () => {
+    const pair = generateMainBlockPair();
+    const gates = [...pair.mainA.nodes, ...pair.mainB.nodes].filter((n) =>
+      /_trial_start$/.test(n?.data?.phase ?? '')
+    );
+    expect(gates.map((g) => g.data.main_trial_number_overall)).toEqual(
+      Array.from({ length: 120 }, (_, i) => i + 1)
+    );
   });
 });
