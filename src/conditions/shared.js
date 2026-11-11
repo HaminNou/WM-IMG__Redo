@@ -50,6 +50,7 @@ import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { setTrialCounter, TRIAL_TYPE_TAG_COLOURS } from './trial-counter.js';
 import { unmountToggle as unmountVoiceoverToggle } from '../visuals/voiceover-slide.js';
 import { getVoiceover } from '../visuals/voiceover.js';
+import { createTrialResponseButtons } from '../visuals/response-buttons.js';
 
 const ROTATION_ARROW_ASSET_URL = `${import.meta.env.BASE_URL}assets/rotation-arrow.png`;
 
@@ -195,6 +196,12 @@ export function frameNode({
   };
 }
 
+/**
+ * A fixed-length response window for the arrow keys. `response_buttons` ({left, right} labels,
+ * practice trials only, else null) shows the two response buttons under the circle from the
+ * frame in which the window opens to the moment it closes (also at teardown) and highlights the
+ * first valid key; it changes no timing, key handling or recorded value.
+ */
 export function timedResponseWindowNode({
   mount_id,
   phase,
@@ -211,8 +218,10 @@ export function timedResponseWindowNode({
   on_onset_end,
   on_finish,
   timestamp_field = null,
+  response_buttons = null,
 } = {}) {
   const state = {
+    buttons: null,
     frame: null,
     response_key: null,
     response_rt_ms: null,
@@ -234,10 +243,12 @@ export function timedResponseWindowNode({
   const closeOnset = () => {
     if (state.onset_closed) return;
     state.onset_closed = true;
+    state.buttons?.hide();
     on_onset_end?.(state.frame, state);
   };
 
   const teardown = () => {
+    state.buttons?.hide();
     if (state.onset_timer) clearTimeout(state.onset_timer);
     if (state.failsafe_timer) clearTimeout(state.failsafe_timer);
     if (state.raf_id !== null) cancelAnimationFrame(state.raf_id);
@@ -268,6 +279,11 @@ export function timedResponseWindowNode({
       state.extra_keypresses = 0;
 
       state.frame = mount({ rotation_deg, fixation, background_shade });
+      /* Practice only: the response buttons under the circle. Built now, attached
+       * when the window opens and detached when it closes (see `show` / `hide`). */
+      state.buttons = response_buttons
+        ? createTrialResponseButtons({ labels: response_buttons, anchorEl: state.frame.wrapper })
+        : null;
       on_load?.(state.frame, state);
 
       const allowed = new Set(allowed_keys.map((key) => String(key).toLowerCase()));
@@ -297,6 +313,7 @@ export function timedResponseWindowNode({
         /* The key event's own timestamp (same scale as the onset stamp), so that
          * response_rt_ms can be re-derived as response_ts_ms - <phase>_onset_ts_ms. */
         state.response_ts_ms = Math.round(t);
+        state.buttons?.press(key);
         on_response?.(state.frame, state, key);
       };
       window.addEventListener('keydown', state.key_handler, { capture: true });
@@ -309,6 +326,7 @@ export function timedResponseWindowNode({
         state.onset_ts = ts;
         if (timestamp_field) stampTrialData(timestamp_field, ts);
         on_onset?.(state.frame, state, ts);
+        if (!state.onset_closed) state.buttons?.show();
         state.onset_timer = setTimeout(closeOnset, Math.max(0, ts + onset_ms - performance.now()));
       });
       state.failsafe_timer = setTimeout(closeOnset, onset_ms + WINDOW_FAILSAFE_MS);
@@ -612,6 +630,11 @@ export function isFirstPracticeTrial(params) {
   return meta?.is_practice === true && meta?.block_position === 0;
 }
 
+/** True for the practice trials (never for main trials). */
+export function isPracticeTrial(params) {
+  return params?.trial_meta?.is_practice === true;
+}
+
 export const TRIAL_TYPE_LABELS = Object.freeze({
   d_only: 'Dots',
   t_only: 'Tones',
@@ -619,6 +642,52 @@ export const TRIAL_TYPE_LABELS = Object.freeze({
   i_d: 'Stars + Dots',
   i_t: 'Stars + Tones',
 });
+
+/* The look of the trial-type tag above the circle (everything except where it sits).
+ * Shared by the live tag in the trial-start gate and by the slide that introduces the
+ * tags before the first main trial, so the two cannot drift apart. */
+export const TRIAL_TYPE_TAG_PILL_STYLE = Object.freeze([
+  'display: inline-flex',
+  'align-items: center',
+  'background: rgba(255, 255, 255, 0.93)',
+  'backdrop-filter: blur(12px)',
+  '-webkit-backdrop-filter: blur(12px)',
+  'color: #1a1a1a',
+  'font-size: 15px',
+  'font-weight: 700',
+  'line-height: 1',
+  'padding: 0.5rem 1.15rem 0.5rem 0.9rem',
+  'border: 1px solid rgba(0, 0, 0, 0.10)',
+  'border-radius: 999px',
+  'box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)',
+  'letter-spacing: 0.03em',
+  'pointer-events: none',
+  'z-index: 1001',
+  'user-select: none',
+  'font-family: system-ui, sans-serif',
+  'white-space: nowrap',
+]);
+
+export function trialTypeTagDotStyle(colour) {
+  return (
+    [
+      'display: inline-block',
+      'width: 11px',
+      'height: 11px',
+      'border-radius: 50%',
+      `background: ${colour}`,
+      `box-shadow: 0 0 0 3px ${colour}40`,
+      'margin-right: 9px',
+      'flex-shrink: 0',
+    ].join('; ') + ';'
+  );
+}
+
+/** The tag of one trial type as inline markup (same look as the live tag, not fixed on the page). */
+export function trialTypeTagHtml(trialType) {
+  const colour = TRIAL_TYPE_TAG_COLOURS[trialType] || '#888';
+  return `<span class="trial-type-label" style="${TRIAL_TYPE_TAG_PILL_STYLE.join('; ')};"><span style="${trialTypeTagDotStyle(colour)}"></span><span>${TRIAL_TYPE_LABELS[trialType]}</span></span>`;
+}
 
 export function trialStartGateNode({
   trial_index_in_block,
@@ -814,19 +883,7 @@ export function trialStartGateNode({
         labelEl.id = labelId;
         labelEl.className = 'trial-type-label';
         const dot = document.createElement('span');
-        dot.setAttribute(
-          'style',
-          [
-            'display: inline-block',
-            'width: 11px',
-            'height: 11px',
-            'border-radius: 50%',
-            `background: ${colour}`,
-            `box-shadow: 0 0 0 3px ${colour}40`,
-            'margin-right: 9px',
-            'flex-shrink: 0',
-          ].join('; ') + ';'
-        );
+        dot.setAttribute('style', trialTypeTagDotStyle(colour));
         const text = document.createElement('span');
         text.textContent = TRIAL_TYPE_LABELS[trialType];
         labelEl.appendChild(dot);
@@ -838,25 +895,7 @@ export function trialStartGateNode({
             `top: ${labelTopPx}px`,
             'left: 50%',
             'transform: translateX(-50%) translateY(-100%)',
-            'display: inline-flex',
-            'align-items: center',
-            'background: rgba(255, 255, 255, 0.93)',
-            'backdrop-filter: blur(12px)',
-            '-webkit-backdrop-filter: blur(12px)',
-            'color: #1a1a1a',
-            'font-size: 15px',
-            'font-weight: 700',
-            'line-height: 1',
-            'padding: 0.5rem 1.15rem 0.5rem 0.9rem',
-            'border: 1px solid rgba(0, 0, 0, 0.10)',
-            'border-radius: 999px',
-            'box-shadow: 0 4px 16px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)',
-            'letter-spacing: 0.03em',
-            'pointer-events: none',
-            'z-index: 1001',
-            'user-select: none',
-            'font-family: system-ui, sans-serif',
-            'white-space: nowrap',
+            ...TRIAL_TYPE_TAG_PILL_STYLE,
           ].join('; ') + ';'
         );
         document.body.appendChild(labelEl);

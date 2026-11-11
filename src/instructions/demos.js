@@ -129,6 +129,12 @@
  * analytical weight — they're instruction-only rows like
  * `instructions_memory_d_only`.
  */
+import {
+  RESPONSE_BUTTON_CSS,
+  responseButtonStackHtml,
+  PROBE_BUTTON_TEXT,
+  STAR_BUTTON_TEXT,
+} from '../visuals/response-buttons.js';
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 import { config } from '../config.js';
 import { createGridFrame, clearStimuli, setFixation, setRotation } from '../visuals/frame.js';
@@ -284,34 +290,8 @@ function demoFrameTemplate(taskNumber, title) {
         100% { transform: translateY(0)    scale(1);    box-shadow: 0 4px 0 rgba(0,0,0,0.35); }
       }
       .demo-btn-pressed { animation: demo-btn-press 0.22s ease-out; }
-      /* Demo "key" buttons render as dark-ink pills on the gray card —
-       * matching the caption and hint styling. The
-       * box-shadow remains a thin black bar for the depressible-key
-       * affordance that the press-animation keyframe targets. */
-      .demo-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 9rem;
-        padding: 0.7rem 1.4rem;
-        border-radius: 0.65rem;
-        background: rgba(0,0,0,0.04);
-        border: 1px solid rgba(0,0,0,0.30);
-        color: rgba(0,0,0,0.85);
-        font-size: 1.05rem;
-        font-weight: 500;
-        box-shadow: 0 4px 0 rgba(0,0,0,0.35);
-        user-select: none;
-        cursor: default;
-        /* Participant is NEVER meant to click a demo button — the animated
-         * hand glyph performs every press. Disabling pointer-events kills
-         * the browser's default hover/focus paint that otherwise made the
-         * buttons look interactive (and could falsely cue a response during
-         * passive watch/listen phases). The replay button at end-of-demo
-         * is the only clickable affordance and overrides this rule with
-         * an inline pointer-events:auto + cursor:pointer style. */
-        pointer-events: none;
-      }
+      /* Demo "key" buttons: shared look, see visuals/response-buttons.js */
+      ${RESPONSE_BUTTON_CSS}
       /* Watch/listen banner lives in its OWN persistent slot
        * (#demo-watch-banner-row), one row ABOVE the response buttons —
        * NOT in the buttons-row itself, so it stays on screen when the
@@ -412,36 +392,6 @@ function demoFrameTemplate(taskNumber, title) {
       }
       .demo-hand.is-pressing {
         animation: demo-hand-wiggle 520ms cubic-bezier(0.22, 1, 0.36, 1);
-      }
-      /* Per-button keyboard-key indicator. A small key-cap glyph rendered
-       * directly below each demo button so the participant sees which
-       * physical arrow key maps to which response, persistently — exactly
-       * the same visual the deck pages use ("<kbd>&rarr;</kbd> RIGHT
-       * arrow") but here it sits in the live demo's button row. The key
-       * is decorative (aria-hidden); the button label already carries
-       * the response meaning for assistive tech. */
-      .demo-btn-stack {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 0.4rem;
-      }
-      .demo-btn-key {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 1.6rem;
-        height: 1.6rem;
-        padding: 0 0.35rem;
-        border: 1px solid rgba(0, 0, 0, 0.35);
-        border-bottom-width: 2px;
-        border-radius: 0.3rem;
-        background: rgba(255, 255, 255, 0.55);
-        font-size: 1.05rem;
-        line-height: 1;
-        color: rgba(0, 0, 0, 0.8);
-        user-select: none;
-        pointer-events: none;
       }
     </style>
     <div class="demo-frame" style="${SLIDE_STYLE_DEMO}">
@@ -962,6 +912,12 @@ export function demoProbePlan() {
 export const DEMO_NO_PRESS_NOTE =
   'The demonstration presses the keys for you. Please do not press any keys.';
 
+const HAND_HTML = Object.freeze({
+  left: '\n        <span class="demo-hand" data-side="left" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>',
+  right:
+    '\n        <span class="demo-hand" data-side="right" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>',
+});
+
 /**
  * Mount a left/right button pair plus a pair of resting hand glyphs in
  * the demo's reserved button row. The hands sit in the flow below each
@@ -997,20 +953,8 @@ export function mountResponseButtons({ leftLabel, rightLabel }) {
       gap: 1.25rem;
       padding: 0.5rem 0.5rem 0.75rem;
     ">
-      <div class="demo-btn-stack">
-        <button type="button" class="demo-btn" data-side="left">
-          <span class="demo-btn-label">${leftLabel}</span>
-        </button>
-        <span class="demo-btn-key" data-side="left" aria-hidden="true">&larr;</span>
-        <span class="demo-hand" data-side="left" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>
-      </div>
-      <div class="demo-btn-stack">
-        <button type="button" class="demo-btn" data-side="right">
-          <span class="demo-btn-label">${rightLabel}</span>
-        </button>
-        <span class="demo-btn-key" data-side="right" aria-hidden="true">&rarr;</span>
-        <span class="demo-hand" data-side="right" aria-hidden="true"><span class="demo-hand-glyph">✋</span></span>
-      </div>
+      ${responseButtonStackHtml({ side: 'left', label: leftLabel, extraHtml: HAND_HTML.left })}
+      ${responseButtonStackHtml({ side: 'right', label: rightLabel, extraHtml: HAND_HTML.right })}
     </div>
     <p class="demo-no-press-note">${DEMO_NO_PRESS_NOTE}</p>
     </div>
@@ -1224,8 +1168,8 @@ function hideHand(controls) {
  * judgements. The `pressedSide` / `correctSide` keys are still used
  * internally to drive the hand-emoji animation; only the participant-
  * visible label is scheme-aware. */
-const PROBE_LABELS = Object.freeze({ left: 'No', right: 'Yes' });
-const STAR_LABELS = Object.freeze({ left: 'Not on-pattern', right: 'On-pattern' });
+const PROBE_LABELS = Object.freeze({ left: PROBE_BUTTON_TEXT.no, right: PROBE_BUTTON_TEXT.yes });
+const STAR_LABELS = Object.freeze({ left: STAR_BUTTON_TEXT.off, right: STAR_BUTTON_TEXT.on });
 
 function pressOutcomeCaption({ pressedLabel, correctLabel, isCorrect, stimulusName }) {
   const correctSpan = `<span style="color: ${FEEDBACK_COLOR_CORRECT}; font-weight: 600;">correct</span>`;
@@ -1306,7 +1250,10 @@ async function runDOnlyMiniTrial(frame, ctl) {
    * slot. They stay mounted across all three contiguous probes (no
    * banner flicker between probes); they will be cleared by `loopify`'s
    * end-of-loop teardown after the third probe completes. */
-  const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+  const btns = mountResponseButtons({
+    leftLabel: PROBE_LABELS.left,
+    rightLabel: PROBE_LABELS.right,
+  });
 
   /* Press plan (demoProbePlan): Right/Yes correct, Left/No correct, then
    * one deliberate wrong press (Left/No on a target), so both keys are shown
@@ -1397,7 +1344,10 @@ async function runTOnlyMiniTrial(frame, ctl) {
   /* Probe loop begins — swap the LISTEN banner out for the response
    * buttons. They stay mounted across all three contiguous probes; the
    * loopify teardown will clear them after the third probe completes. */
-  const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+  const btns = mountResponseButtons({
+    leftLabel: PROBE_LABELS.left,
+    rightLabel: PROBE_LABELS.right,
+  });
 
   const probePlan = demoProbePlan();
   for (let p = 0; p < probePlan.length; p++) {
@@ -1488,8 +1438,8 @@ async function runIOnlyMiniTrial(frame, ctl) {
    * buttons replace the banner and stay mounted across all three stars
    * (invisible filler slots between them don't toggle the row). */
   const btns = mountResponseButtons({
-    leftLabel: 'Not on-pattern',
-    rightLabel: 'On-pattern',
+    leftLabel: STAR_LABELS.left,
+    rightLabel: STAR_LABELS.right,
   });
 
   const { fillerCells, starCells } = pickDemoCells();
@@ -1614,8 +1564,8 @@ async function runIDMiniTrial(frame, ctl) {
      * since the participant is still meant to just watch the demo's
      * hand glyph perform the press — not respond themselves. */
     const btns = mountResponseButtons({
-      leftLabel: 'Not on-pattern',
-      rightLabel: 'On-pattern',
+      leftLabel: STAR_LABELS.left,
+      rightLabel: STAR_LABELS.right,
     });
 
     if (!(await ctl.wait(DEMO_EVENT_LEAD_MS))) return;
@@ -1666,7 +1616,10 @@ async function runIDMiniTrial(frame, ctl) {
    * pattern) labels out for the dot-probe (No / Yes) labels. The
    * watch-and-listen banner stays visible above through every probe;
    * the demo's hand glyph performs every press. */
-  const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+  const btns = mountResponseButtons({
+    leftLabel: PROBE_LABELS.left,
+    rightLabel: PROBE_LABELS.right,
+  });
   setFixation(frame, '?');
   if (!(await ctl.wait(DEMO_EVENT_TAIL_MS))) return;
 
@@ -1776,8 +1729,8 @@ async function runITMiniTrial(frame, ctl) {
      * On-pattern). The watch-and-listen banner stays visible above —
      * the hand glyph performs every press, the participant doesn't. */
     const btns = mountResponseButtons({
-      leftLabel: 'Not on-pattern',
-      rightLabel: 'On-pattern',
+      leftLabel: STAR_LABELS.left,
+      rightLabel: STAR_LABELS.right,
     });
 
     if (!(await ctl.wait(DEMO_EVENT_LEAD_MS))) return;
@@ -1825,7 +1778,10 @@ async function runITMiniTrial(frame, ctl) {
   if (!(await ctl.advanceCaption(''))) return;
   /* Probe phase begins — swap the previous (Not on-pattern / On-
    * pattern) labels for (No / Yes). Banner stays above. */
-  const btns = mountResponseButtons({ leftLabel: 'No', rightLabel: 'Yes' });
+  const btns = mountResponseButtons({
+    leftLabel: PROBE_LABELS.left,
+    rightLabel: PROBE_LABELS.right,
+  });
   setFixation(frame, '?');
   if (!(await ctl.wait(DEMO_EVENT_TAIL_MS))) return;
 

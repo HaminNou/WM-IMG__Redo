@@ -58,8 +58,10 @@
         "practice_iteration_start",
         "practice_readiness",
         "practice_feedback",
+        "practice_buttons_notice",
         "practice_disqualification",
         "main_a_intro",
+        "main_a_tag_reminder",
         "main_b_intro",
         "rest",
         "rest_resume_gate",
@@ -1173,6 +1175,11 @@
     "gate_trial_type": {
       "type": ["string", "null"],
       "description": "Trial-start gate: condition label shown to the participant."
+    },
+    "notice_task": {
+      "type": "string",
+      "enum": ["d_only", "t_only", "i_only"],
+      "description": "`practice_buttons_notice`: the single task whose first practice trial the notice followed (the zoomed response buttons and the message that they are not shown in the main trials)."
     },
     "gate_prominent": {
       "type": "boolean",

@@ -26,6 +26,11 @@
  *      probe (probes run back-to-back).
  *   6. Final ITI.
  *
+ * Practice trials only (never main trials; see practice-buttons.js): the two response
+ * buttons are shown under the circle while a probe window is open, and the FIRST practice
+ * trial of the task is followed, before the ITI, by a self-paced notice (phase
+ * practice_buttons_notice) that the buttons will not be shown in the main trials.
+ *
  * Note: unlike D-only, T-only's encoding has no visible memory stimulus;
  * the open-square dummies are still visible (so there is *something* on the
  * grid to look at, helping the participant maintain a comparable visual
@@ -33,6 +38,11 @@
  * visible throughout encoding.
  */
 import { createEncodingNode } from './encoding-schedule.js';
+import {
+  practiceProbeButtons,
+  practiceButtonsNoticeNode,
+  PROBE_BUTTON_LABELS,
+} from './practice-buttons.js';
 import { postEncodingRotationDeg, probeFrameFields } from './trial-record.js';
 
 import { setFixation } from '../visuals/frame.js';
@@ -129,6 +139,7 @@ function probeNode(params, probe) {
     rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     allowed_keys: [KEY_YES, KEY_NO],
+    response_buttons: practiceProbeButtons(params),
     timestamp_field: 'probe_onset_ts_ms',
     data: {
       trial_index_in_block: params.trial_index_in_block,
@@ -171,6 +182,10 @@ export function tOnlyTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
+  /* First practice trial only: the self-paced "no buttons in the main trials" notice
+   * after the last probe window, before the ITI. */
+  const notice = practiceButtonsNoticeNode(params, 't_only', PROBE_BUTTON_LABELS);
+  if (notice) out.push(notice);
   out.push(
     itiNode({
       phase: 't_only_iti',

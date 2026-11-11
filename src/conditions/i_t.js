@@ -39,6 +39,7 @@
  * phase). Probe data is on the probe nodes (`i_t_probe` phase).
  */
 import { createEncodingNode } from './encoding-schedule.js';
+import { practiceProbeButtons, practiceStarButtons } from './practice-buttons.js';
 import { postEncodingRotationDeg, probeFrameFields } from './trial-record.js';
 
 import { setFixation } from '../visuals/frame.js';
@@ -108,6 +109,7 @@ function encodingNode(params) {
     rotate: true,
     m_kind: 'tone',
     s_kind: 'star',
+    response_buttons: practiceStarButtons(params),
     data: {
       rotation_deg: params.rotation_deg,
       memory_items: params.memory_items.map((m) => ({
@@ -154,6 +156,7 @@ function probeNode(params, probe) {
     rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     allowed_keys: [KEY_YES, KEY_NO],
+    response_buttons: practiceProbeButtons(params),
     timestamp_field: 'probe_onset_ts_ms',
     data: {
       trial_index_in_block: params.trial_index_in_block,

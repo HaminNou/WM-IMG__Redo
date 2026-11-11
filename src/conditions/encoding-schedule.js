@@ -68,6 +68,7 @@ import { addOpenSquare } from '../visuals/dummy.js';
 import { playToneByCell, toneForCell } from '../audio/tones.js';
 import { getAudioContext, audioContextInfo } from '../audio/context.js';
 import { stopAllScheduledAudio } from '../audio/dsp.js';
+import { createTrialResponseButtons } from '../visuals/response-buttons.js';
 import {
   stampTrialData,
   judgeStarResponse,
@@ -149,6 +150,8 @@ function scheduledOnsetPerfMs(ac, when) {
  * @param {'dot'|'tone'|'dummy'} cfg.m_kind   what an M-slot shows
  * @param {'star'|'dummy'} cfg.s_kind         what an S-slot shows
  * @param {object} [cfg.data]            extra fields for the node's data row
+ * @param {{left: string, right: string}|null} [cfg.response_buttons]  practice only: the
+ *                                       buttons shown under the circle while a star window is open
  */
 export function createEncodingNode(cfg) {
   const {
@@ -161,6 +164,7 @@ export function createEncodingNode(cfg) {
     s_kind,
     data = {},
     frame_rotation_deg = 0,
+    response_buttons = null,
   } = cfg;
   const star_phase = star_row ? star_row.phase : null;
   const sequence = params.sequence;
@@ -246,6 +250,7 @@ export function createEncodingNode(cfg) {
         m_kind,
         s_kind,
         star_phase,
+        response_buttons,
         slot_onsets_ts_ms,
         slot_offsets_ts_ms,
         slot_offset_sources,
@@ -287,6 +292,10 @@ export function createEncodingNode(cfg) {
 function startRun(ctx) {
   const { frame, params, plan, rotate, angle_deg, m_kind, s_kind, star_phase, summary, key_log } =
     ctx;
+  /* Practice only: the response buttons, shown for as long as a star window is open. */
+  const buttons = ctx.response_buttons
+    ? createTrialResponseButtons({ labels: ctx.response_buttons, anchorEl: frame.wrapper })
+    : null;
   const t0 = performance.now();
   const timers = new Set();
   const frames = new Set();
@@ -383,6 +392,7 @@ function startRun(ctx) {
     nextFrame((ts) => {
       if (w.closed) return;
       w.el = addStar(frame, star.cell);
+      buttons?.show();
       /* The angle the star was actually drawn at (read from the frame), so the row
        * records what was rendered and not only what was planned. */
       w.drawn_rotation_deg = frame.rotation_deg;
@@ -412,6 +422,7 @@ function startRun(ctx) {
         return;
       }
       w.responded = true;
+      buttons?.press(k);
       w.response_key = k;
       w.response_rt_ms = Math.max(1, Math.round(rt));
       w.response_ts_ms = Math.round(t);
@@ -428,6 +439,7 @@ function startRun(ctx) {
     if (w.closed) return;
     w.closed = true;
     if (openWindow === w) openWindow = null;
+    buttons?.hide();
     closedSlots.add(w.slot);
     if (w.el) {
       if (truncated) {
@@ -638,6 +650,7 @@ function startRun(ctx) {
       }
     }
     aborted = true;
+    buttons?.hide();
     for (const id of timers) clearTimeout(id);
     timers.clear();
     for (const id of frames) cancelAnimationFrame(id);

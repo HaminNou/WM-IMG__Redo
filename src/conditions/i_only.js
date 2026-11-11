@@ -40,6 +40,11 @@
  *        e. Tear down stars and dummies; restore fixation.
  *   3. ITI (800 ms blank with central fixation).
  *
+ * Practice trials only (never main trials; see practice-buttons.js): the two response
+ * buttons are shown under the circle while a star window is open, and the FIRST practice
+ * trial of the task is followed, before the ITI, by a self-paced notice (phase
+ * practice_buttons_notice) that the buttons will not be shown in the main trials.
+ *
  * No retention or recognition probe — the I-only trial ends after the last
  * star slot.
  *
@@ -49,6 +54,11 @@
  * data uploader uniform across conditions.
  */
 import { createEncodingNode } from './encoding-schedule.js';
+import {
+  practiceStarButtons,
+  practiceButtonsNoticeNode,
+  STAR_BUTTON_LABELS,
+} from './practice-buttons.js';
 
 import { postEncodingRotationDeg } from './trial-record.js';
 import {
@@ -139,6 +149,7 @@ function encodingNode(params) {
     rotate: true,
     m_kind: 'dummy',
     s_kind: 'star',
+    response_buttons: practiceStarButtons(params),
     data: {
       rotation_deg: params.rotation_deg,
       stars: params.stars.map((s) => ({
@@ -164,9 +175,13 @@ function encodingNode(params) {
  * trial would imply an upcoming probe that never comes.
  */
 export function iOnlyTrial(params) {
+  /* First practice trial only: the self-paced "no buttons in the main trials"
+   * notice after the last star window, before the ITI. */
+  const notice = practiceButtonsNoticeNode(params, 'i_only', STAR_BUTTON_LABELS);
   return [
     ...gatePreambleNodes(params),
     encodingNode(params),
+    ...(notice ? [notice] : []),
     itiNode({
       phase: 'i_only_iti',
       fixation: '',

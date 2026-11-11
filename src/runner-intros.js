@@ -7,8 +7,10 @@
  * runner, a side-effect-heavy bootstrap entry that imports the storage /
  * Prolific layer at module load.
  *
- * Three nodes, all narrated:
+ * Four nodes (all narrated except the tag reminder, see its comment):
  *   - `mainAIntroNode()`     — "Main task — Block 1 of 2"
+ *   - `mainATagReminderNode()` — "Before every trial: check the tag" (the last screen
+ *                              before Block 1's first trial gate)
  *   - `mainBIntroNode()`     — "Main task — Block 2 of 2"
  *   - `endOfTaskIntroNode()` — "You've finished the task"
  *
@@ -25,6 +27,7 @@ import { unmountTrialCounter } from './conditions/trial-counter.js';
 import { narrateNowIfPresent, unmountToggle } from './visuals/voiceover-slide.js';
 import { getVoiceover } from './visuals/voiceover.js';
 import { continueHintHtml } from './visuals/continue-hint.js';
+import { TRIAL_TYPE_LABELS, trialTypeTagHtml } from './conditions/shared.js';
 
 /**
  * Leaving a narrated screen: stop any utterance still running and remove the "Voice on/off"
@@ -85,6 +88,63 @@ export function mainAIntroNode() {
     },
   };
   registerHiddenNavStep(stepId, mainAIntroNode);
+  return trackHiddenNavNode(node, stepId);
+}
+
+/* What comes next for each trial tag, in the wording of the instruction slides
+ * (Tasks 1-5): remember the dots / the tones, picture the pattern and judge the stars,
+ * or both together. Keyed by the same trial-type ids as TRIAL_TYPE_LABELS. */
+const TAG_MEANING = Object.freeze({
+  d_only: 'remember the dots, then answer Yes or No for each dot test.',
+  t_only: 'remember the tones, then answer Yes or No for each tone test.',
+  i_only: 'picture the pattern and judge each star: On-pattern or Not on-pattern.',
+  i_d: 'judge each star against the pattern and remember the dots for the dot tests.',
+  i_t: 'judge each star against the pattern and remember the tones for the tone tests.',
+});
+
+/* A small stand-in for the circle under the example tag: the bull's-eye ring and dot. */
+const MINI_CIRCLE_HTML = `<span aria-hidden="true" style="display: inline-block; position: relative; width: 4.2rem; height: 4.2rem; border: 2px solid rgba(255, 255, 255, 0.55); border-radius: 50%; box-sizing: border-box;"><span style="position: absolute; top: 50%; left: 50%; width: 0.45rem; height: 0.45rem; margin: -0.225rem 0 0 -0.225rem; border-radius: 50%; background: rgba(255, 255, 255, 0.8);"></span></span>`;
+
+/**
+ * One-time slide shown as the last screen before the first trial gate of Block 1: before
+ * every trial starts, look at the tag above the circle, because it says which kind of task
+ * the trial is. The five tags are the live ones (`trialTypeTagHtml`).
+ */
+export function mainATagReminderNode() {
+  const stepId = 'main_a_tag_reminder';
+  const rows = Object.keys(TRIAL_TYPE_LABELS)
+    .map(
+      (type) =>
+        `<li style="display: flex; align-items: center; gap: 0.8rem; margin: 0.55rem 0;"><span style="flex: 0 0 10.5rem;">${trialTypeTagHtml(type)}</span><span>– ${TAG_MEANING[type]}</span></li>`
+    )
+    .join('');
+  const node = {
+    type: htmlKeyboardResponse,
+    stimulus: `
+      <div style="max-width: 40rem; margin: 0 auto;">
+        <h2>Before every trial: check the tag</h2>
+        <div style="text-align: center; margin: 0.6rem 0 0.8rem;">
+          ${trialTypeTagHtml('d_only')}
+          <div style="margin-top: 0.5rem;">${MINI_CIRCLE_HTML}</div>
+        </div>
+        <div>
+          <p>Before every trial starts, look at the small tag at the top of
+          the circle. It tells you which kind of task the upcoming trial is,
+          so you know what to expect.</p>
+          <ul style="list-style: none; padding: 0; margin: 0.8rem 0 0;">${rows}</ul>
+          ${continueHintHtml('Press <kbd>Space</kbd> to start the first trial.')}
+        </div>
+      </div>
+    `,
+    choices: [' '],
+    data: { phase: 'main_a_tag_reminder' },
+    /* Not narrated yet: the Edge TTS endpoint refused the render (HTTP 403) when this
+     * slide was written. To narrate it, put 'data-voiceover-target' on the body div,
+     * add 'on_load: () => narrateNowIfPresent()' and 'on_finish: leaveNarratedScreen'
+     * as on the screens around it, then run 'npm run harvest-voiceover' and
+     * 'npm run render-voiceover-edge' (the harvester already visits this node). */
+  };
+  registerHiddenNavStep(stepId, mainATagReminderNode);
   return trackHiddenNavNode(node, stepId);
 }
 

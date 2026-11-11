@@ -46,7 +46,12 @@ import { getToneBank } from './audio/tones.js';
  * comment block at the observer-install site below). The toggle pill is
  * still mounted on demand by `demos.js::setCaption` whenever a demo
  * actually speaks. */
-import { mainAIntroNode, mainBIntroNode, endOfTaskIntroNode } from './runner-intros.js';
+import {
+  mainAIntroNode,
+  mainATagReminderNode,
+  mainBIntroNode,
+  endOfTaskIntroNode,
+} from './runner-intros.js';
 import { sessionInfoNode } from './session-info-node.js';
 import { stopDisplayGuardNode } from './calibration/display-guard.js';
 import { startSessionGuard, markUploadDone } from './session-guard.js';
@@ -190,6 +195,9 @@ try {
     ...assembleInstructionsAndPractice(),
     sessionInfoNode(session),
     mainAIntroNode(),
+    /* One-time reminder to read the trial-type tag; the last screen before Block 1's
+     * first trial gate. */
+    mainATagReminderNode(),
     ...mainPair.mainA.nodes,
     restNode({ session }),
     mainBIntroNode(),

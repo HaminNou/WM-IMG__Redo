@@ -28,10 +28,20 @@
  *      hands directly to the next probe (probes run back-to-back).
  *   6. Final ITI 800 ms.
  *
+ * Practice trials only (never main trials; see practice-buttons.js): the two response
+ * buttons are shown under the circle while a probe window is open, and the FIRST practice
+ * trial of the task is followed, before the ITI, by a self-paced notice (phase
+ * practice_buttons_notice) that the buttons will not be shown in the main trials.
+ *
  * Returns an array of jsPsych trial objects. The data uploader will
  * concatenate them into the trial-record stream with `phase` tags.
  */
 import { createEncodingNode } from './encoding-schedule.js';
+import {
+  practiceProbeButtons,
+  practiceButtonsNoticeNode,
+  PROBE_BUTTON_LABELS,
+} from './practice-buttons.js';
 
 import { postEncodingRotationDeg, probeRenderFields } from './trial-record.js';
 import { addDot, removeElement } from '../visuals/dot.js';
@@ -130,6 +140,7 @@ function probeNode(params, probe) {
     rotation_deg: postEncodingRotationDeg(params),
     background_shade: params.background_shade,
     allowed_keys: [KEY_YES, KEY_NO],
+    response_buttons: practiceProbeButtons(params),
     timestamp_field: 'probe_onset_ts_ms',
     data: {
       trial_index_in_block: params.trial_index_in_block,
@@ -174,6 +185,10 @@ export function dOnlyTrial(params) {
   for (const probe of params.probes) {
     out.push(probeNode(params, probe));
   }
+  /* First practice trial only: the self-paced "no buttons in the main trials" notice
+   * after the last probe window, before the ITI. */
+  const notice = practiceButtonsNoticeNode(params, 'd_only', PROBE_BUTTON_LABELS);
+  if (notice) out.push(notice);
   out.push(
     itiNode({
       phase: 'd_only_iti',

@@ -347,6 +347,7 @@ async function harvestFromStatic() {
       '/src/runner-intros.js',
       (mod) => {
         walkNode(mod.mainAIntroNode(), 'runner-intros.mainAIntroNode');
+        walkNode(mod.mainATagReminderNode(), 'runner-intros.mainATagReminderNode');
         walkNode(mod.mainBIntroNode(), 'runner-intros.mainBIntroNode');
         walkNode(mod.endOfTaskIntroNode(), 'runner-intros.endOfTaskIntroNode');
       },
