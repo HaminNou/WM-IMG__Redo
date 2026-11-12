@@ -10,7 +10,7 @@ import {
 } from '../src/debug/debug-mode.js';
 
 const PROLIFIC = '?PROLIFIC_PID=a&STUDY_ID=b&SESSION_ID=c';
-const base = { hostname: 'user.github.io', isPilot: false, isDev: false };
+const base = { hostname: 'user.github.io', isPilot: false, isDev: false, buildEnabled: true };
 
 beforeEach(() => _resetDebugModeForTests());
 
@@ -88,5 +88,40 @@ describe('session stamp', () => {
         rows: [],
       }).debug_mode
     ).toBe(true);
+  });
+});
+
+describe('the build decides first: a production build has debug compiled OFF', () => {
+  it('buildEnabled false: every URL / host / dev combination is OFF', () => {
+    const off = { buildEnabled: false };
+    expect(
+      isDebugMode({ ...base, ...off, isPilot: true, search: `${PROLIFIC}&pilot=1&debug=1` })
+    ).toBe(false);
+    expect(isDebugMode({ ...base, ...off, isDev: true, search: '?debug=1' })).toBe(false);
+    expect(isDebugMode({ ...base, ...off, hostname: 'localhost', search: '?debug=1' })).toBe(false);
+    expect(
+      isDebugMode({
+        ...base,
+        ...off,
+        hostname: '127.0.0.1',
+        isPilot: true,
+        search: '?pilot=1&debug=1',
+      })
+    ).toBe(false);
+    expect(
+      debugSessionStamp({ ...base, ...off, isPilot: true, search: '?pilot=1&debug=1' })
+    ).toEqual({
+      debug_mode: false,
+    });
+  });
+  it('buildEnabled true keeps the experimenter matrix (pilot, dev, localhost)', () => {
+    expect(isDebugMode({ ...base, isPilot: true, search: '?pilot=1&debug=1' })).toBe(true);
+    expect(isDebugMode({ ...base, search: `${PROLIFIC}&debug=1` })).toBe(false);
+  });
+  it('package.json has a normal build without the flag and a build:debug with it', async () => {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync('package.json', 'utf-8'));
+    expect(pkg.scripts.build).not.toContain('VITE_ENABLE_DEBUG');
+    expect(pkg.scripts['build:debug']).toContain('VITE_ENABLE_DEBUG=1');
   });
 });

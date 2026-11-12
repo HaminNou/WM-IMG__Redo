@@ -10,7 +10,16 @@ Two tools for the experimenter, both OFF unless switched on by the URL:
 
 ## How to switch them on
 
-Add `debug=1` to the URL. It counts only on an experimenter session, that is when one of these holds:
+**The deployed site has them OFF.** The normal production build (`npm run build`, what is deployed for
+participants) is built without `VITE_ENABLE_DEBUG`, so no URL can turn the trace or the reveal on there. To use them:
+
+- locally: `npm run dev` (a dev server allows debug), then open `http://localhost:5173/?debug=1`;
+- or build the debug version: `npm run build:debug` (sets `VITE_ENABLE_DEBUG=1`) and serve `dist/` yourself
+  (for example `npx vite preview`) or deploy it to a separate test location, never to the participants' link;
+- the exact code of the version deployed on 2026-11-11 WITH the debug tools active is kept as the git tag
+  `debug-enabled-v1` (`git checkout debug-enabled-v1`).
+
+In a build that allows debug, add `debug=1` to the URL. It counts only on an experimenter session, that is when one of these holds:
 
 - the URL also has `pilot=1`;
 - it is a Vite dev build (`npm run dev`);
@@ -101,6 +110,7 @@ The analysis tools carry the flags, so debug sessions and trials can be found an
 
 ## Before the main batch
 
-Make sure the reveal and the trace are switched off for the main batch: nothing in the page stops a participant who adds
-`&pilot=1&debug=1` to the URL. The researcher accepted this risk for now. The data flags above make such a session detectable
-(`debug_mode`, `Sample_Class = debug`, reason `debug_session`), so check `PARTICIPANT_SUMMARY.csv` before analysing.
+The deployed (production) build is compiled with debug OFF (see "How to switch them on"), so a participant who adds
+`&pilot=1&debug=1` to the URL gets nothing. Keep it that way: deploy only with `npm run build`, never `npm run build:debug`.
+If a debug build ever reaches participants by mistake, the data flags above make such sessions detectable
+(`debug_mode`, `Sample_Class = debug`, reason `debug_session`): check `PARTICIPANT_SUMMARY.csv` before analysing.

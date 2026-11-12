@@ -3,8 +3,12 @@
  * (trace.js) and the secret grid reveal (reveal.js).
  *
  * These tools expose the answers (targets, patterns), so they must be OFF for
- * every real participant. Debug mode is ON only when BOTH hold:
+ * every real participant. Debug mode is ON only when ALL of these hold:
  *
+ *   0. the BUILD allows it: the site was built with `VITE_ENABLE_DEBUG=1`
+ *      (`npm run build:debug`) or this is a Vite dev server. The normal production
+ *      build (`npm run build`, what is deployed for participants) does NOT allow it:
+ *      there, no URL flag can turn the trace or the reveal on, and
  *   1. the URL query string contains `debug=1` (the URL is the ONLY source:
  *      never storage, cookies, Prolific parameters or anything a participant
  *      or the platform could set), and
@@ -35,6 +39,16 @@ function ambientHostname() {
   return typeof window !== 'undefined' && window.location ? (window.location.hostname ?? '') : '';
 }
 
+/* Does this build allow debug at all? Vite replaces `import.meta.env.VITE_ENABLE_DEBUG` at build
+ * time, so in the normal production build this is a constant `false`. */
+function ambientBuildAllowsDebug() {
+  try {
+    return import.meta.env.VITE_ENABLE_DEBUG === '1' || import.meta.env.DEV === true;
+  } catch {
+    return false;
+  }
+}
+
 function ambientIsDev() {
   try {
     return import.meta.env?.DEV === true;
@@ -56,6 +70,8 @@ function ambientIsDev() {
  * @param {string} [inject.hostname]  host name (default: `location.hostname`).
  * @param {boolean} [inject.isPilot]  pilot flag (default: read from the URL via readPilotMode).
  * @param {boolean} [inject.isDev]    dev-build flag (default: `import.meta.env.DEV`).
+ * @param {boolean} [inject.buildEnabled] does the build allow debug (default: built with
+ *                                    `VITE_ENABLE_DEBUG=1`, or a dev server).
  * @returns {boolean}
  */
 export function isDebugMode(inject) {
@@ -65,7 +81,8 @@ export function isDebugMode(inject) {
     const i = inject ?? {};
     const search = i.search ?? ambientSearch();
     const requested = truthy(new URLSearchParams(search).get('debug'));
-    if (requested) {
+    const buildEnabled = i.buildEnabled ?? ambientBuildAllowsDebug();
+    if (requested && buildEnabled === true) {
       const hostname = String(i.hostname ?? ambientHostname()).toLowerCase();
       const isPilot = i.isPilot ?? readPilotMode({ search, env: {} }).is_pilot_run;
       const isDev = i.isDev ?? ambientIsDev();
