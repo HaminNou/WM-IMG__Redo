@@ -357,11 +357,22 @@ export function readSubjectRegistry(path) {
  * @param {{write?: boolean}} [opts]  write=false: compute only, never touch the file
  * @returns {{assigned: Map<string, number>, added: {subject: number, pid: string}[]}}
  */
+/**
+ * What a participant's subject number is keyed by: the Prolific id, or, for a session opened
+ * without Prolific parameters (a "preview": the plain study link, an in-person run), its
+ * session id (`LOCAL_...`), so such a run still gets a subject number. The run stays flagged
+ * `is_preview`. A session with neither key gets no number.
+ */
+export function subjectKey(entry) {
+  const params = entry?.session?.params;
+  return params?.prolific_pid || params?.session_id || null;
+}
+
 export function assignSubjects(perParticipant, registryPath, { write = true } = {}) {
   const registry = readSubjectRegistry(registryPath);
   const firstSeen = new Map();
   for (const e of perParticipant) {
-    const pid = e.session?.params?.prolific_pid;
+    const pid = subjectKey(e);
     if (!pid) continue;
     const t = Math.min(
       ...e.rows.map((r) => r?.wall_ms).filter(Number.isFinite),
@@ -395,7 +406,7 @@ export function assignSubjects(perParticipant, registryPath, { write = true } = 
     chmodSync(registryPath, 0o600);
   }
   for (const e of perParticipant) {
-    const pid = e.session?.params?.prolific_pid;
+    const pid = subjectKey(e);
     e.subject = pid ? registry.get(pid) : null;
   }
   return { assigned: registry, added };

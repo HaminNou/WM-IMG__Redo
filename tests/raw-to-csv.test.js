@@ -650,6 +650,24 @@ describe('subject registry', () => {
     expect(readSubjectRegistry(file).size).toBe(1);
   });
 
+  it('a preview session without a Prolific id is numbered by its session id; none without either', () => {
+    const file = join(dir, 'e.csv');
+    const preview = (sid, t0, run_id) => ({
+      ...entry(null, t0),
+      run_id,
+      session: { params: { session_id: sid } },
+    });
+    const list = [
+      entry('PID_ONE_00000001', 10),
+      preview('LOCAL_abc_def', 20, 'r1'),
+      preview('LOCAL_abc_def', 30, 'r2'),
+      entry(null, 5),
+    ];
+    assignSubjects(list, file);
+    expect(list.map((e) => e.subject)).toEqual([1, 2, 2, null]);
+    expect(readSubjectRegistry(file).get('LOCAL_abc_def')).toBe(2);
+  });
+
   it('write=false computes the numbers without creating the file', () => {
     const file = join(dir, 'never.csv');
     const list = [entry('PID_DRYRUN_000001', 1)];
