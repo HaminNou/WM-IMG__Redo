@@ -68,6 +68,34 @@ TRIAL 17/120  [Stars + Dots]  main_a #17  pool 5  shade=gray  rotation=+37° (cl
 - Rests, block boundaries and practice notices appear as short `── text ──` lines between trials.
 - The values printed are the ones the trial code already computed for the data rows and the feedback; the trace never scores anything itself.
 
+## Session plan print (start of the session)
+
+With debug on, the console shows the **whole plan of the session** right after the banner and before consent: the
+plan is generated from the seed at load, and the print reads those very trial objects (`src/debug/plan-print.js`, with
+`plan-model.js` and `plan-store.js`). Practice trials are generated inside `singleTypePractice`, which hands its
+`trialParams` to the plan store, so the printed practice plan is the one that runs. Nothing is recomputed or changed.
+
+1. **HEADER**: seed (`PID|STUDY|SESSION`), build, number of trials per block and task, the legend. Generation time and
+   attempts are not recorded by the generator, so they are not printed.
+2. **BALANCINGS**: one collapsed group per task, with Main A, Main B and the 24-trial pool: per serial slot (M / S, memory items
+   and ON, probed T_on / T_off, stars and ON), per ordinal and test position (memory ON, probe type x test #, encoding ordinal x
+   test #, star ON), histograms of targets / memory ON / stars ON per trial (pinned 2,4,4,2 or 1,5,5,1 per half, 3,9,9,3 per pool),
+   shade counts and their crossing with the labels, rotation strata with their angles. Each scope ends with the line
+   `validator PASS` or the exact violations of `blockInvariantViolations` / `poolInvariantViolations`; the plan-level check
+   (`planInvariantViolations`) and the session task order (digits 1-5 = Task 1-5, longest same-task run <= 2, reminder trials,
+   rests) follow. The last line is **ALL EXACT BALANCES PASS**, or a list of failures in red (`console.error`).
+3. **TRIALS**: Practice, Main A and Main B, each with an overview table (one row per trial in presentation order) and one collapsed
+   group per trial, e.g. `TRIAL 17/120  Stars + Tones  main_a #17  rot -30° (ccw)  shade=white  seq SSMSMM`, holding an ENCODING table
+   (slot, kind, item, cell 0-24, row/col, ON/OFF, tone index 0-23 and Hz, planned onset ms, tested as) and a RECALL table
+   (test #, probe type, TARGET/FOIL, cell, ON/OFF, tone, which memory item it refers to or is paired with, correct answer).
+   Counts and ordinals are 1-based, cell and tone ids 0-based. Symbols: ● dot, ♪ tone, ★ star, ▢ hidden placeholder.
+
+`window.__WM_PLAN__` holds `{seed, build, practice, mainA, mainB, summaries}` (the same trial objects; `summaries` has the
+balance counts, validator results, sequences and one display record per trial). `window.__WM_PLAN_DOWNLOAD__()` saves it as
+`wm-plan_<seed>.json`. Both exist only in debug mode.
+
+**The deployed build must be built with `npm run build:debug` for these tools** (the normal `npm run build` has none of them).
+
 ## Secret grid reveal: G G
 
 Inside a trial press **G** twice within 450 ms (key repeat, Ctrl/Cmd/Alt combinations and typing in a text field are ignored).

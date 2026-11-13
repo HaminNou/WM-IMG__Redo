@@ -43,6 +43,7 @@ import { getSessionPRNG } from '../prng.js';
 import { assembleBlock } from './block.js';
 import { traceMarker } from '../debug/trace-adapters.js';
 import { setPracticeIteration } from './trial-meta.js';
+import { recordPracticePlan } from '../debug/plan-store.js';
 import { consumeDeveloperSkip } from '../hidden-nav.js';
 import { continueHintHtml } from '../visuals/continue-hint.js';
 
@@ -123,6 +124,10 @@ export function singleTypePractice({
     runLengthCap: Math.max(1, perType),
     prng: rng,
   });
+  recordPracticePlan(
+    trialType,
+    block.trialParams
+  ); /* debug only: the plan print reads these same objects */
   return {
     schedule: block.schedule,
     trialParams: block.trialParams,
