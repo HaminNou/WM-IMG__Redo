@@ -70,6 +70,7 @@ import {
   formatPracticeFeedbackHtml,
 } from '../scheduler/practice.js';
 import { traceMarker } from '../debug/trace-adapters.js';
+import { isPracticeBypassed } from '../debug/skip.js';
 import { setPracticeIteration } from '../scheduler/trial-meta.js';
 import { getSessionPRNG } from '../prng.js';
 import {
@@ -365,6 +366,7 @@ function practiceFailureExit() {
       data.final_practice_total = last?.iteration_total ?? null;
       data.practice_attempts = last?.practice_iteration ?? null;
     },
-    condition: () => lastFeedback()?.iteration_passed === false,
+    /* The experimenter's N N skip out of practice (debug only) bypasses the criterion. */
+    condition: () => !isPracticeBypassed() && lastFeedback()?.iteration_passed === false,
   });
 }

@@ -196,6 +196,8 @@ export function segmentTrials(rows) {
       if (r.debug_reveal_on === true && !r.trial_uid) cur.debugRevealSeen = true;
       continue;
     }
+    /* Experimenter stage skip (src/debug/skip.js): an event row, never part of a trial. */
+    if (ph === 'debug_skip') continue;
     if (ph === 'pattern_phase') {
       cur.patternPhase = true;
       cur.patternRow = r;

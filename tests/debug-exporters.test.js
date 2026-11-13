@@ -129,6 +129,12 @@ describe('row classification', () => {
     expect(stageOf(row)).toBe('session_event');
     expect(taskOf({ phase: 'debug_reveal' })).toBeNull();
   });
+
+  it('debug_skip rows are session events with no task', () => {
+    const row = { phase: 'debug_skip', from_stage: 'practice', to_stage: 'main_a_intro' };
+    expect(stageOf(row)).toBe('session_event');
+    expect(taskOf(row)).toBeNull();
+  });
 });
 
 describe('trial segmentation', () => {
