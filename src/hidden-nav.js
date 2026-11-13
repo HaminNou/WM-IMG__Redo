@@ -260,6 +260,14 @@ export function installHiddenNav(jsPsych) {
   if (installed) return;
   if (typeof document === 'undefined') return;
 
+  /* The plugins' own keyboard listeners (htmlKeyboardResponse, instructions) are only
+   * cancelled by the plugin's own end_trial. Ending the trial from here via finishTrial
+   * would leave them registered, and the next Space (e.g. on the practice-buttons notice)
+   * would also reach the dead node's callback, whose display element is gone:
+   * "Cannot read properties of null (reading 'className')". Only the node being left holds
+   * listeners at this moment; the next node registers its own after finishTrial. */
+  const releaseKeyboardListeners = () => jsPsych.pluginAPI?.cancelAllKeyboardResponses?.();
+
   const handler = (event) => {
     const tag = (event.target && event.target.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable) {
@@ -335,6 +343,7 @@ export function installHiddenNav(jsPsych) {
        * the next demo / instruction takes over, in the registered case),
        * and DOWN before any normally-running successor trial starts. */
       setAudioMuted(true);
+      releaseKeyboardListeners();
       jsPsych.finishTrial({
         ...syntheticResult,
         phase: meta.phase,
@@ -385,6 +394,7 @@ export function installHiddenNav(jsPsych) {
        * the upcoming spliced steps. */
       setAudioMuted(false);
     }
+    releaseKeyboardListeners();
     jsPsych.finishTrial({
       ...syntheticResult,
       phase: meta.phase,
