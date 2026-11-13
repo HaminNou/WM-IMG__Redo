@@ -80,7 +80,6 @@ Recorded for transparency. It was made after the first three pilot sessions and 
 
 Copy the text between the lines into the OSF "Transparent Changes" (or amendment) form. Check the date and the link to the registered version before filing.
 
-
 Second transparent change (2026-11-13, after the first three pilot sessions, before any confirmatory data): a memory trial may now have 0 to 3 target probes instead of exactly 1 or 2, with the number of trials per target count pinned to (3,9,9,3) per 24-trial condition pool ((2,4,4,2) and (1,5,5,1) in the two 12-trial halves). Reason: with exactly 1 or 2 targets and feedback, the third probe of a third of the trials could be inferred from the first two (TT gives a foil, FF a target), as in Experiment 2. In 38,400 simulated trials the third probe is now a target 50% of the time after any pattern of the first two. Hypotheses, tests, thresholds and exclusion rules are unchanged; the sensitivity analysis excluding the last 3 trials of each task per block is unchanged.
 
 ---
