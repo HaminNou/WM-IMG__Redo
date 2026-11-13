@@ -71,10 +71,16 @@ function encodingRows(r) {
   return r.encoding.map((s) => ({
     slot: s.slot,
     'serial pos': s.slot,
-    kind: `${KIND_SYMBOL[s.kind] ?? '?'} ${s.kind === 'dummy' ? 'HIDDEN' : s.kind.toUpperCase()}`,
+    /* A hidden placeholder is invisible: like the live trace, show no cell for it (the cell it
+     * sits on is only noted in the kind column). */
+    kind: `${KIND_SYMBOL[s.kind] ?? '?'} ${
+      s.kind === 'dummy'
+        ? `HIDDEN${s.cell === undefined ? '' : ` (invisible, planned at cell ${s.cell})`}`
+        : s.kind.toUpperCase()
+    }`,
     item: s.ordinal ?? '-',
-    'cell (0-24)': s.cell ?? '-',
-    'row/col': s.row === undefined ? '-' : `r${s.row},c${s.col}`,
+    'cell (0-24)': s.kind === 'dummy' ? '-' : (s.cell ?? '-'),
+    'row/col': s.kind === 'dummy' || s.row === undefined ? '-' : `r${s.row},c${s.col}`,
     'ON/OFF': tagText(s.on_pattern),
     'tone idx (0-23)': s.tone_index ?? '-',
     Hz: s.freq_hz ?? '-',
