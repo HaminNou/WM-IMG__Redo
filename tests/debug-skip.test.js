@@ -335,10 +335,18 @@ describe('the four stage transitions on the real timeline', () => {
     expect(phasesRun()).toContain('practice_feedback'); /* its row exists, bypassed */
     expect(__isAudioMutedForTests()).toBe(false);
     expect(_openGroupDepth()).toBe(0);
-    expect(liveListeners()).toBeLessThanOrEqual(baseline);
+    /* main_a_intro owns one Space listener while it is on screen (Space is locked until the
+     * voiceover ends); everything skipped on the way here left none behind. The count drops back
+     * to the baseline once the screen is left (checked below, at main_b_intro). */
+    expect(liveListeners()).toBeLessThanOrEqual(baseline + 1);
     expect(document.getElementById('overall-trial-counter')).toBeNull();
 
-    /* ---- Block 1 intro and tag reminder by hand, then Main A trial 1 gate */
+    /* ---- Block 1 intro and tag reminder by hand, then Main A trial 1 gate. Space is locked until
+     * the (here: silent, jsdom) narration is over; an early Space is ignored. */
+    space();
+    await step(50);
+    expect(phaseNow()).toBe('main_a_intro');
+    expect(await until(() => !document.getElementById('narration-locked-line'), 20000)).toBe(true);
     space();
     await until(() => phaseNow() === 'main_a_tag_reminder', 2000);
     await step(2000);

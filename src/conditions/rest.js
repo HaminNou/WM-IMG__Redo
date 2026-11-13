@@ -1,15 +1,18 @@
 /**
- * Forced-rest screens used in the main task.
+ * Rest screens used in the main task.
  *
  * Two flavours, one shared countdown primitive:
  *
- * (1) Inter-block rest. 30-second forced rest between Main A
- *     and Main B. Duration is locked (`config.blocks.rest_duration_s`) so
- *     the inter-block delay is uniform across participants — participants
- *     who took longer breaks could plausibly perform better on the next
- *     block for reasons unrelated to the manipulation.
+ * (1) Inter-block rest. Between Main A and Main B: `config.blocks.inter_block_rest_duration_s`
+ *     (120 s, shown as m:ss). The participant MAY SKIP it: a visible hint says so, Space is ignored
+ *     during the first `SKIP_GUARD_MS` (a key still held from the previous screen cannot skip it),
+ *     and after that Space ends the rest early. So the real length varies by participant and is
+ *     recorded on the rest row: `rest_planned_s`, `rest_actual_ms`, `rest_skipped`. Until
+ *     2026-11-13 this rest was 30 s, forced, with no skip (a uniform inter-block delay); see
+ *     pre-reg/AMENDMENT-inter-block-rest.md. When the timer ends or the rest is skipped the Block 2
+ *     intro follows and waits for Space.
  *
- * (2) Intra-block rest. A 30-second rest is spliced
+ * (2) Intra-block rest. A 30-second rest (`config.blocks.rest_duration_s`) is spliced
  *     in within each main block (see `src/scheduler/main-blocks.js`): Main A
  *     gets two mid-block rests after within-block trials 20 and 40 (gates
  *     21 and 41), and Main B gets three, after within-block trials 15, 30
@@ -21,10 +24,10 @@
  *     the next trial fires gives them a self-paced re-engagement step
  *     so a trial doesn't begin while they're still mid-stretch.
  *
- * Both flavours show a live countdown so the participant knows the rest
- * has a finite end. There is intentionally NO skip-early option: the
- * design guarantee is "at least 30 s of low-cognitive-load" and a skip
- * would let an eager participant collapse this to seconds.
+ * Both flavours show a live countdown so the participant knows the rest has a finite end. The
+ * intra-block rests have intentionally NO skip option: the design guarantee there is "at least
+ * 30 s of low-cognitive-load" and a skip would let an eager participant collapse it to seconds.
+ * Only the inter-block rest can be skipped.
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
@@ -38,16 +41,21 @@ import {
 import { uploadConsentAndPractice, uploadCheckpoint } from '../uploader.js';
 import { getSessionObject } from '../storage.js';
 import { traceMarker } from '../debug/trace-adapters.js';
+import { restLengthPhrase } from './rest-text.js';
 
 const COUNTDOWN_ID = 'rest-countdown';
+const SKIP_HINT_ID = 'rest-skip-hint';
 const TICK_MS = 1000;
+/* Space does nothing for this long after the inter-block rest appears. */
+export const SKIP_GUARD_MS = 2000;
+export const SKIP_HINT_TEXT = 'You can skip the rest by pressing Space when you are ready.';
 /* The copy states what happens when the timer ends. After the inter-block rest
  * the Block 2 intro waits for Space (`mainBIntroNode`); after an intra-block
  * rest `resumeAfterRestGateNode` waits for both arrow keys. Neither advances by
  * itself, so neither message says "automatically". */
 const DEFAULT_INTER_BLOCK_MESSAGE =
   'Take a short break. When the timer ends, you will press Space to start the next block.';
-const DEFAULT_INTRA_BLOCK_MESSAGE = `Take a ${config.blocks.rest_duration_s}-second rest. When the timer ends, press both arrow keys to continue.`;
+const DEFAULT_INTRA_BLOCK_MESSAGE = `Take a ${restLengthPhrase(config.blocks.rest_duration_s)} rest. When the timer ends, press both arrow keys to continue.`;
 
 /* Uploads started at a rest are cancelled when the rest ends, so no request
  * is in flight while a trial runs. Anything not sent is included in the next
@@ -65,36 +73,64 @@ async function restUpload(session, signal) {
 }
 
 /**
- * Build a forced-rest jsPsych node with a live countdown timer.
+ * Build a rest jsPsych node with a live countdown timer.
  *
  * @param {object} [opts]
  * @param {number} [opts.durationS]   override the rest duration in seconds (mainly for tests)
+ * @param {boolean} [opts.skippable]  true (default): the inter-block rest, 120 s by default, Space
+ *                                    ends it after the first SKIP_GUARD_MS. false: an intra-block
+ *                                    rest, `config.blocks.rest_duration_s` by default, no skip.
  * @param {string} [opts.blockLabel]  label for the data record (default 'inter_block')
  * @param {string} [opts.message]     short copy under the heading; defaults to the inter-block message
  * @param {string} [opts.heading]     heading text; defaults to 'Rest'
  * @returns {object}                  jsPsych trial object
  */
-export function restNode({ durationS, blockLabel, message, heading, session } = {}) {
-  const totalS = durationS ?? config.blocks.rest_duration_s;
+export function restNode({
+  durationS,
+  skippable = true,
+  blockLabel,
+  message,
+  heading,
+  session,
+} = {}) {
+  const totalS =
+    durationS ??
+    (skippable ? config.blocks.inter_block_rest_duration_s : config.blocks.rest_duration_s);
   const totalMs = totalS * 1000;
   const copy = message ?? DEFAULT_INTER_BLOCK_MESSAGE;
   const title = heading ?? 'Rest';
   let uploadController = null;
+  let interval = null;
+  let keydownHandler = null;
+  let startedAt = null;
+  let skipped = false;
+  const stopTimers = () => {
+    if (interval) clearInterval(interval);
+    interval = null;
+    if (keydownHandler) document.removeEventListener('keydown', keydownHandler, true);
+    keydownHandler = null;
+  };
+  const hint = skippable
+    ? `<p id="${SKIP_HINT_ID}" style="opacity: 0.7; margin: 0; font-size: 0.95rem;">You can skip the rest by pressing <kbd>Space</kbd> when you are ready.</p>`
+    : '';
   return {
     type: htmlKeyboardResponse,
     stimulus: `
-      <div style="display: grid; place-items: center; gap: 1rem; height: 16rem;">
+      <div style="display: grid; place-items: center; gap: 1rem; height: ${skippable ? '19rem' : '16rem'};">
         <h2 style="margin: 0;">${title}</h2>
         <p data-voiceover-target style="opacity: 0.85; margin: 0;">${copy}</p>
         <div style="font-size: 4rem; line-height: 1;">
           <span id="${COUNTDOWN_ID}">${formatCountdown(totalS)}</span>
         </div>
+        ${hint}
       </div>
     `,
     choices: 'NO_KEYS',
     trial_duration: totalMs,
     on_load: () => {
-      stampTrialData('rest_started_ts_ms', performance.now());
+      startedAt = performance.now();
+      skipped = false;
+      stampTrialData('rest_started_ts_ms', startedAt);
       traceMarker(`REST ${totalS} s (${blockLabel ?? 'inter_block'})`);
 
       /* Safety upload. The inter-block rest also sends the consent and
@@ -103,21 +139,53 @@ export function restNode({ durationS, blockLabel, message, heading, session } = 
       uploadController = new AbortController();
       void restUpload(session, uploadController.signal);
 
+      /* Inter-block rest only: Space ends it early, but not during the first SKIP_GUARD_MS. The
+       * handler is owned here (choices is NO_KEYS, so the plugin has no keyboard listener); it
+       * is removed on every exit path (skip, timer end, external finishTrial via on_finish). */
+      if (skippable) {
+        keydownHandler = (e) => {
+          if (e.key !== ' ' && e.code !== 'Space') return;
+          e.preventDefault();
+          if (e.repeat || skipped) return;
+          if (performance.now() - startedAt < SKIP_GUARD_MS) return;
+          skipped = true;
+          const actual = Math.round(performance.now() - startedAt);
+          stopTimers();
+          window.jsPsych?.pluginAPI?.cancelAllKeyboardResponses?.();
+          /* Deferred so the next screen (the Block 2 intro waits for Space) does not receive
+           * this same keydown. */
+          setTimeout(
+            () => window.jsPsych?.finishTrial?.({ rest_skipped: true, rest_actual_ms: actual }),
+            0
+          );
+        };
+        document.addEventListener('keydown', keydownHandler, true);
+      }
+
       const el = document.getElementById(COUNTDOWN_ID);
       if (!el) return;
       let remainingS = totalS;
       const tick = () => {
         remainingS -= 1;
-        if (remainingS < 0) return;
+        if (remainingS < 0) {
+          clearInterval(interval);
+          interval = null;
+          return;
+        }
         el.textContent = formatCountdown(remainingS);
       };
-      const interval = setInterval(tick, TICK_MS);
-      setTimeout(() => clearInterval(interval), totalMs + 100);
+      interval = setInterval(tick, TICK_MS);
     },
     on_finish: (data) => {
+      stopTimers();
       uploadController?.abort();
       uploadController = null;
       data.rest_ended_ts_ms = Math.round(performance.now());
+      data.rest_planned_s = totalS;
+      data.rest_skipped = skipped;
+      if (data.rest_actual_ms === undefined && startedAt !== null) {
+        data.rest_actual_ms = Math.round(performance.now() - startedAt);
+      }
     },
     data: {
       phase: 'rest',
@@ -135,6 +203,7 @@ export function restNode({ durationS, blockLabel, message, heading, session } = 
 export function intraBlockRestNode({ durationS, blockLabel } = {}) {
   return restNode({
     durationS,
+    skippable: false,
     blockLabel: blockLabel ?? 'intra_block',
     message: DEFAULT_INTRA_BLOCK_MESSAGE,
     heading: 'Rest',

@@ -207,7 +207,13 @@ export const config = deepFreeze({
     main_trials_per_type: 24,
     /* The 24 main trials of each type are split across two main blocks (12 + 12). */
     main_block_count: 2,
+    /* Intra-block rests (after trials 20/40 in Block 1 and 15/30/45 in Block 2): forced, no skip. */
     rest_duration_s: 30,
+    /* Rest between the two blocks. Until 2026-11-13 this was the same forced 30 s; it is now 120 s
+     * and the participant may skip it with Space after the first 2 s, so the actual length varies
+     * and is recorded per participant (rest_planned_s, rest_actual_ms, rest_skipped). See
+     * pre-reg/AMENDMENT-inter-block-rest.md. */
+    inter_block_rest_duration_s: 120,
   },
 
   /* Practice gating */

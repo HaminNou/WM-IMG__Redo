@@ -10,7 +10,7 @@
  *      a single jsPsych `loop_function` gated on cumulative practice
  *      accuracy versus the criterion (= 0.7), with one re-loop allowed.
  *   3. Main A: 60 trials (12 x 5 types).
- *   4. Inter-block rest: 30 s forced countdown.
+ *   4. Inter-block rest: 120 s countdown, skippable with Space after 2 s.
  *   5. Main B: 60 trials (12 x 5 types).
  *   6. The display guard is switched off, then the questionnaire chain: strategy questionnaire (19 items across five
  *      condition-specific pages; see src/questionnaire/strategy.js) and

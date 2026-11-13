@@ -203,12 +203,26 @@ async function renderOne(text, hash) {
       }
     });
   }
-  await new Promise((resolve, reject) => {
-    audioStream.on('data', (chunk) => chunks.push(chunk));
-    audioStream.on('end', resolve);
-    audioStream.on('close', resolve);
-    audioStream.on('error', reject);
-  });
+  /* msedge-tts 2.1.x emits 'error' ("Stream closed before the synthesis completed") when the
+   * socket drops mid-turn, on either stream; an unhandled one would crash the run. The audio
+   * promise settles on end/close/error; the metadata stream is awaited too, so no boundary that
+   * arrives right before the audio ends is lost. */
+  const metadataDone = metadataStream
+    ? new Promise((resolve, reject) => {
+        metadataStream.on('end', resolve);
+        metadataStream.on('close', resolve);
+        metadataStream.on('error', reject);
+      })
+    : Promise.resolve();
+  await Promise.all([
+    new Promise((resolve, reject) => {
+      audioStream.on('data', (chunk) => chunks.push(chunk));
+      audioStream.on('end', resolve);
+      audioStream.on('close', resolve);
+      audioStream.on('error', reject);
+    }),
+    metadataDone,
+  ]);
   const buf = Buffer.concat(chunks);
   if (buf.length === 0) {
     throw new Error(
@@ -293,7 +307,18 @@ async function main() {
       continue;
     }
     try {
-      const { bytes, wordBoundaries } = await renderOne(text, hash);
+      /* A dropped connection is transient: retry up to 3 times before reporting the failure. */
+      let rendered_ = null;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          rendered_ = await renderOne(text, hash);
+          break;
+        } catch (err) {
+          if (attempt >= 3) throw err;
+          console.warn(`${prefix} attempt ${attempt} failed (${err.message}); retrying`);
+        }
+      }
+      const { bytes, wordBoundaries } = rendered_;
       manifest.entries[hash] = {
         file,
         bytes,
