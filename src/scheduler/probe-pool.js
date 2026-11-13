@@ -15,10 +15,10 @@
  * since 24 / 4 = 6), so across the block each (probe_type × probe_position)
  * cell hits exactly 6 times (4 types × 3 positions = 12 cells; 24 trials ×
  * 3 probes / 12 cells = 6 per cell). An individual trial is free to contain
- * repeated probe types so long as the trial remains feasible (1 ≤ targets ≤
- * 2 — neither all-foils nor all-targets — and no more than two probes of
- * any single type, which keeps the trial compatible with the block-level
- * memory-item label schedule used downstream).
+ * repeated probe types so long as the trial remains feasible (any number of
+ * targets, 0-3, and no more than two probes of any single type, which keeps
+ * the trial compatible with the block-level memory-item label schedule used
+ * downstream).
  *
  * Encoding-position-to-probe-position counterbalance.
  *
@@ -62,13 +62,11 @@ function permute(arr, start, out) {
   }
 }
 
-/* Per-trial feasibility check. With 3 probes per trial we require:
- *   - 1 ≤ targetCount ≤ 2  (not all-foils so the trial has at least one
- *     "yes"-correct probe; not all-targets so the trial has at least one
- *     "no"-correct probe — both are necessary to keep guessing strategies
- *     unprofitable);
+/* Per-trial feasibility check. With 3 probes per trial we require only:
  *   - per-type cap ≤ 2 (no triple of any single label).
- * These rules keep the per-trial composition compatible with the
+ * The number of targets is NOT restricted (0-3 per trial, as in the main
+ * task; the old 1-2 rule made the third probe inferable after feedback).
+ * This rule keeps the per-trial composition compatible with the
  * block-level memory-item label schedule (which must accommodate the
  * trial's T_on / T_off targets at specific encoding positions). */
 function isFeasibleProbeTrial(order) {
@@ -76,15 +74,7 @@ function isFeasibleProbeTrial(order) {
   const tOffCount = order.filter((type) => type === 'T_off').length;
   const fOnCount = order.filter((type) => type === 'F_on').length;
   const fOffCount = order.filter((type) => type === 'F_off').length;
-  const targetCount = tOnCount + tOffCount;
-  return (
-    targetCount >= 1 &&
-    targetCount <= PROBES_PER_TRIAL - 1 &&
-    tOnCount <= 2 &&
-    tOffCount <= 2 &&
-    fOnCount <= 2 &&
-    fOffCount <= 2
-  );
+  return tOnCount <= 2 && tOffCount <= 2 && fOnCount <= 2 && fOffCount <= 2;
 }
 
 /**

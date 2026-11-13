@@ -19,7 +19,10 @@
  *      6 / 6 per star ordinal; 3 / 3 per rotation stratum.
  *   4. Probe type x test position: 3 per cell; encoding ordinal x test position:
  *      4 per cell; target class x ordinal x test position: 1 per cell; 3 probed
- *      targets per slot; 1-2 targets per trial; no probe type 3 times in a trial.
+ *      targets per slot; 0-3 targets per trial with the histogram (2,4,4,2) in one half and
+ *      (1,5,5,1) in the other (the pool has (3,9,9,3) trials with 0/1/2/3 targets; a trial
+ *      may thus have 3 foils or 0 foils; the half is drawn like item 6); no probe type 3
+ *      times in a trial (cap kept).
  *   5. Rotation: 2 angles per stratum (6 strata), 6 negative + 6 non-negative;
  *      background shade 6 white + 6 gray.
  *   6. The per-trial number of on-pattern items (memory, and separately stars) has
@@ -134,9 +137,18 @@ const OMITTABLE = ['SMSMSM', 'SMSMMS', 'SMMSSM', 'SMMSMS'].map((k) =>
 function trialProbeBad(types) {
   const c = [0, 0, 0, 0];
   types.forEach((t) => c[t]++);
-  const targets = c[0] + c[1];
-  return targets < 1 || targets > 2 || Math.max(...c) > 2 ? 1 : 0;
+  return Math.max(...c) > 2 ? 1 : 0;
 }
+/* number of trials with 0 / 1 / 2 / 3 targets */
+function targetHist(types) {
+  const h = [0, 0, 0, 0];
+  types.forEach((r) => h[r.filter((x) => x <= 1).length]++);
+  return h;
+}
+const histDev = (types, want) => {
+  const h = targetHist(types);
+  return sum(h.map((x, k) => Math.abs(x - want[k])));
+};
 const PERMS = (() => {
   const o = [];
   for (const a of [0, 1, 2])
@@ -145,22 +157,24 @@ const PERMS = (() => {
   return o;
 })();
 
-function genProbePlan(rng, st) {
+function genProbePlan(rng, st, want) {
   for (let att = 0; ; att++) {
     st.planTries++;
     if (att > 200) fail('probe types');
     const cols = range(3).map(() => rng.shuffle([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]));
     const types = range(N).map((t) => [cols[0][t], cols[1][t], cols[2][t]]);
-    let cost = sum(types.map(trialProbeBad));
+    /* cost = trials with a probe type 3 times + deviation of the targets-per-trial histogram from the
+     * pinned one; swaps inside a column keep the exact column margins */
+    const total = () => sum(types.map(trialProbeBad)) + histDev(types, want);
+    let cost = total();
     for (let step = 0; step < 4000 && cost > 0; step++) {
       const j = rng.int(3);
       const a = rng.int(N);
       const b = rng.int(N);
       if (a === b || types[a][j] === types[b][j]) continue;
-      const before = trialProbeBad(types[a]) + trialProbeBad(types[b]);
       [types[a][j], types[b][j]] = [types[b][j], types[a][j]];
-      const after = trialProbeBad(types[a]) + trialProbeBad(types[b]);
-      if (after <= before) cost += after - before;
+      const after = total();
+      if (after <= cost) cost = after;
       else [types[a][j], types[b][j]] = [types[b][j], types[a][j]];
     }
     if (cost > 0) continue;
@@ -426,7 +440,8 @@ function assignStrataByMemory(rng, memOn, angles) {
  * Everything that is decided once per 24-trial pool and shared by its two halves:
  * which complement pair each half leaves out, the per-slot T_on pattern (a / 3 - a),
  * the 4 angles of every stratum split 2 / 2 (listed stratum by stratum: entries 2k and
- * 2k + 1 belong to stratum k), the on-count histogram of each half, and (after half A
+ * 2k + 1 belong to stratum k), the on-count histogram of each half, the targets-per-trial histogram of each half
+ * (drawn independently of the on-count one), and (after half A
  * is generated) its probe-type x test-position x shade matrix, which half B complements.
  */
 export function drawPoolPlan(type, rng) {
@@ -447,6 +462,15 @@ export function drawPoolPlan(type, rng) {
   return {
     type,
     hist: rng.int(2)
+      ? [
+          [2, 4, 4, 2],
+          [1, 5, 5, 1],
+        ]
+      : [
+          [1, 5, 5, 1],
+          [2, 4, 4, 2],
+        ],
+    thist: rng.int(2)
       ? [
           [2, 4, 4, 2],
           [1, 5, 5, 1],
@@ -477,7 +501,7 @@ function genHalfOnce(rng, ps, b, st) {
   if (hasMemory(type)) {
     for (let k = 0; plan === null; k++) {
       if (k >= 40) fail('row attributes');
-      const cand = genProbePlan(rng, st);
+      const cand = genProbePlan(rng, st, ps.thist[b]);
       const r = assignShade(rng, cand, ps.shadeW);
       if (!r) {
         st.attrRetry++;

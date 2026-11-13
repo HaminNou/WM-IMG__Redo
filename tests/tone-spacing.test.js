@@ -252,7 +252,6 @@ describe('integration – t_only blocks respect the spacing rule', () => {
     for (const trial of trials) {
       const encodedRanks = trial.memory_items.map((m) => toneForCell(m.cell).rank);
       const foilProbes = trial.probes.filter((p) => p.is_target === false);
-      expect(foilProbes.length).toBeGreaterThanOrEqual(1);
       for (const foil of foilProbes) {
         const foilRank = toneForCell(foil.cell).rank;
         for (const er of encodedRanks) {
@@ -273,7 +272,6 @@ describe('integration – t_only blocks respect the spacing rule', () => {
     for (const trial of trials) {
       const encodedRanks = trial.memory_items.map((m) => toneForCell(m.cell).rank);
       const foilProbes = trial.probes.filter((p) => p.is_target === false);
-      expect(foilProbes.length).toBeGreaterThanOrEqual(1);
       for (const foil of foilProbes) {
         const foilRank = toneForCell(foil.cell).rank;
         for (const er of encodedRanks) {

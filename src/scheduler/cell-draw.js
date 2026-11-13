@@ -84,7 +84,7 @@ const cumulative = (w) => {
 };
 
 /* ------------------------------ tones: fitted weights ------------------------------ */
-/* Number of foils of one label in a trial is 0..2 (a trial has 1 or 2 foils). */
+/* Number of foils of one label in a trial is 0..2 (a trial has 0..3 foils, no probe type more than twice). */
 const MAX_FOILS_PER_LABEL = 2;
 const FIT_TOLERANCE = 1e-10;
 const FIT_MAX_ITERATIONS = 3000;

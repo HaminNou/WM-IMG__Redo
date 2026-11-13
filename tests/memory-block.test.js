@@ -89,8 +89,7 @@ describe.each([['d_only'], ['t_only']])('memory-block: %s', (trialType) => {
       expect(tOff).toBeLessThanOrEqual(offCount);
       expect(fOn).toBeLessThanOrEqual(2);
       expect(fOff).toBeLessThanOrEqual(2);
-      expect(targets).toBeGreaterThanOrEqual(1);
-      expect(targets).toBeLessThanOrEqual(2);
+      expect(targets).toBeLessThanOrEqual(3);
     }
   });
 

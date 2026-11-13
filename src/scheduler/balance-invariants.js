@@ -93,6 +93,7 @@ export function blockInvariantViolations(trials, type, { size = 12 } = {}) {
   const typeShade = grid(4, 2);
   const typePosShade = [grid(4, 3), grid(4, 3)];
   const memOnCounts = [];
+  const targetCounts = [];
   const starOnCounts = [];
   const seqKeys = [];
 
@@ -251,7 +252,8 @@ export function blockInvariantViolations(trials, type, { size = 12 } = {}) {
       });
       const foils = probes.filter((p) => !p.is_target).map((p) => p.cell);
       if (new Set(foils).size !== foils.length) bad('foil_repeat', sk);
-      if (targets < 1 || targets > 2) bad('targets_per_trial', `${targets}`);
+      if (targets < 0 || targets > 3) bad('targets_per_trial', `${targets}`);
+      targetCounts.push(targets);
       if (Math.max(...Object.values(counts)) > 2) bad('probe_type_cap', 'a probe type 3 times');
       if (stars.some((s) => encCells.includes(s.cell))) bad('star_on_item', sk);
       if (stars.some((s) => probes.some((p) => p.cell === s.cell))) bad('star_on_probe', sk);
@@ -306,6 +308,9 @@ export function blockInvariantViolations(trials, type, { size = 12 } = {}) {
     if (!slotTon.every((x) => x === 1 || x === 2)) bad('t_on_per_slot', `${slotTon}`);
     if (slotTon.reduce((a, b) => a + b, 0) !== size * 0.75) bad('t_on_total', `${slotTon}`);
     if (!histOk(histOf(memOnCounts))) bad('mem_on_histogram', `${histOf(memOnCounts)}`);
+    /* targets per trial: 0..3, with the pinned histogram (a probe of a trial may be all targets or all
+     * foils, but how many trials have each count is exact, so the totals stay balanced) */
+    if (!histOk(histOf(targetCounts))) bad('targets_histogram', `${histOf(targetCounts)}`);
     if (rot && (!allEqual(memStratumN, half) || !allEqual(memStratumOn, half / 2)))
       bad('mem_label_x_stratum', `on per stratum ${memStratumOn} of ${memStratumN}`);
   }
@@ -370,6 +375,7 @@ export function poolInvariantViolations(trialsA, trialsB, type) {
     const slotTon = zeros(6);
     const slotTargets = zeros(6);
     const histCounts = [];
+    const targetCounts = [];
     const stratumOn = zeros(6);
     const memShade = grid(2, 2);
     const typeShade = grid(4, 2);
@@ -386,6 +392,7 @@ export function poolInvariantViolations(trialsA, trialsB, type) {
         if (hasRotation(type)) stratumOn[rotationStratumIndex(angleOf(t))] += o;
       }
       histCounts.push(onC);
+      targetCounts.push(t.probes.filter((p) => p.is_target).length);
       for (const p of t.probes) {
         const ti = PROBE_TYPES.indexOf(p.type);
         typeShade[ti][sh]++;
@@ -409,6 +416,8 @@ export function poolInvariantViolations(trialsA, trialsB, type) {
       bad('pool_t_on_t_off_per_slot', `T_on ${slotTon} of ${slotTargets}`);
     const h = [0, 1, 2, 3].map((k) => histCounts.filter((x) => x === k).length);
     if (h.join() !== '3,9,9,3') bad('pool_mem_on_histogram', `${h}`);
+    const th = [0, 1, 2, 3].map((k) => targetCounts.filter((x) => x === k).length);
+    if (th.join() !== '3,9,9,3') bad('pool_targets_histogram', `${th}`);
     if (!memShade.flat().every((x) => x === 18)) bad('pool_mem_label_x_shade', `${memShade}`);
     if (!typeShade.flat().every((x) => x === 9)) bad('pool_probe_type_x_shade', `${typeShade}`);
     if (!typePosShade.flat(2).every((x) => x === 3))

@@ -69,6 +69,7 @@ export function checkBlock(
     typeShade = Z(2, 4), // [shade][probe type]
     tposShade = [Z(4, 3), Z(4, 3)]; // [shade][type][test position]
   const onCounts = [],
+    targetCounts = [],
     stOnCounts = [];
   const encUse = {},
     foilUse = {},
@@ -197,7 +198,7 @@ export function checkBlock(
       });
       const foils = pr.filter((p) => !p.is_target).map((p) => p.cell);
       if (new Set(foils).size !== foils.length) bad('foil repeat');
-      if (tg < 1 || tg > 2) bad('targets per trial');
+      targetCounts.push(tg);
       if (Math.max(...Object.values(cnt)) > 2) bad('type cap');
       if (tone) {
         for (let i = 0; i < 3; i++)
@@ -242,6 +243,7 @@ export function checkBlock(
   if (histOK) {
     const okH = (h) => h.join() === '2,4,4,2' || h.join() === '1,5,5,1';
     if (mem && !okH(hist(onCounts))) bad('mem on-count hist not (2,4,4,2)/(1,5,5,1)');
+    if (mem && !okH(hist(targetCounts))) bad('targets-per-trial hist not (2,4,4,2)/(1,5,5,1)');
     if (star && !okH(hist(stOnCounts))) bad('star on-count hist not (2,4,4,2)/(1,5,5,1)');
   }
   return {
