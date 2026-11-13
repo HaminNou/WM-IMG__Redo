@@ -1076,7 +1076,7 @@
         },
         "tested_later": {
           "type": ["boolean", "null"],
-          "description": "For dots and tones: True if one of the three recognition tests is a TARGET probe of this item, False if no test probes it (the three tests are a mix of targets and foils, so some items are never tested). Empty for stars and placeholders and when no probes were planned."
+          "description": "For dots and tones: True if one of the three recognition tests is a TARGET probe of this item, False if no test probes it (a trial has 0 to 3 target probes, so a trial may test none, some or all of its items). Empty for stars and placeholders and when no probes were planned."
         },
         "test_position": {
           "type": ["integer", "null"],

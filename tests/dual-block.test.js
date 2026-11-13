@@ -119,8 +119,7 @@ describe.each([['i_d'], ['i_t']])('dual-block: %s – structural invariants', (t
       expect(tOff).toBeLessThanOrEqual(offCount);
       expect(fOn).toBeLessThanOrEqual(2);
       expect(fOff).toBeLessThanOrEqual(2);
-      expect(targets).toBeGreaterThanOrEqual(1);
-      expect(targets).toBeLessThanOrEqual(2);
+      expect(targets).toBeLessThanOrEqual(3);
     }
   });
 

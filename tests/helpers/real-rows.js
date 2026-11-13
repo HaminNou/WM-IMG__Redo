@@ -80,6 +80,11 @@ export async function runTrial(cond, params, policy = {}) {
     /* probeRtMs: ms after the loop first sees a probe node that a key is pressed; null = never
      * (the window times out). probeExtraPressMs: a second press this long after the first. */
     probeExtraPressMs = null,
+    /* probeKeyFor(order): the key pressed on the order-th probe window (0-based), or null for no
+     * press (default: probeKey on every probe). onStep({phase, order, sinceProbeMs, jsPsych}):
+     * called after every clock step, to observe the DOM. */
+    probeKeyFor = null,
+    onStep = null,
   } = policy;
   const added = [];
   const removed = [];
@@ -176,11 +181,14 @@ export async function runTrial(cond, params, policy = {}) {
       if (!probeSeenAt.has(trial))
         probeSeenAt.set(trial, { t: now, done: false, order: probeSeenAt.size });
       const p = probeSeenAt.get(trial);
+      const keyNow = probeKeyFor ? probeKeyFor(p.order) : probeKey;
       if (probeRtMs !== null && !p.done && now - p.t >= probeRtMs) {
         p.done = true;
         p.firstAt = performance.now();
-        probePresses.push({ probe: p.order, t: p.firstAt, key: probeKey });
-        press(probeKey);
+        if (keyNow !== null) {
+          probePresses.push({ probe: p.order, t: p.firstAt, key: keyNow });
+          press(keyNow);
+        }
       }
       if (
         probeExtraPressMs !== null &&
@@ -189,9 +197,19 @@ export async function runTrial(cond, params, policy = {}) {
         performance.now() - p.firstAt >= probeExtraPressMs
       ) {
         p.extra = true;
-        probePresses.push({ probe: p.order, t: performance.now(), key: probeKey });
-        press(probeKey);
+        probePresses.push({ probe: p.order, t: performance.now(), key: keyNow });
+        press(keyNow);
       }
+    }
+    if (onStep) {
+      const seen = phase.endsWith('_probe') ? probeSeenAt.get(trial) : null;
+      onStep({
+        phase,
+        order: seen ? seen.order : null,
+        sinceProbeMs: seen ? now - seen.t : null,
+        pressed: seen ? seen.done : null,
+        jsPsych,
+      });
     }
   }
   await runP;

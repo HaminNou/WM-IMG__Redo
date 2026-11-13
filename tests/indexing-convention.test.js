@@ -56,7 +56,7 @@ const EXACT = {
   attempt: ONE(2, { first: ['trials.csv'] }),
   presentation_index: ONE(120),
   presentation_index_stamped: ONE(120),
-  block_position: ONE(24),
+  block_position: ONE(60) /* a main block has 60 trials */,
   pool_index: ONE(24),
   rotation_stratum: ONE(6),
   star_serial_position: ONE(3, { first: true }),

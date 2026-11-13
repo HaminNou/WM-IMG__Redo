@@ -759,7 +759,7 @@ export const COLUMN_DOCS = {
     'True if the tone was scheduled after its planned onset (slot_tone_events.late). Tones only.',
   tone_late_ms: 'How late the tone was scheduled, ms (slot_tone_events.late_ms). Tones only.',
   tested_later:
-    'For dots and tones: True if one of the three recognition tests is a TARGET probe of this item, False if no test probes it (the three tests are a mix of targets and foils, so some items are never tested). Empty for stars and placeholders and when no probes were planned.',
+    'For dots and tones: True if one of the three recognition tests is a TARGET probe of this item, False if no test probes it (a trial has 0 to 3 target probes, so a trial may test none, some or all of its items). Empty for stars and placeholders and when no probes were planned.',
   test_probe_type: 'T_on, T_off, F_on or F_off of the target probe that tests this item.',
   test_row_recorded: 'False if the planned test has no row in the data.',
   test_responded: 'True if the test of this item was answered.',

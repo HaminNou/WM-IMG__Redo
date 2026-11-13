@@ -87,6 +87,7 @@ function auditPool(type, pool) {
     const probeCell = new Map(); /* type|position */
     const probeType = new Map();
     const encPos = new Map(); /* encoding_position|probe_position */
+    const targetsPerTrial = [];
     const onPerEnc = [0, 0, 0];
     const offPerEnc = [0, 0, 0];
     for (const t of pool) {
@@ -98,7 +99,7 @@ function auditPool(type, pool) {
         (m.pattern_label === 'on' ? onPerEnc : offPerEnc)[m.encoding_position] += 1;
       });
       const targets = t.probes.filter((p) => p.is_target).length;
-      if (targets < 1 || targets > 2) fail(`targets per trial = ${targets}`);
+      targetsPerTrial.push(targets);
       for (const p of t.probes) {
         count(probeCell, `${p.type}|${p.probe_position}`);
         count(probeType, p.type);
@@ -130,6 +131,8 @@ function auditPool(type, pool) {
                 fail('foil tone within gap');
       }
     }
+    const th = [0, 1, 2, 3].map((k) => targetsPerTrial.filter((x) => x === k).length).join();
+    if (th !== '3,9,9,3') fail(`targets-per-trial histogram ${th}, expected 3,9,9,3`);
     if (!allEqual(probeCell, 6, 12)) fail('probe type x position not 6 each');
     if (!allEqual(probeType, 18, 4)) fail('probe type totals not 18');
     if (DUAL_TYPES.includes(type) && !allEqual(encPos, 8, 9))

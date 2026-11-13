@@ -9,7 +9,7 @@ The preregistration states that on/off-pattern labels of memory items and stars 
 - M/S slot occupancy: 6 trials per slot (each half is built from 6 of the 7 complement pairs of the 14 valid strings, 12 distinct strings; the two blocks leave out different pairs, so the pool still uses all 14 strings, none more than twice);
 - on/off labels of memory items: 3 on and 3 off among the 6 trials that have a memory item at each serial position (1 to 6 among all stimuli); 6 on and 6 off per memory ordinal; exactly 3 on-pattern items per rotation stratum (not T_only, which has no rotation); 9 on and 9 off per background shade;
 - stars: 3 on and 3 off per serial position; 6 and 6 per star ordinal; 3 and 3 per rotation stratum; 9 and 9 per shade;
-- probe type x test position (3 per cell), encoding position x test position (4 per cell), target class x encoding position x test position (1 per cell), 3 probed targets per serial position (1 or 2 of them on-pattern), 1 or 2 target probes per trial;
+- probe type x test position (3 per cell), encoding position x test position (4 per cell), target class x encoding position x test position (1 per cell), 3 probed targets per serial position (1 or 2 of them on-pattern), 0 to 3 target probes per trial with the number of trials per target count pinned to (2,4,4,2) / (1,5,5,1) per half and (3,9,9,3) per pool (revision 2026-11-13, see the section below);
 - probe type x shade (4 or 5 per cell) and probe type x test position x shade (1 or 2 per cell; the second block complements the first);
 - rotation strata (2 angles per stratum; 6 negative and 6 non-negative) and shade (6 white, 6 gray);
 - the per-trial number of on-pattern items (memory items and stars separately) as the histogram (2,4,4,2) in one block and (1,5,5,1) in the other, i.e. 3, 9, 9 and 3 trials with 0, 1, 2 and 3 on-pattern items per 24-trial pool (it is not forced into 1 to 2, which would be a deterministic cue).
@@ -62,9 +62,26 @@ The exact within-block balances create counting cues. This note does NOT claim t
 
 Pre-registered sensitivity analysis (committed before data collection). Every confirmatory analysis that uses probe responses will be reported twice: (a) on all trials and (b) excluding the last k = 3 trials of each task in each block (task-trial index 9, 10, 11 within a block, where counting accuracy is 0.785 to 1.000), or equivalently with a covariate for those trials. Conclusions are called robust only if (a) and (b) agree in direction and inferential decision.
 
+## Revision 2026-11-13: 0 to 3 targets per trial, number of trials per target count pinned to (3, 9, 9, 3)
+
+Recorded for transparency. It was made after the first three pilot sessions and before any confirmatory data collection; no hypothesis, test, threshold or exclusion rule changed.
+
+**Why.** Every memory trial had exactly 3 probes with exactly 1 or 2 targets (exactly 6 + 6 trials per 12-trial half). A participant who learns each probe's true type from the feedback could therefore infer the third probe in one third of the trials: after two targets (TT) the third was always a foil, after two foils (FF) always a target (point 5 of the predictability note above: "p = 1.0 at the same rate as before"). In the three pilot sessions the third-probe accuracy was higher in those forced trials (.79) than in the others (.68). The original Experiment 2 had the same structure (all 3,840 of its trials had 1 or 2 targets), so this is a deviation from Experiment 2 and is filed as such.
+
+**What changed.** A memory trial (D_only, T_only, I_D, I_T) may now have 0, 1, 2 or 3 target probes (so also 3 foils or no foil). The number of trials per target count is pinned, exactly as the number of on-pattern items per trial already was: (2,4,4,2) trials with 0, 1, 2, 3 targets in one 12-trial half and (1,5,5,1) in the other, which gives (3,9,9,3) per 24-trial pool, the 1 : 3 : 3 : 1 split of a fair coin per probe. Which half gets which histogram is drawn from the seed. Every half still has exactly 18 targets (6 per test position). Practice trials follow the same rule (without pinning, two trials per task).
+
+**Unchanged.** Every other exact balance of the block-exact generator (probe type x test position, encoding position x test position, target class x encoding position x test position, 3 probed targets per serial position with 1 or 2 T_on, label, shade and rotation-stratum balances, the 14 sequence strings); no probe type appears 3 times in a trial; a foil is never on an encoded, star or placeholder cell and foils of a trial are distinct; tone foils are at least 3 ranks from the encoded tones; cells stay independent draws.
+
+**Measured (400 simulated sessions, 38,400 memory trials, cap kept).** P(third probe is a target | first two TT) = 0.502, | FF = 0.498, | TF = 0.506, | FT = 0.494; P(second = target | first = T) = 0.498, | F = 0.502; each of the eight patterns TTT..FFF occurs in 12.4 to 12.7 % of trials (1/8 each in expectation). The held-out cell-history classifier is unchanged (0.5086 against 0.5000 over 115,200 probes). Generation succeeded for every seed (worst case 22 attempts per pool against a budget of 1600).
+
+**Remaining predictability, stated plainly.** The exact histogram per block creates a counting cue across trials: a participant who counted the trials of each target count in a block would know, near the end of the block, which counts are still missing (for example the number of targets of the last trial of a task in a block is determined). This is the same kind of cue as in the note above and is judged infeasible for ordinary participants; the registered sensitivity analysis (all trials, and excluding the last k = 3 trials of each task per block) remains the safeguard. On the specific points of items 1 and 5 above: the within-trial TT/FF rule no longer exists, and the number of targets of the last trial of a block is no longer "1 vs 2" but one of 0 to 3 given the remaining counts.
+
 ## For the researcher: wording for the OSF amendment / transparent changes note
 
 Copy the text between the lines into the OSF "Transparent Changes" (or amendment) form. Check the date and the link to the registered version before filing.
+
+
+Second transparent change (2026-11-13, after the first three pilot sessions, before any confirmatory data): a memory trial may now have 0 to 3 target probes instead of exactly 1 or 2, with the number of trials per target count pinned to (3,9,9,3) per 24-trial condition pool ((2,4,4,2) and (1,5,5,1) in the two 12-trial halves). Reason: with exactly 1 or 2 targets and feedback, the third probe of a third of the trials could be inferred from the first two (TT gives a foil, FF a target), as in Experiment 2. In 38,400 simulated trials the third probe is now a target 50% of the time after any pattern of the first two. Hypotheses, tests, thresholds and exclusion rules are unchanged; the sensitivity analysis excluding the last 3 trials of each task per block is unchanged.
 
 ---
 

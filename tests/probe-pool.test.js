@@ -75,8 +75,7 @@ describe('probe-pool: full-block (24-trial) counterbalance', () => {
       expect(tOff).toBeLessThanOrEqual(2);
       expect(fOn).toBeLessThanOrEqual(2);
       expect(fOff).toBeLessThanOrEqual(2);
-      expect(targets).toBeGreaterThanOrEqual(1);
-      expect(targets).toBeLessThanOrEqual(2);
+      expect(targets).toBeLessThanOrEqual(3);
     }
   });
 });
@@ -102,8 +101,7 @@ describe('probe-pool: practice / non-main blocks', () => {
       expect(tOff).toBeLessThanOrEqual(2);
       expect(fOn).toBeLessThanOrEqual(2);
       expect(fOff).toBeLessThanOrEqual(2);
-      expect(targets).toBeGreaterThanOrEqual(1);
-      expect(targets).toBeLessThanOrEqual(2);
+      expect(targets).toBeLessThanOrEqual(3);
     }
   });
 });
