@@ -236,6 +236,7 @@ function buildEncodingRow(trialType, params, blockLabel, timing) {
       display_rotation_deg: params.display_rotation_deg,
       memory_items: params.memory_items.map((m) => ({
         slot: m.slot_index_in_seq,
+        encoding_position: m.encoding_position,
         cell: m.cell,
         pattern_label: m.pattern_label,
       })),
@@ -249,6 +250,7 @@ function buildEncodingRow(trialType, params, blockLabel, timing) {
         const tone = toneForCell(m.cell);
         return {
           slot: m.slot_index_in_seq,
+          encoding_position: m.encoding_position,
           cell: m.cell,
           tone_index: tone.index,
           tone_freq_hz: tone.freq_hz,

@@ -299,7 +299,8 @@ describe('real I+D trials: probe dot vs encoded dot, from the DOM', () => {
           expect(encByCell.has(probe.cell)).toBe(false);
         }
       });
-      expect(nTargets).toBeGreaterThan(0);
+      /* a trial may carry 0 to 3 targets */
+      expect(nTargets).toBe(params.probes.filter((p) => p.is_target).length);
     },
     120000
   );

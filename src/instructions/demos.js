@@ -940,8 +940,8 @@ function pickDemoCells() {
     /* M/S-slot fillers (open squares): different cells from above so the
      * demo's 6-slot sequence never repeats a cell. */
     fillerCells: [offCells[0], onCells[1], offCells[2]],
-    /* Probes: target, foil, target (T_on, F_off, T_off). At set-size 3
-     * trials must carry 1–2 targets. The order makes the three demonstrated
+    /* Probes: target, foil, target (T_on, F_off, T_off). (Real trials
+     * carry 0–3 targets; this demo shows both kinds.) The order makes the three demonstrated
      * presses Right (Yes), Left (No), Left (No, the deliberate error) so
      * BOTH keys are shown (see demoProbePlan). */
     probeCells: [

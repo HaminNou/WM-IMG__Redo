@@ -14,6 +14,8 @@
  *
  * Reference result (800 plans): 0.505 with independent cell draws (shipped); 0.694 when every
  * cell was used an exact number of times with greedy picking of foil cells (the rejected design).
+ * With 0-3 targets per trial (pinned histogram 3/9/9/3 per pool) the base rate is exactly 0.5 and
+ * the lookup scores 0.504 over 200 plans.
  */
 import { pathToFileURL } from 'node:url';
 import { createPRNG } from '../src/prng.js';
