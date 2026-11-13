@@ -154,11 +154,10 @@ describe('rest screens say what actually happens next', () => {
   });
 
   it('inter-block: the timer ends, then the Block 2 intro waits for Space', () => {
-    expect(plain(restNode().stimulus)).toContain('you will press Space to start the next block');
+    expect(plain(restNode().stimulus)).toContain('press the Left and Right arrow keys together');
     expect(mainBIntroNode().choices).toEqual([' ']);
     expect(restNode().choices).toBe('NO_KEYS');
-    expect(restNode().trial_duration).toBe(config.blocks.inter_block_rest_duration_s * 1000);
-    expect(plain(restNode().stimulus)).toContain('You can skip the rest by pressing Space');
+    expect(restNode().trial_duration).toBe(config.blocks.inter_block_rest_max_s * 1000);
   });
 
   it('intra-block: the length comes from config and a two-key resume gate follows', () => {

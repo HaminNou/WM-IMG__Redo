@@ -1724,6 +1724,22 @@ describe('extractCalibrationRow: environment and checks', () => {
     expect(row.Timing_Ok).toBe('NA');
   });
 
+  it('gives an inter-block rest timeout a row with its exit reason', () => {
+    const rows = [
+      { phase: 'consent', consented: true },
+      {
+        phase: 'inter_block_rest_timeout',
+        exit_reason: 'inter_block_rest_timeout',
+        response: 0,
+      },
+    ];
+    const { files } = composeExport([
+      { participant_id: 'P9', session: sessionMeta(), rows, source_paths: [] },
+    ]);
+    const lines = files['CALIBRATION_SUMMARY.csv'].split('\n').filter(Boolean);
+    expect(lines[1]).toContain('"inter_block_rest_timeout"');
+  });
+
   it('gives a screened-out session a row with its exit reason', () => {
     const rows = [
       { phase: 'consent', consented: true },

@@ -107,6 +107,9 @@ export async function finishScreenOut({ reasonHtml, flush, url, navigate = navig
  * @param {Function} opts.condition          conditional_function
  * @param {boolean}  [opts.flush]            upload pending rows before redirect
  * @param {Function} [opts.onFinish]         extra `data` stamping
+ * @param {number}   [opts.autoSubmitAfterMs] end the node (and so start the flush and redirect)
+ *                                           after this long without a click; the explanation then
+ *                                           states the redirect itself and has no "click" sentence
  * @param {boolean}  [opts.beforeConsent]    the exit happens before the consent form has been
  *                                           shown (device gate), so the generic text must not
  *                                           refer to "the consent form"
@@ -120,6 +123,7 @@ export function screenOutExit({
   flush = false,
   onFinish,
   beforeConsent = false,
+  autoSubmitAfterMs,
 }) {
   const url = buildScreenOutUrl();
   const isPlaceholder = isPlaceholderScreenOutUrl(url) || !url;
@@ -132,15 +136,24 @@ export function screenOutExit({
         stimulus: () => {
           const next = isPlaceholder
             ? '<p style="opacity: 0.7; font-size: 0.9em;">This is a test build. No Prolific action is required.</p>'
-            : `<p>${
-                beforeConsent
-                  ? 'This session has ended.'
-                  : 'This session has ended because of one of the checks described in the consent form.'
-              } Click the button below to submit the screen-out completion code to Prolific, ` +
-              'where your submission will be recorded.</p>';
+            : autoSubmitAfterMs
+              ? ''
+              : `<p>${
+                  beforeConsent
+                    ? 'This session has ended.'
+                    : 'This session has ended because of one of the checks described in the consent form.'
+                } Click the button below to submit the screen-out completion code to Prolific, ` +
+                'where your submission will be recorded.</p>';
           return `<div style="max-width: 38rem; margin: 0 auto; text-align: center; line-height: 1.6;">${resolveReason()}${next}</div>`;
         },
-        choices: [isPlaceholder ? 'Close' : 'Submit code to Prolific'],
+        choices: [
+          isPlaceholder
+            ? 'Close'
+            : autoSubmitAfterMs
+              ? 'Return to Prolific now'
+              : 'Submit code to Prolific',
+        ],
+        ...(autoSubmitAfterMs ? { trial_duration: autoSubmitAfterMs } : {}),
         data: { phase, exit_reason: exitReason },
         on_finish: (data) => {
           if (onFinish) onFinish(data);

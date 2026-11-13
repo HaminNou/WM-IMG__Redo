@@ -212,6 +212,7 @@ describe('pre-reg.json matches the build', () => {
       'tone_audibility',
       'timing_probe',
       'practice_accuracy',
+      'inter_block_rest_timeout',
       'display_guard_escape',
     ]);
   });
@@ -252,6 +253,8 @@ describe('pre-reg.json matches the build', () => {
       max_loops: config.practice.max_loops,
     });
     expect(rule('display_guard_escape').escape_after_ms).toBe(ESCAPE_AFTER_MS);
+    expect(rule('inter_block_rest_timeout').threshold_s).toBe(config.blocks.inter_block_rest_max_s);
+    expect(rule('inter_block_rest_timeout').source).toBe('src/conditions/rest.js');
   });
 
   it('keeps the guard-flag trial-drop rule among the analysis exclusions', () => {

@@ -502,6 +502,14 @@ describe('summariseExclusions (participant-level rules)', () => {
     ]);
   });
 
+  it('does not count an inter-block rest timeout as completed', () => {
+    const rows = [
+      ...base(),
+      { phase: 'inter_block_rest_timeout', exit_reason: 'inter_block_rest_timeout' },
+    ];
+    expect(summariseExclusions(rows).completed).toBe(false);
+  });
+
   it('does not count a screen-out or an unfinished session as completed', () => {
     expect(
       summariseExclusions([...base(), { phase: 'exit', exit_reason: 'tones_not_audible' }])

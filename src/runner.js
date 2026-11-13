@@ -34,7 +34,7 @@ import { initSession } from './prolific.js';
 import { assembleCalibrationChain } from './calibration/index.js';
 import { getVisibilityEvents } from './calibration/fullscreen.js';
 import { generateMainBlockPair } from './scheduler/main-blocks.js';
-import { restNode } from './conditions/rest.js';
+import { restNode, interBlockRestTimeoutExit } from './conditions/rest.js';
 import { uploadProgressNode, completionRedirectNode } from './conditions/debrief.js';
 import { initStorage, appendTrialRow, recordWriteFailure } from './storage.js';
 import { assembleInstructionsAndPractice } from './instructions/index.js';
@@ -214,6 +214,7 @@ try {
     mainATagReminderNode(),
     ...mainPair.mainA.nodes,
     restNode({ session }),
+    interBlockRestTimeoutExit(),
     mainBIntroNode(),
     ...mainPair.mainB.nodes,
     /* Zoom and fullscreen no longer matter after the last trial. */

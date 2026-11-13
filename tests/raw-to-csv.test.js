@@ -69,6 +69,7 @@ describe('stageOf and taskOf', () => {
     [{ phase: 'upload_session_end' }, 'end', null],
     [{ phase: 'completion_redirect' }, 'end', null],
     [{ phase: 'timing_probe_fail', exit_reason: 'timing_check_failed' }, 'end', null],
+    [{ phase: 'inter_block_rest_timeout', exit_reason: 'inter_block_rest_timeout' }, 'end', null],
     [{ phase: 'display_guard_event' }, 'session_event', null],
     [{ phase: 'visibility_event' }, 'session_event', null],
     [{ phase: 'audio_state_change' }, 'session_event', null],

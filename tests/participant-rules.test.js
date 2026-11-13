@@ -174,6 +174,17 @@ describe('evaluateRun: the three participant-level rules', () => {
       screened_out: true,
     });
   });
+  it('a run that timed out in the inter-block rest is screened out, not completed, even with a completion row', () => {
+    const rows = [
+      ...cleanRows(),
+      { phase: 'inter_block_rest_timeout', exit_reason: 'inter_block_rest_timeout' },
+    ];
+    expect(evaluateRun(rows)).toMatchObject({
+      completed: false,
+      retained: false,
+      screened_out: true,
+    });
+  });
   it('a run without a completion row is not completed', () => {
     const rows = cleanRows().filter((r) => r.phase !== 'completion_redirect');
     expect(evaluateRun(rows)).toMatchObject({ completed: false, retained: false });

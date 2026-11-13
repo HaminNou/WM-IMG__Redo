@@ -113,6 +113,7 @@ describe('nothing can bring back date of birth, computed age or an age screen', 
     const ALLOWED_EXITS = new Set([
       'consent_declined',
       'desktop_required',
+      'inter_block_rest_timeout',
       'display_guard_escape',
       'practice_criterion_not_met',
       'screen_calibration_failed',

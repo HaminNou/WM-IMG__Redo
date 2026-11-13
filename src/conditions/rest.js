@@ -3,14 +3,18 @@
  *
  * Two flavours, one shared countdown primitive:
  *
- * (1) Inter-block rest. Between Main A and Main B: `config.blocks.inter_block_rest_duration_s`
- *     (120 s, shown as m:ss). The participant MAY SKIP it: a visible hint says so, Space is ignored
- *     during the first `SKIP_GUARD_MS` (a key still held from the previous screen cannot skip it),
- *     and after that Space ends the rest early. So the real length varies by participant and is
- *     recorded on the rest row: `rest_planned_s`, `rest_actual_ms`, `rest_skipped`. Until
- *     2026-11-13 this rest was 30 s, forced, with no skip (a uniform inter-block delay); see
- *     pre-reg/AMENDMENT-inter-block-rest.md. When the timer ends or the rest is skipped the Block 2
- *     intro follows and waits for Space.
+ * (1) Inter-block rest. Between Main A and Main B: up to `config.blocks.inter_block_rest_max_s`
+ *     (600 s = 10 minutes, shown as m:ss). It is a MAXIMUM. The participant may end it early by
+ *     pressing BOTH arrow keys (Left and Right, the same simultaneous-press rule as the resume gate:
+ *     both down within BOTH_KEYS_WINDOW_MS, each cleared on keyup). Arrow presses are ignored during
+ *     the first `SKIP_GUARD_MS` (a key still held from the previous screen cannot end it). Space does
+ *     nothing. If the full time elapses without that key press, the participant is sent back to
+ *     Prolific (`interBlockRestTimeoutExit`: the screen-out helper uploads the rows collected so far,
+ *     writes `exit_reason: 'inter_block_rest_timeout'` and redirects with the screen-out
+ *     completion code). The real length varies by participant and is recorded on the rest row:
+ *     `rest_planned_s`, `rest_actual_ms`, `rest_skipped` (ended early), `rest_timed_out`. Until
+ *     2026-11-13 this rest was 30 s and forced; see pre-reg/AMENDMENT-inter-block-rest.md. After an
+ *     early end the Block 2 intro follows and waits for Space.
  *
  * (2) Intra-block rest. A 30-second rest (`config.blocks.rest_duration_s`) is spliced
  *     in within each main block (see `src/scheduler/main-blocks.js`): Main A
@@ -27,7 +31,7 @@
  * Both flavours show a live countdown so the participant knows the rest has a finite end. The
  * intra-block rests have intentionally NO skip option: the design guarantee there is "at least
  * 30 s of low-cognitive-load" and a skip would let an eager participant collapse it to seconds.
- * Only the inter-block rest can be skipped.
+ * Only the inter-block rest can be ended early.
  */
 import htmlKeyboardResponse from '@jspsych/plugin-html-keyboard-response';
 
@@ -41,20 +45,26 @@ import {
 import { uploadConsentAndPractice, uploadCheckpoint } from '../uploader.js';
 import { getSessionObject } from '../storage.js';
 import { traceMarker } from '../debug/trace-adapters.js';
-import { restLengthPhrase } from './rest-text.js';
+import { restLengthPhrase, restDurationText } from './rest-text.js';
+import { screenOutExit } from '../screen-out.js';
 
 const COUNTDOWN_ID = 'rest-countdown';
-const SKIP_HINT_ID = 'rest-skip-hint';
+const URGENT_ID = 'rest-urgent';
 const TICK_MS = 1000;
-/* Space does nothing for this long after the inter-block rest appears. */
+/* Arrow presses do nothing for this long after the inter-block rest appears. */
 export const SKIP_GUARD_MS = 2000;
-export const SKIP_HINT_TEXT = 'You can skip the rest by pressing Space when you are ready.';
-/* The copy states what happens when the timer ends. After the inter-block rest
- * the Block 2 intro waits for Space (`mainBIntroNode`); after an intra-block
- * rest `resumeAfterRestGateNode` waits for both arrow keys. Neither advances by
+/* The last stretch of the inter-block rest is shown as urgent. */
+export const URGENT_LAST_S = 60;
+export const URGENT_LINE_TEXT =
+  'Press both arrow keys now to continue, or you will be sent back to Prolific.';
+export const INTER_BLOCK_TIMEOUT_REASON = 'inter_block_rest_timeout';
+/* After the inter-block rest the Block 2 intro waits for Space (`mainBIntroNode`); after an
+ * intra-block rest `resumeAfterRestGateNode` waits for both arrow keys. Neither advances by
  * itself, so neither message says "automatically". */
-const DEFAULT_INTER_BLOCK_MESSAGE =
-  'Take a short break. When the timer ends, you will press Space to start the next block.';
+export function interBlockRestMessage(maxS = config.blocks.inter_block_rest_max_s) {
+  const t = restDurationText(maxS);
+  return `Take a break of up to ${t}. When you are ready to continue, press the Left and Right arrow keys together. If you are not back within ${t}, you will be sent back to Prolific.`;
+}
 const DEFAULT_INTRA_BLOCK_MESSAGE = `Take a ${restLengthPhrase(config.blocks.rest_duration_s)} rest. When the timer ends, press both arrow keys to continue.`;
 
 /* Uploads started at a rest are cancelled when the rest ends, so no request
@@ -77,9 +87,11 @@ async function restUpload(session, signal) {
  *
  * @param {object} [opts]
  * @param {number} [opts.durationS]   override the rest duration in seconds (mainly for tests)
- * @param {boolean} [opts.skippable]  true (default): the inter-block rest, 120 s by default, Space
- *                                    ends it after the first SKIP_GUARD_MS. false: an intra-block
- *                                    rest, `config.blocks.rest_duration_s` by default, no skip.
+ * @param {boolean} [opts.skippable]  true (default): the inter-block rest, up to 600 s by default;
+ *                                    both arrow keys end it after the first SKIP_GUARD_MS and a
+ *                                    natural end is a timeout (`rest_timed_out`). false: an
+ *                                    intra-block rest, `config.blocks.rest_duration_s` by default,
+ *                                    no early end.
  * @param {string} [opts.blockLabel]  label for the data record (default 'inter_block')
  * @param {string} [opts.message]     short copy under the heading; defaults to the inter-block message
  * @param {string} [opts.heading]     heading text; defaults to 'Rest'
@@ -94,35 +106,48 @@ export function restNode({
   session,
 } = {}) {
   const totalS =
-    durationS ??
-    (skippable ? config.blocks.inter_block_rest_duration_s : config.blocks.rest_duration_s);
+    durationS ?? (skippable ? config.blocks.inter_block_rest_max_s : config.blocks.rest_duration_s);
   const totalMs = totalS * 1000;
-  const copy = message ?? DEFAULT_INTER_BLOCK_MESSAGE;
+  const copy = message ?? (skippable ? interBlockRestMessage(totalS) : DEFAULT_INTRA_BLOCK_MESSAGE);
   const title = heading ?? 'Rest';
   let uploadController = null;
   let interval = null;
   let keydownHandler = null;
+  let keyupHandler = null;
   let startedAt = null;
   let skipped = false;
   const stopTimers = () => {
     if (interval) clearInterval(interval);
     interval = null;
     if (keydownHandler) document.removeEventListener('keydown', keydownHandler, true);
+    if (keyupHandler) document.removeEventListener('keyup', keyupHandler, true);
     keydownHandler = null;
+    keyupHandler = null;
   };
-  const hint = skippable
-    ? `<p id="${SKIP_HINT_ID}" style="opacity: 0.7; margin: 0; font-size: 0.95rem;">You can skip the rest by pressing <kbd>Space</kbd> when you are ready.</p>`
+  const urgentLine = skippable
+    ? `<p id="${URGENT_ID}" style="visibility: hidden; margin: 0; font-weight: 700; color: #b00020;">${URGENT_LINE_TEXT}</p>`
     : '';
+  const setUrgent = (remainingS) => {
+    if (!skippable) return;
+    const urgent = remainingS <= URGENT_LAST_S;
+    const count = document.getElementById(COUNTDOWN_ID);
+    const line = document.getElementById(URGENT_ID);
+    if (count) {
+      count.style.color = urgent ? '#b00020' : '';
+      count.style.fontWeight = urgent ? '700' : '';
+    }
+    if (line) line.style.visibility = urgent ? 'visible' : 'hidden';
+  };
   return {
     type: htmlKeyboardResponse,
     stimulus: `
-      <div style="display: grid; place-items: center; gap: 1rem; height: ${skippable ? '19rem' : '16rem'};">
+      <div style="display: grid; place-items: center; gap: 1rem; height: ${skippable ? '22rem' : '16rem'}; max-width: 38rem; margin: 0 auto; text-align: center;">
         <h2 style="margin: 0;">${title}</h2>
-        <p data-voiceover-target style="opacity: 0.85; margin: 0;">${copy}</p>
+        <p ${skippable ? '' : 'data-voiceover-target '}style="opacity: 0.85; margin: 0;">${copy}</p>
         <div style="font-size: 4rem; line-height: 1;">
           <span id="${COUNTDOWN_ID}">${formatCountdown(totalS)}</span>
         </div>
-        ${hint}
+        ${urgentLine}
       </div>
     `,
     choices: 'NO_KEYS',
@@ -139,32 +164,52 @@ export function restNode({
       uploadController = new AbortController();
       void restUpload(session, uploadController.signal);
 
-      /* Inter-block rest only: Space ends it early, but not during the first SKIP_GUARD_MS. The
-       * handler is owned here (choices is NO_KEYS, so the plugin has no keyboard listener); it
-       * is removed on every exit path (skip, timer end, external finishTrial via on_finish). */
+      /* Inter-block rest only: both arrow keys end it early (same rule as the resume gate), but
+       * not during the first SKIP_GUARD_MS. The listeners are owned here (choices is NO_KEYS, so
+       * the plugin has no keyboard listener); they are removed on every exit path (early end,
+       * timer end, external finishTrial via on_finish). */
       if (skippable) {
+        let leftDownTs = null;
+        let rightDownTs = null;
         keydownHandler = (e) => {
-          if (e.key !== ' ' && e.code !== 'Space') return;
+          const k = String(e.key).toLowerCase();
+          if (k !== 'arrowleft' && k !== 'arrowright') return;
           e.preventDefault();
           if (e.repeat || skipped) return;
-          if (performance.now() - startedAt < SKIP_GUARD_MS) return;
+          const now = performance.now();
+          if (now - startedAt < SKIP_GUARD_MS) return;
+          if (k === 'arrowleft') leftDownTs = now;
+          else rightDownTs = now;
+          if (
+            leftDownTs === null ||
+            rightDownTs === null ||
+            Math.abs(leftDownTs - rightDownTs) > BOTH_KEYS_WINDOW_MS
+          )
+            return;
           skipped = true;
-          const actual = Math.round(performance.now() - startedAt);
+          const actual = Math.round(now - startedAt);
           stopTimers();
           window.jsPsych?.pluginAPI?.cancelAllKeyboardResponses?.();
-          /* Deferred so the next screen (the Block 2 intro waits for Space) does not receive
+          /* Deferred so the next screen (the Block 2 intro waits for Space) is not handed
            * this same keydown. */
           setTimeout(
             () => window.jsPsych?.finishTrial?.({ rest_skipped: true, rest_actual_ms: actual }),
             0
           );
         };
+        keyupHandler = (e) => {
+          const k = String(e.key).toLowerCase();
+          if (k === 'arrowleft') leftDownTs = null;
+          else if (k === 'arrowright') rightDownTs = null;
+        };
         document.addEventListener('keydown', keydownHandler, true);
+        document.addEventListener('keyup', keyupHandler, true);
       }
 
       const el = document.getElementById(COUNTDOWN_ID);
       if (!el) return;
       let remainingS = totalS;
+      setUrgent(remainingS);
       const tick = () => {
         remainingS -= 1;
         if (remainingS < 0) {
@@ -173,6 +218,7 @@ export function restNode({
           return;
         }
         el.textContent = formatCountdown(remainingS);
+        setUrgent(remainingS);
       };
       interval = setInterval(tick, TICK_MS);
     },
@@ -186,6 +232,10 @@ export function restNode({
       if (data.rest_actual_ms === undefined && startedAt !== null) {
         data.rest_actual_ms = Math.round(performance.now() - startedAt);
       }
+      /* Timed out = the inter-block rest ran its full length with no early end. An external
+       * finish (debug skip, hidden nav) before the full length is neither. */
+      data.rest_timed_out =
+        skippable && !skipped && data.rest_actual_ms >= totalMs - TIMEOUT_TOLERANCE_MS;
     },
     data: {
       phase: 'rest',
@@ -194,6 +244,39 @@ export function restNode({
     },
   };
 }
+
+/* jsPsych's trial_duration timer cannot fire early; this only absorbs rounding. */
+const TIMEOUT_TOLERANCE_MS = 50;
+
+/**
+ * Exit after the inter-block rest ran out. Placed right after `restNode()`: when the last
+ * inter-block rest row says `rest_timed_out`, the participant sees the explanation and is sent
+ * back to Prolific with the screen-out completion code (rows collected so far are uploaded
+ * first, `exit_reason: 'inter_block_rest_timeout'`). The Block 2 intro and everything after it
+ * are then never reached. The redirect starts by itself after a short read time; the button
+ * does it at once.
+ */
+export function interBlockRestTimeoutExit() {
+  return screenOutExit({
+    phase: INTER_BLOCK_TIMEOUT_REASON,
+    exitReason: INTER_BLOCK_TIMEOUT_REASON,
+    flush: true,
+    autoSubmitAfterMs: AUTO_REDIRECT_MS,
+    reasonHtml: () => `
+      <h2>The session has ended</h2>
+      <p>You did not return to the experiment within ${restDurationText(config.blocks.inter_block_rest_max_s)}, so the session has ended. You will now be sent back to Prolific.</p>
+    `,
+    condition: () => {
+      const last = window.jsPsych?.data
+        ?.get()
+        .filter({ phase: 'rest', block_label: 'inter_block' })
+        .last(1)
+        .values()[0];
+      return last?.rest_timed_out === true;
+    },
+  });
+}
+const AUTO_REDIRECT_MS = 4000;
 
 /**
  * Build the intra-block rest node (30-second countdown spliced in mid-block).

@@ -131,6 +131,47 @@ describe.each(CASES)('$name exit', ({ build, rows, phase, reason, flush }) => {
   });
 });
 
+describe('inter-block rest timeout exit end to end', () => {
+  it('uploads first, then redirects with the screen-out code; no button text asks for a click', async () => {
+    mocks.url = 'https://app.prolific.com/submissions/complete?cc=REALCODE';
+    const abort = setRows([]);
+    const navigate = vi.fn();
+    const order = [];
+    mocks.uploadPendingData.mockImplementationOnce(async () => {
+      order.push('upload');
+      return { status: 'uploaded' };
+    });
+    const { interBlockRestTimeoutExit } = await import('../src/conditions/rest.js');
+    const trial = interBlockRestTimeoutExit().timeline[0];
+    expect(trial.choices).toEqual(['Return to Prolific now']);
+    expect(trial.stimulus()).not.toContain('Click the button');
+    expect(trial.data.exit_reason).toBe('inter_block_rest_timeout');
+    /* the same flush + redirect the other exits use */
+    await finishScreenOut({
+      reasonHtml: trial.stimulus(),
+      flush: true,
+      url: mocks.url,
+      navigate: (u) => {
+        order.push('redirect');
+        navigate(u);
+      },
+    });
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['upload', 'redirect']);
+    expect(navigate).toHaveBeenCalledWith(mocks.url);
+  });
+
+  it('on_finish aborts the run and flushes', async () => {
+    mocks.url = 'https://app.prolific.com/submissions/complete?cc=SCREENOUT_CODE_PLACEHOLDER';
+    const abort = setRows([]);
+    const { interBlockRestTimeoutExit } = await import('../src/conditions/rest.js');
+    interBlockRestTimeoutExit().timeline[0].on_finish({});
+    expect(abort).toHaveBeenCalledTimes(1);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(mocks.uploadPendingData).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('finishScreenOut', () => {
   const REAL = 'https://app.prolific.com/submissions/complete?cc=REALCODE';
 

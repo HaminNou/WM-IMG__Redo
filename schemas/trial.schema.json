@@ -292,9 +292,10 @@
         "tones_not_audible",
         "screen_calibration_failed",
         "timing_check_failed",
-        "practice_criterion_not_met"
+        "practice_criterion_not_met",
+        "inter_block_rest_timeout"
       ],
-      "description": "Why the session ended early. Present only on the exit row (`desktop_gate_fail`, `consent_declined`, `tone_audibility_fail`, `screen_calibration_fail`, `timing_probe_fail`, `practice_disqualification`)."
+      "description": "Why the session ended early. Present only on the exit row (`desktop_gate_fail`, `consent_declined`, `tone_audibility_fail`, `screen_calibration_fail`, `timing_probe_fail`, `practice_disqualification`, `inter_block_rest_timeout`)."
     },
     "attention_excluded": {
       "type": "boolean",
@@ -455,23 +456,27 @@
     },
     "rest_started_ts_ms": {
       "type": "integer",
-      "description": "performance.now() timestamp (rounded ms) at which a rest screen rendered. Stamped on `rest` rows (inter-block and intra-block). `rest_ended_ts_ms - rest_started_ts_ms` is the realised rest length: `config.blocks.rest_duration_s` (30 s) for an intra-block rest, and up to `config.blocks.inter_block_rest_duration_s` (120 s) for the inter-block rest, which the participant may skip."
+      "description": "performance.now() timestamp (rounded ms) at which a rest screen rendered. Stamped on `rest` rows (inter-block and intra-block). `rest_ended_ts_ms - rest_started_ts_ms` is the realised rest length: `config.blocks.rest_duration_s` (30 s) for an intra-block rest, and up to `config.blocks.inter_block_rest_max_s` (600 s) for the inter-block rest, which the participant may end early with both arrow keys."
     },
     "rest_ended_ts_ms": {
       "type": "integer",
-      "description": "performance.now() timestamp (rounded ms) at which the rest countdown reached zero (or the rest was skipped) and the node finished. Stamped on `rest` rows. Use with `rest_started_ts_ms` to compute the realised rest length."
+      "description": "performance.now() timestamp (rounded ms) at which the rest countdown reached zero (or the rest was ended early) and the node finished. Stamped on `rest` rows. Use with `rest_started_ts_ms` to compute the realised rest length."
     },
     "rest_planned_s": {
       "type": "integer",
-      "description": "Planned rest length in seconds: 120 (`config.blocks.inter_block_rest_duration_s`) on the inter-block rest row (`block_label = inter_block`), 30 (`config.blocks.rest_duration_s`) on the intra-block rest rows. Stamped on every `rest` row."
+      "description": "Planned rest length in seconds: 600 (`config.blocks.inter_block_rest_max_s`, a maximum) on the inter-block rest row (`block_label = inter_block`), 30 (`config.blocks.rest_duration_s`) on the intra-block rest rows. Stamped on every `rest` row."
     },
     "rest_actual_ms": {
       "type": "integer",
-      "description": "Realised rest length in ms, from the moment the rest screen rendered to the moment it ended (timer end, or Space on the skippable inter-block rest). Stamped on every `rest` row. Before 2026-11-13 the inter-block rest was a forced 30 s; see pre-reg/AMENDMENT-inter-block-rest.md."
+      "description": "Realised rest length in ms, from the moment the rest screen rendered to the moment it ended (timer end, or both arrow keys on the inter-block rest). Stamped on every `rest` row. Before 2026-11-13 the inter-block rest was a forced 30 s, and the 2026-11-13 first version of this change was 120 s ended with Space; see pre-reg/AMENDMENT-inter-block-rest.md."
     },
     "rest_skipped": {
       "type": "boolean",
-      "description": "True if the participant ended the (inter-block) rest early by pressing Space (possible only after the first 2 s). Always false on intra-block rests, which cannot be skipped. Stamped on every `rest` row."
+      "description": "True if the participant ended the (inter-block) rest early by pressing both arrow keys together (possible only after the first 2 s). Always false on intra-block rests, which cannot be ended early. Stamped on every `rest` row."
+    },
+    "rest_timed_out": {
+      "type": "boolean",
+      "description": "True on the inter-block `rest` row if the full `rest_planned_s` ran out without the participant pressing both arrow keys; the session then ends with `exit_reason = inter_block_rest_timeout` and the participant is sent back to Prolific with the screen-out completion code. False otherwise (always false on intra-block rests). Stamped on every `rest` row."
     },
     "space_enabled_after_ms": {
       "type": ["integer", "null"],

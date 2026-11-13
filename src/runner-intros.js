@@ -29,7 +29,7 @@ import { getVoiceover } from './visuals/voiceover.js';
 import { continueHintHtml } from './visuals/continue-hint.js';
 import { TRIAL_TYPE_LABELS, trialTypeTagHtml } from './conditions/shared.js';
 import { traceMarker } from './debug/trace-adapters.js';
-import { restLengthPhrase } from './conditions/rest-text.js';
+import { restLengthPhrase, restDurationText } from './conditions/rest-text.js';
 import { gateUntilNarrationEnds } from './visuals/narration-gate.js';
 
 /**
@@ -108,9 +108,11 @@ export function mainAIntroNode() {
           blocks of 60 trials. Block 1 includes a
           ${restLengthPhrase(config.blocks.rest_duration_s)} rest after trials 20 and 40,
           Block 2 includes ${restLengthPhrase(config.blocks.rest_duration_s)} rests after
-          trials 15, 30 and 45, and there is a
-          ${restLengthPhrase(config.blocks.inter_block_rest_duration_s)} rest between the two
-          blocks, which you can skip if you do not want to wait.</p>
+          trials 15, 30 and 45. Between the two blocks there is a rest of up to
+          ${restDurationText(config.blocks.inter_block_rest_max_s)}. If you are not back in the
+          experiment within ${restDurationText(config.blocks.inter_block_rest_max_s)}, you will be
+          sent back to Prolific. If you want a shorter rest, press the Left and Right arrow keys
+          together when you are ready.</p>
           <p>Same controls as the practice: <strong>Yes</strong> or
           <strong>On-pattern</strong> on the
           <kbd>&rarr;</kbd> RIGHT arrow key,
