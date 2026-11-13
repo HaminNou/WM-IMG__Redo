@@ -600,10 +600,6 @@
     "source": "imagery.iOnlyInstructionNode.page1#0:script"
   },
   {
-    "text": "Take a short break. When the timer ends, you will press Space to start the next block.",
-    "source": "rest.restNode.stimulus#0"
-  },
-  {
     "text": "Tone 1 — listen and try to remember it.",
     "source": "demos.caption27"
   },
@@ -674,6 +670,10 @@
   {
     "text": "Test 2 of 3: was this tone one of the ones you just heard?",
     "source": "demos.caption37"
+  },
+  {
+    "text": "Practice is over. The main trials start now. There are two blocks of 60 trials. Block 1 includes a 30-second rest after trials 20 and 40, Block 2 includes 30-second rests after trials 15, 30 and 45. Between the two blocks there is a rest of up to 10 minutes. If you are not back in the experiment within 10 minutes, you will be sent back to Prolific. If you want a shorter rest, press the Left and Right arrow keys together when you are ready. Same controls as the practice: Yes or On-pattern on the → RIGHT arrow key, No or Not on-pattern on the ← LEFT arrow key. Important: To start each trial, press the Left and Right arrow keys at the same time . Before you do, look at the label shown above the circle. It tells you what type of trial is coming next, so you know what to expect. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
   },
   {
     "text": "Tone 1 — keep listening for each tone.",
