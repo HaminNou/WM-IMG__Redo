@@ -42,8 +42,8 @@ const MAIN_TRIALS_TOTAL = TRIAL_TYPES.length * TRIALS_PER_TYPE_TOTAL; /* 120 */
  * trials 15, 30 and 45 (four 15-trial runs). Every rest is the same length
  * (`config.blocks.rest_duration_s`). The inter-block rest at trial 60→61 is
  * added separately by the runner. */
-const REST_AFTER_WITHIN_BLOCK_TRIALS_A = Object.freeze([20, 40]);
-const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
+export const REST_AFTER_WITHIN_BLOCK_TRIALS_A = Object.freeze([20, 40]);
+export const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
 
 /**
  * Generate the Main A + Main B block pair.

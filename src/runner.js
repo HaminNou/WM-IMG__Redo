@@ -41,6 +41,7 @@ import { assembleInstructionsAndPractice } from './instructions/index.js';
 import { assembleQuestionnaireChain } from './questionnaire/index.js';
 import { installReveal } from './debug/reveal.js';
 import { trace } from './debug/trace.js';
+import { printSessionPlan } from './debug/plan-print.js';
 import { emitAuxDataRow } from './conditions/shared.js';
 import { installHiddenNav, getHiddenNavTrialStartHook } from './hidden-nav.js';
 import { getToneBank } from './audio/tones.js';
@@ -198,8 +199,9 @@ trace.banner({ seed: session.seed_string });
  * of leaving the participant on a blank page. */
 let timeline = [];
 let timelineError = null;
+let mainPair = null;
 try {
-  const mainPair = generateMainBlockPair();
+  mainPair = generateMainBlockPair();
   timeline = [
     ...assembleCalibrationChain(),
     ...assembleInstructionsAndPractice(),
@@ -222,6 +224,8 @@ try {
 } catch (err) {
   timelineError = err;
 }
+/* Debug only: print the whole generated plan now, before consent. */
+if (mainPair) printSessionPlan({ seed: session.seed_string, mainPair });
 
 /* If IDB open fails fatally we'd otherwise sit on a blank screen forever —
  * `initStorage` already falls back to the in-memory backend on a recoverable

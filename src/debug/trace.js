@@ -407,6 +407,10 @@ const banner = guarded((info = {}) => {
     ['reveal  ', 'label'],
     'press G twice quickly to show/hide the hidden grid + pattern (each toggle is logged to the data)',
   ]);
+  out('log', [
+    ['plan    ', 'label'],
+    'the whole session plan is printed below the banner (balances, every trial); window.__WM_PLAN__ holds it, window.__WM_PLAN_DOWNLOAD__() saves it as JSON',
+  ]);
   out('log', [['url     ', 'label'], search || '(none)']);
   out('log', [['build   ', 'label'], `${config.build_id} (${BUILD_COMMIT}, ${BUILD_TIME})`]);
   if (info.seed !== undefined && info.seed !== null)
