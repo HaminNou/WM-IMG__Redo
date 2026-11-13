@@ -408,6 +408,10 @@ const banner = guarded((info = {}) => {
     'press G twice quickly to show/hide the hidden grid + pattern (each toggle is logged to the data)',
   ]);
   out('log', [
+    ['skip    ', 'label'],
+    'press N twice quickly to skip one stage forward: instructions/demos -> practice -> Block 1 intro -> Block 2 intro -> end (calibration cannot be skipped; each skip is logged to the data)',
+  ]);
+  out('log', [
     ['plan    ', 'label'],
     'the whole session plan is printed below the banner (balances, every trial); window.__WM_PLAN__ holds it, window.__WM_PLAN_DOWNLOAD__() saves it as JSON',
   ]);
