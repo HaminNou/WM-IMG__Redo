@@ -455,11 +455,36 @@
     },
     "rest_started_ts_ms": {
       "type": "integer",
-      "description": "performance.now() timestamp (rounded ms) at which the inter-block rest screen rendered. Stamped on `rest` rows. The rest is locked at `config.blocks.rest_duration_s` (30 s) so `rest_ended_ts_ms - rest_started_ts_ms` should reproduce that constant within a frame."
+      "description": "performance.now() timestamp (rounded ms) at which a rest screen rendered. Stamped on `rest` rows (inter-block and intra-block). `rest_ended_ts_ms - rest_started_ts_ms` is the realised rest length: `config.blocks.rest_duration_s` (30 s) for an intra-block rest, and up to `config.blocks.inter_block_rest_duration_s` (120 s) for the inter-block rest, which the participant may skip."
     },
     "rest_ended_ts_ms": {
       "type": "integer",
-      "description": "performance.now() timestamp (rounded ms) at which the rest countdown reached zero and the node finished. Stamped on `rest` rows. Use with `rest_started_ts_ms` to compute the realised inter-block delay."
+      "description": "performance.now() timestamp (rounded ms) at which the rest countdown reached zero (or the rest was skipped) and the node finished. Stamped on `rest` rows. Use with `rest_started_ts_ms` to compute the realised rest length."
+    },
+    "rest_planned_s": {
+      "type": "integer",
+      "description": "Planned rest length in seconds: 120 (`config.blocks.inter_block_rest_duration_s`) on the inter-block rest row (`block_label = inter_block`), 30 (`config.blocks.rest_duration_s`) on the intra-block rest rows. Stamped on every `rest` row."
+    },
+    "rest_actual_ms": {
+      "type": "integer",
+      "description": "Realised rest length in ms, from the moment the rest screen rendered to the moment it ended (timer end, or Space on the skippable inter-block rest). Stamped on every `rest` row. Before 2026-11-13 the inter-block rest was a forced 30 s; see pre-reg/AMENDMENT-inter-block-rest.md."
+    },
+    "rest_skipped": {
+      "type": "boolean",
+      "description": "True if the participant ended the (inter-block) rest early by pressing Space (possible only after the first 2 s). Always false on intra-block rests, which cannot be skipped. Stamped on every `rest` row."
+    },
+    "space_enabled_after_ms": {
+      "type": ["integer", "null"],
+      "description": "`main_a_intro` row only. Time in ms from the start of the screen until Space was enabled (Space is inactive until the voiceover has finished). null if Space was enabled at once (voice off or no recording)."
+    },
+    "narration_finished": {
+      "type": "boolean",
+      "description": "`main_a_intro` row only. True if Space was enabled because the recording played to its end."
+    },
+    "gate_reason": {
+      "type": "string",
+      "enum": ["narration_end", "voice_off", "timeout", "no_audio", "locked_exit"],
+      "description": "`main_a_intro` row only. Why Space was enabled: the recording ended (`narration_end`), the participant's voice toggle was off (`voice_off`), the safety timeout ran out (`timeout`), or there was no audio to wait for (`no_audio`: recording missing, failed to load, or playback blocked by the browser). `locked_exit` = the screen was left (experimenter keys U/R or the debug N N skip) while Space was still locked."
     },
     "condition": {
       "type": "string",

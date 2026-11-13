@@ -69,14 +69,17 @@ export function installVoiceoverSlideObserver() {
 }
 
 function handleTargets() {
+  let first = null;
   const targets = document.querySelectorAll(`[${TARGET_ATTR}]:not([${STARTED_FLAG}])`);
   for (const target of targets) {
     /* Mark before extracting so a re-entrant mutation (e.g. our own
      * `replaceChildren` inside renderWordSpans) doesn't trigger a second
      * narration pass. */
     target.setAttribute(STARTED_FLAG, '1');
-    narrateTarget(target);
+    const controller = narrateTarget(target);
+    first ??= controller ?? null;
   }
+  return first;
 }
 
 /**
@@ -87,10 +90,11 @@ function handleTargets() {
  * experimenter wants this one screen spoken — e.g. the "main trials begin"
  * announcement after practice, or the "thank you" message at the end of the
  * main task. Idempotent: nodes already flagged as narrated are skipped, so
- * a re-fire of `on_load` won't double-speak.
+ * a re-fire of `on_load` won't double-speak. Returns the controller of the narration it started
+ * (null when nothing new was started), so a screen can wait for its end.
  */
 export function narrateNowIfPresent() {
-  handleTargets();
+  return handleTargets();
 }
 
 function narrateTarget(target) {
@@ -98,7 +102,7 @@ function narrateTarget(target) {
    * captures the visible prose regardless of HTML structure. Footer
    * hints (e.g. "Press Space to continue") sit OUTSIDE the target, so
    * they don't contribute — by design. */
-  if (!target.textContent || !target.textContent.trim()) return;
+  if (!target.textContent || !target.textContent.trim()) return null;
 
   /* Hand off to the engine's structure-preserving walker. The body's
    * `<p>`, `<ul>`, `<li>`, `<strong>` (and any other inline / block
@@ -107,10 +111,11 @@ function narrateTarget(target) {
    * reading layout the slide was designed around (bulleted lists, bold
    * emphasis, paragraph breaks) while still giving the engine a flat
    * narration stream + per-word reveal targets. */
-  getVoiceover().narrateInPlace(target);
+  const controller = getVoiceover().narrateInPlace(target);
 
   /* Mount the toggle pill the first time we narrate. */
   ensureToggleMounted();
+  return controller;
 }
 
 /**

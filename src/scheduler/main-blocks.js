@@ -2,7 +2,7 @@
  * Main A / Main B block-pair builder.
  *
  * The main task is 24 trials per type × 5 types = 120 trials, split into two
- * 60-trial blocks (Main A and Main B) with a 30-second rest between them.
+ * 60-trial blocks (Main A and Main B) with a 2-minute (skippable) rest between them.
  *
  * Each type's 24-trial pool is generated as TWO exact 12-trial halves, one per
  * block (`balanced-pool.js`), never as a 24-pool that is partitioned afterwards.
@@ -39,9 +39,9 @@ const MAIN_TRIALS_TOTAL = TRIAL_TYPES.length * TRIALS_PER_TYPE_TOTAL; /* 120 */
 /* Intra-block rest schedule. With 60 trials per block, Main A gets a rest
  * after within-block trials 20 and 40 (three 20-trial runs). Main B, the
  * later block and the one run under more fatigue, gets one more rest: after
- * trials 15, 30 and 45 (four 15-trial runs). Every rest is the same length
- * (`config.blocks.rest_duration_s`). The inter-block rest at trial 60→61 is
- * added separately by the runner. */
+ * trials 15, 30 and 45 (four 15-trial runs). Every intra-block rest is the same length
+ * (`config.blocks.rest_duration_s`, 30 s, no skip). The inter-block rest at trial 60→61 is
+ * added separately by the runner (`config.blocks.inter_block_rest_duration_s`, skippable). */
 export const REST_AFTER_WITHIN_BLOCK_TRIALS_A = Object.freeze([20, 40]);
 export const REST_AFTER_WITHIN_BLOCK_TRIALS_B = Object.freeze([15, 30, 45]);
 

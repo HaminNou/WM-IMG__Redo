@@ -129,6 +129,62 @@ export function expectedAudioMs(entry) {
   return Math.max(fromWords, fromBytes) || fromChars;
 }
 
+const normWord = (w) =>
+  String(w ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]/gu, '');
+const LOOKAHEAD_TOKENS = 4;
+
+/**
+ * Map each TTS word boundary to the spoken on-screen token it belongs to.
+ *
+ * The recording's boundary list is not always 1:1 with the visible words: the TTS sometimes
+ * reports no boundary for a lone digit ("Block 1" has a boundary for "Block" only, a few
+ * recordings lose one to three of them), and a plain "k-th boundary = k-th token" mapping then
+ * reveals every later word one or more words late. The mapping below walks both lists together:
+ * when the boundary's text matches the next token it is used; when it matches a token up to
+ * `LOOKAHEAD_TOKENS` further on, the tokens in between had no boundary and are revealed together
+ * with it; when nothing matches (different spelling of a number), the next token is used, as
+ * before. The result is monotonic, one entry per boundary, values are indices into `tokenTexts`.
+ *
+ * @param {string[]} boundaryTexts  `word_boundaries[].text` of the manifest entry
+ * @param {string[]} tokenTexts     visible tokens that carry a letter or digit
+ * @returns {number[]}
+ */
+export function alignBoundariesToTokens(boundaryTexts, tokenTexts) {
+  const last = tokenTexts.length - 1;
+  const out = [];
+  let i = 0;
+  const same = (tok, b) => {
+    const a = normWord(tok);
+    const c = normWord(b);
+    return a !== '' && a === c;
+  };
+  for (const b of boundaryTexts) {
+    if (last < 0) break;
+    /* One boundary can cover several tokens ("Block 1", "3 seconds"): it ends at the last one. */
+    const parts = String(b ?? '')
+      .split(/\s+/)
+      .filter((p) => normWord(p) !== '');
+    let at = -1;
+    for (let k = i; k <= Math.min(last, i + LOOKAHEAD_TOKENS); k++) {
+      if (same(tokenTexts[k], parts[0])) {
+        at = k;
+        break;
+      }
+    }
+    if (at < 0) at = Math.min(i, last);
+    let end = at;
+    for (let p = 1; p < parts.length && end + 1 <= last; p++) {
+      if (!same(tokenTexts[end + 1], parts[p])) break;
+      end += 1;
+    }
+    out.push(end);
+    i = Math.min(end + 1, last + 1);
+  }
+  return out;
+}
+
 /** Hard time limit for one recording, in ms. */
 export function audioWatchdogLimitMs(entry, rate = 1) {
   const r = Number(rate) > 0 ? Number(rate) : 1;
@@ -1166,6 +1222,12 @@ class VoiceoverEngine {
     audio.playbackRate = opts.rate ?? 1.0;
     audio.preload = 'auto';
     state.audioEl = audio;
+    /* Facts for `gateUntilNarrationEnds` (narration-gate.js): how long the recording may take at
+     * most, whether it really started playing, and whether it ended by itself. */
+    state.audioLimitMs = audioWatchdogLimitMs(entry, audio.playbackRate);
+    audio.addEventListener('playing', () => {
+      state.audioPlaying = true;
+    });
     armAudioGuard(audio, entry, state, finish, audio.playbackRate);
 
     /* Precompute the token indices of every word token so the time-based
@@ -1210,9 +1272,13 @@ class VoiceoverEngine {
     /* Truncate to the shorter of the two so we never index out of
      * bounds. The remaining words are caught by `revealAll` in
      * `finish('completed')`. */
-    const boundaryLimit = useBoundaries
-      ? Math.min(boundariesRaw.length, spokenWordTokenIndices.length)
-      : 0;
+    const boundaryTokenPos = useBoundaries
+      ? alignBoundariesToTokens(
+          boundariesRaw.map((b) => b.text),
+          spokenWordTokenIndices.map((idx) => state.tokens[idx].text)
+        )
+      : [];
+    const boundaryLimit = boundaryTokenPos.length;
     /* Pre-compute the trigger time for each spoken word: revealing at
      * the END of the word (`offset_ms + duration_ms`) instead of the
      * start. Rationale: lighting a word the instant the voice begins
@@ -1245,7 +1311,7 @@ class VoiceoverEngine {
           nextBoundaryIdx += 1;
         }
         if (advancedTo < 0) return;
-        const tokenIdx = spokenWordTokenIndices[advancedTo];
+        const tokenIdx = spokenWordTokenIndices[boundaryTokenPos[advancedTo]];
         if (tokenIdx <= state.revealedUpTo) return;
         state.revealedUpTo = tokenIdx;
         revealUpTo(host, tokenIdx);
@@ -1270,9 +1336,27 @@ class VoiceoverEngine {
      * appear as soon as duration is known. */
     audio.addEventListener('timeupdate', revealForTime);
     audio.addEventListener('loadedmetadata', revealForTime);
+    /* `timeupdate` alone quantises the reveal to about 250 ms. While the audio plays, also read
+     * the audio clock on every animation frame, so each word flips within a frame or two of the
+     * end of its spoken duration. `timeupdate` stays as the fallback (hidden tab: no frames). */
+    if (typeof requestAnimationFrame === 'function') {
+      let rafId = 0;
+      const frame = () => {
+        rafId = 0;
+        if (state.finished || audio.paused || audio.ended) return;
+        revealForTime();
+        rafId = requestAnimationFrame(frame);
+      };
+      const start = () => {
+        if (!rafId && !state.finished) rafId = requestAnimationFrame(frame);
+      };
+      audio.addEventListener('playing', start);
+      audio.addEventListener('play', start);
+    }
 
     audio.addEventListener('ended', () => {
       if (state.finished) return;
+      state.audioEnded = true;
       finish('completed');
     });
     audio.addEventListener('error', () => {

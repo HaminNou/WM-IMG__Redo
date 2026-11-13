@@ -288,6 +288,10 @@
     "source": "memory.dOnlyInstructionNode.page2#0:script"
   },
   {
+    "text": "Practice is over. The main trials start now. There are two blocks of 60 trials. Block 1 includes a 30-second rest after trials 20 and 40, Block 2 includes 30-second rests after trials 15, 30 and 45, and there is a 2-minute rest between the two blocks, which you can skip if you do not want to wait. Same controls as the practice: Yes or On-pattern on the → RIGHT arrow key, No or Not on-pattern on the ← LEFT arrow key. Important: To start each trial, press the Left and Right arrow keys at the same time . Before you do, look at the label shown above the circle. It tells you what type of trial is coming next, so you know what to expect. Press Space to begin Block 1.",
+    "source": "runner-intros.mainAIntroNode.stimulus#0"
+  },
+  {
     "text": "Tone test 2 of 3: was that tone one of the ones you just heard?",
     "source": "demos.caption59"
   },

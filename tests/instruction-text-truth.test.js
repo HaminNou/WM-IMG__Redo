@@ -157,7 +157,8 @@ describe('rest screens say what actually happens next', () => {
     expect(plain(restNode().stimulus)).toContain('you will press Space to start the next block');
     expect(mainBIntroNode().choices).toEqual([' ']);
     expect(restNode().choices).toBe('NO_KEYS');
-    expect(restNode().trial_duration).toBe(config.blocks.rest_duration_s * 1000);
+    expect(restNode().trial_duration).toBe(config.blocks.inter_block_rest_duration_s * 1000);
+    expect(plain(restNode().stimulus)).toContain('You can skip the rest by pressing Space');
   });
 
   it('intra-block: the length comes from config and a two-key resume gate follows', () => {
