@@ -3,10 +3,11 @@
 Two tools for the experimenter, both OFF unless switched on by the URL:
 
 1. a console trace of every trial (angles, cells, ON/OFF tags, targets and foils, keys, truth values, feedback);
-2. a secret key (press **G** twice) that shows the hidden grid and pattern inside the circle.
+2. a secret key (press **G** twice) that shows the hidden grid and pattern inside the circle;
+3. a secret stage-skip key (press **N** twice) that jumps forward one stage of the session (see "Stage skip: N N").
 
 **Never use them with real participants.** They show the answers. Code is in `src/debug/`
-(`debug-mode.js`, `trace.js`, `reveal.js`).
+(`debug-mode.js`, `trace.js`, `reveal.js`, `skip.js`).
 
 ## How to switch them on
 
@@ -105,6 +106,29 @@ it never covers dots or stars and takes no clicks. It stays on across the steps 
 and switches itself off at the end of the trial. **G G** again hides it. Outside a trial only a console note is printed.
 The G key is never counted as a response (the response handlers only accept their own keys).
 
+## Stage skip: N N
+
+Press **N** twice within 450 ms (key repeat, Ctrl/Cmd/Alt combinations and typing in a text field are ignored; no `devnav=1` needed,
+the `U` / `R` keys stay dev-server only) to skip forward ONE stage. Where you are decides what happens:
+
+| You are in                                                              | N N goes to                                                                                                                                                        |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| instructions, demos, task intro slides, practice-readiness              | the next practice trial gate (Task 1's the first time); every deck, demo and slide before it is skipped. Practice then runs normally                               |
+| any practice trial, practice feedback, practice notice, attention check | the Block 1 intro (`main_a_intro`); rest of practice, its feedback and attention checks are skipped, the accuracy criterion / retry / disqualification is bypassed |
+| Main A: intro, tag reminder, trial, rest, resume gate                   | the Block 2 intro (`main_b_intro`)                                                                                                                                 |
+| Main B: intro, trial, rest, resume gate                                 | the end-of-task screen (`end_of_task_intro`): questionnaires and the end can be tested                                                                             |
+| consent, demographics, calibration, volume, tone check, timing probe    | nothing: the console prints `calibration cannot be skipped` (they measure the screen and sound that the geometry needs)                                            |
+| end-of-task screen and after                                            | nothing (a console note)                                                                                                                                           |
+
+How it works (`src/debug/skip.js`): the key finishes the screen you are on (like `U`), silences audio, closes the trace group
+(`TRIAL ABORTED: experimenter stage skip`), prints a `SKIP from -> to` line and writes one `debug_skip` row. Every following
+screen is then ended at once (it still runs its own cleanup, so no key listener, timer, audio or background is left behind)
+until the target screen, which runs normally. Trial numbers (`N/120`) are fixed in the plan, so if Main A is skipped Block 2 still
+starts at 61/120; the counter shows the last number reached until the next trial. The display guard is still stopped on the way
+to the end-of-task screen. The N key is not an allowed key of any response handler, so it is never counted as a response or an
+extra key, and it does not interfere with `G G`, `U` or `R`. The skipped nodes' rows (neutralised, no responses) stay in the data
+of this debug session, which is excluded from analysis anyway.
+
 ## What is written to the data
 
 - `debug_mode` (boolean) on the `session_info` row, the upload envelope and the end-of-run session stamp, next to `is_pilot_run`.
@@ -112,6 +136,13 @@ The G key is never counted as a response (the response handlers only accept thei
 - One row per reveal toggle: `phase: 'debug_reveal'`, `debug_reveal_on` (true/false), `trial_uid`, `debug_node_phase`
   (the node that was running), `ts` (performance.now, ms), plus the usual clock fields.
   Exclude any trial that has a `debug_reveal` row with `debug_reveal_on: true`.
+- One row per stage skip: `phase: 'debug_skip'`, `from_stage` (`instructions`, `practice`, `main_a`, `main_b`), `to_stage`
+  (`practice_gate`, `main_a_intro`, `main_b_intro`, `end_of_task_intro`), `trial_uid` (of the trial that was running, or null),
+  `debug_node_phase` (the node that was running), `ts`. The interrupted node's own row carries `debug_skipped: true`.
+  Exporters treat `debug_skip` as a session event (no task), like `debug_reveal`.
+
+The deployed site must be built with `npm run build:debug` for any of these tools (including N N) to exist; the normal
+`npm run build` has no listener and no hook.
 
 The trace leaves every recorded value identical (stimuli, keys, scores, feedback, row contents; checked by
 `tests/debug-data-identical.test.js`). It does not promise identical timing: console calls can cost a frame on the

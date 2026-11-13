@@ -40,6 +40,7 @@ import { initStorage, appendTrialRow, recordWriteFailure } from './storage.js';
 import { assembleInstructionsAndPractice } from './instructions/index.js';
 import { assembleQuestionnaireChain } from './questionnaire/index.js';
 import { installReveal } from './debug/reveal.js';
+import { installSkip } from './debug/skip.js';
 import { trace } from './debug/trace.js';
 import { printSessionPlan } from './debug/plan-print.js';
 import { emitAuxDataRow } from './conditions/shared.js';
@@ -177,6 +178,7 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('devn
 /* Experimenter debug tools (console trace + secret G-G grid reveal). Both are inert
  * unless the URL has debug=1 on a pilot / dev / localhost session (see DEBUGGING.md). */
 installReveal({ emitRow: emitAuxDataRow });
+installSkip({ emitRow: emitAuxDataRow });
 trace.banner({ seed: session.seed_string });
 
 /* Voiceover scope: read-aloud is restricted to the per-task demos.

@@ -58,6 +58,19 @@ let skipUntilNextCheckpoint = false;
  * the loop boundary. The latch is consumed (cleared) at read time so
  * subsequent legitimate iterations are unaffected. */
 let developerSkipArmed = false;
+/* Debug-only trial-start hook (the N N stage skip, src/debug/skip.js). It runs before the
+ * U/R logic below; when it returns true it has handled the trial and U/R do nothing. Null
+ * unless debug mode installed it, so a normal session never reaches it. */
+let debugTrialStartHook = null;
+
+export function setDebugTrialStartHook(fn) {
+  debugTrialStartHook = typeof fn === 'function' ? fn : null;
+}
+
+/** Arm the developer-skip latch without a U press (the debug stage skip uses it to leave the practice loop). */
+export function armDeveloperSkip() {
+  developerSkipArmed = true;
+}
 
 function noteStepVisit(stepId) {
   if (!stepId || typeof stepId !== 'string') return;
@@ -216,6 +229,7 @@ function insertAfterCurrentStep(currentNode, descriptions) {
  */
 export function getHiddenNavTrialStartHook() {
   return function hiddenNavOnTrialStart(trial) {
+    if (debugTrialStartHook !== null && debugTrialStartHook(trial) === true) return;
     /* Always release the audio gate when a checkpoint runs, regardless of
      * whether the skip-forward token is armed. Both U-from-trial and
      * R-from-trial raise the gate so any fire-and-forget scheduler from
@@ -427,6 +441,7 @@ export function __resetHiddenNavForTests() {
   stepFactories.clear();
   skipUntilNextCheckpoint = false;
   developerSkipArmed = false;
+  debugTrialStartHook = null;
   /* Drop the audio gate too — otherwise a test that arms the skip token
    * via a `U` keypress leaves audio globally muted for every subsequent
    * test in the file. */

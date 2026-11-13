@@ -185,6 +185,7 @@ const SESSION_EVENT_PHASES = new Set([
   'runtime_error',
   'runtime_diagnostic',
   'debug_reveal',
+  'debug_skip',
 ]);
 
 const END_PHASES = new Set(['end_of_task_intro', 'upload_session_end', 'completion_redirect']);
